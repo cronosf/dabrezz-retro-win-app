@@ -144,6 +144,7 @@ class Views:
         self.refresh_me()
         self.render_channels()
         self.show_view("home")
+        self.after(2000, self.check_emulators)
 
     def _nav_item(self, parent, key, text, command):
         lbl = tk.Label(parent, text="  " + text, image=th.image(f"ico_{key}.png"), compound="left", anchor="w", padx=22, pady=11,

@@ -128,6 +128,13 @@ EMULATORS = ("fbneo", "snes9x", "ggpofba", "flycast")
 NOTICES = ("EMULATOR-NOTICE.txt", "FBNEO-LICENSE.txt", "SNES9X-LICENSE.txt", "FLYCAST-GPL2-LICENSE.txt", "DIRECTX-LICENSE.txt")
 
 
+def emulator_complete(dest, zp):
+    """True si estan TODOS los archivos del paquete. El antivirus a veces borra el .exe despues de instalar; la marca de "ya instalado"
+    no basta para saberlo."""
+    with zipfile.ZipFile(zp) as z:
+        return all(os.path.isfile(os.path.join(dest, *i.filename.split("/"))) for i in z.infolist() if not i.is_dir())
+
+
 def install_emulators(data):
     """Extrae los emuladores en <datos>/emulators/<nombre> (sin ROMs) y deja sus licencias en emulators/licencias."""
     base = os.path.normpath(os.path.join(data, "emulators"))
@@ -136,8 +143,8 @@ def install_emulators(data):
         os.makedirs(os.path.join(dest, "ROMs"), exist_ok=True)
         zp = payload(f"emulator-{name}.zip")
         marker, sig = os.path.join(dest, ".payload-sha256"), sha256_file(zp)
-        if os.path.exists(marker) and open(marker, encoding="utf-8").read().strip() == sig:
-            continue                          # ese emulador ya esta instalado y no cambio: no se vuelve a extraer
+        if os.path.exists(marker) and open(marker, encoding="utf-8").read().strip() == sig and emulator_complete(dest, zp):
+            continue                          # ese emulador ya esta instalado, completo y no cambio: no se vuelve a extraer
         safe_extract(zp, dest)
         with open(marker, "w", encoding="utf-8") as f:
             f.write(sig)

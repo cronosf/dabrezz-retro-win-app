@@ -238,6 +238,22 @@ class App(Views, LoginPages, LobbyPages, StoreUI, HelpUI, UpdateUI, tk.Tk):
         self.queued = False
         self.show_login()
 
+    def check_emulators(self):
+        """Avisa si falta algun emulador (lo mas comun: el antivirus borro el .exe despues de instalar)."""
+        if not self.me:
+            return
+        falta = []
+        fb = self.cfg["emulator"] or detect_emulator(self.data)
+        if not fb or not os.path.exists(fb):
+            falta.append("FBNeo (arcade, Mega Drive y NES)")
+        if not os.path.exists(self.emulator_for("snes_x")):
+            falta.append("Snes9x (SNES)")
+        if falta:
+            self.log("Falta el emulador de " + " y de ".join(falta) + ". Casi seguro tu antivirus lo borró: en Seguridad de Windows → "
+                     "Protección contra virus y amenazas → Historial de protección, restaura el archivo y permite el elemento; añade "
+                     f"la carpeta {os.path.join(self.data, 'emulators')} a las exclusiones y vuelve a ejecutar el instalador.", "sys")
+            self.show_download_result(False, "Falta un emulador (¿antivirus?): mira el chat")
+
     @staticmethod
     def apply_labels(labels):
         """Nombres de las salas creadas desde el catalogo de ROMs (el servidor los envia). Se validan antes de usarlos."""
@@ -345,7 +361,9 @@ class App(Views, LoginPages, LobbyPages, StoreUI, HelpUI, UpdateUI, tk.Tk):
         if sel and self.system_of(sel[0]) == "snes9x":
             exe = self.emulator_for(sel[0])
             if not os.path.exists(exe):
-                return messagebox.showinfo(APP_NAME, "No se encontró el emulador de SNES. Reinstala Dabrezz Retro.")
+                return messagebox.showinfo(APP_NAME, "No se encontró el emulador de SNES (fcadesnes9x.exe). Si tu antivirus lo borró, "
+                                           "restáuralo desde Seguridad de Windows, añade la carpeta de emuladores a las exclusiones "
+                                           "y vuelve a ejecutar el instalador.")
             if not self.rom_exists(sel[0]):
                 return messagebox.showinfo(APP_NAME, "Falta la ROM: pulsa DESCARGAR ROM en la tarjeta del juego.")
             # Snes9x busca <emulador>\ROMs\<juego>.zip: se le pasa solo el nombre (con ruta o con .zip da "Invalid Zip archive")
