@@ -2,7 +2,7 @@
 import json
 
 APP_NAME = "Dabrezz Retro"
-VERSION = "1.0.12"
+VERSION = "1.0.13"
 DEFAULT_TCP_PORT = 7600
 DEFAULT_UDP_PORT = 7601
 MAX_LINE = 8 * 1024
@@ -23,13 +23,10 @@ CHANNEL_LABELS = {
     "md_puyopuyo": "Puyo Puyo (Mega Drive)", "md_puyopuy2a": "Puyo Puyo 2 (Mega Drive)",
     "md_drrobotnu": "Dr. Robotnik's Mean Bean Machine (Mega Drive)",
     "nes_drmario": "Dr. Mario (NES)", "nes_yoshiscookie": "Yoshi's Cookie (NES)", "nes_warioswoods": "Wario's Woods (NES)",
-    # SNES (experimental): los corre Snes9x, no FBNeo. Sin detector de resultado: solo amistoso. La ROM va en snes_<juego>.zip.
-    "snes_ssf2": "Super Street Fighter II (SNES)", "snes_sf2": "Street Fighter II: The World Warrior (SNES)",
-    "snes_mk3": "Mortal Kombat 3 (SNES)", "snes_contra3": "Contra III: The Alien Wars (SNES)",
-    "snes_tmnt4": "TMNT IV: Turtles in Time (SNES)", "snes_sbomb2": "Super Bomberman 2 (SNES)",
 }
-FRIENDLY_ONLY = ("ssf2t", "vsav", "mslug3", "snes_ssf2", "snes_sf2", "snes_mk3", "snes_contra3", "snes_tmnt4", "snes_sbomb2")
-# sin detector en el emulador: solo amistoso, van al final de la lista
+FRIENDLY_ONLY = ("ssf2t", "vsav", "mslug3")      # sin detector en el emulador: solo amistoso, van al final de la lista
+# Las salas de SNES (snes_*) NO estan aqui: las crea el servidor leyendo el catalogo de ROMs (server/scan_roms.py), con su titulo, y
+# llegan a la app en los mensajes "channels"/"auth" (campo "labels").
 DEFAULT_CHANNELS = [c for c in CHANNEL_LABELS if c not in FRIENDLY_ONLY] + list(FRIENDLY_ONLY)
 
 

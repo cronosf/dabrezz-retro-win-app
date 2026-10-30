@@ -239,6 +239,14 @@ class App(Views, LoginPages, LobbyPages, StoreUI, HelpUI, UpdateUI, tk.Tk):
         self.show_login()
 
     @staticmethod
+    def apply_labels(labels):
+        """Nombres de las salas creadas desde el catalogo de ROMs (el servidor los envia). Se validan antes de usarlos."""
+        if isinstance(labels, dict):
+            for ch, title in labels.items():
+                if ROM_RE.fullmatch(str(ch)) and isinstance(title, str):
+                    CHANNEL_LABELS[ch] = "".join(c for c in title if c.isprintable())[:60]
+
+    @staticmethod
     def system_of(channel):
         """Emulador de un canal: los snes_* los corre Snes9x; el resto, FBNeo."""
         return "snes9x" if channel.startswith("snes_") else "fbneo"
@@ -543,6 +551,7 @@ class App(Views, LoginPages, LobbyPages, StoreUI, HelpUI, UpdateUI, tk.Tk):
             self.first_to = m.get("first_to") or self.first_to
             self.server_rom_manifest = m.get("rom_manifest") or ""
             self.auto_channels = set(m.get("auto_channels") or [])
+            self.apply_labels(m.get("labels"))
             self.save_cfg()
             self.net.udp_open(m["token"])
             self.show_lobby()
@@ -586,6 +595,7 @@ class App(Views, LoginPages, LobbyPages, StoreUI, HelpUI, UpdateUI, tk.Tk):
             if hasattr(self, "lbl_foot"):
                 self.lbl_foot.config(text=f"Ping al servidor: {self.rtt} ms")
         elif t == "channels":
+            self.apply_labels(m.get("labels"))
             self.channels = m["channels"]
             self.render_channels()
         elif t == "joined":
