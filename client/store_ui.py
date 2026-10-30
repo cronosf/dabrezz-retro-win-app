@@ -213,7 +213,7 @@ class StoreUI:
         if (p.get("stock") or 0) > 0:
             ttk.Button(card, text="COMPRAR", style="Accent.TButton", command=lambda s=p["slug"]: self.open_product(s)).pack(fill="x")
         else:
-            ttk.Button(card, text="AGOTADO", state="disabled").pack(fill="x")
+            ttk.Button(card, text="VENDIDO", state="disabled").pack(fill="x")
 
     def open_product(self, slug):
         """Detalle del producto en el navegador (la compra se hace en la tienda web, con tu cuenta)."""
