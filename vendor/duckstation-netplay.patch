@@ -1,0 +1,200 @@
+diff --git a/src/core/netplay.cpp b/src/core/netplay.cpp
+index fe52918..b2fef80 100644
+--- a/src/core/netplay.cpp
++++ b/src/core/netplay.cpp
+@@ -164,6 +164,8 @@ static std::string s_local_nickname;
+ static std::string s_local_session_password;
+ static GGPOPlayerHandle s_local_handle = GGPO_INVALID_HANDLE;
+ static s32 s_local_delay = 0;
++static s32 s_forced_local_port = 0;  // Dabrezz Retro: puerto local al unirse (0 = cualquiera)
++static s32 s_forced_input_delay = 1; // Dabrezz Retro: retraso de entrada local
+ static GGPONetworkStats s_last_net_stats{};
+ static GGPOSession* s_ggpo = nullptr;
+ 
+@@ -338,7 +340,8 @@ bool Netplay::Start(bool is_hosting, std::string nickname, const std::string& re
+   // Create our "host" (which is basically just our port).
+   ENetAddress server_address;
+   server_address.host = ENET_HOST_ANY;
+-  server_address.port = is_hosting ? static_cast<u16>(port) : ENET_PORT_ANY;
++  server_address.port = is_hosting ? static_cast<u16>(port) :
++                                     (s_forced_local_port > 0 ? static_cast<u16>(s_forced_local_port) : ENET_PORT_ANY);
+   s_enet_host = enet_host_create(&server_address, MAX_PLAYERS - 1, NUM_ENET_CHANNELS, 0, 0);
+   if (!s_enet_host)
+   {
+@@ -1869,6 +1872,16 @@ void Netplay::SetInputs(Netplay::Input inputs[2])
+   }
+ }
+ 
++void Netplay::SetLocalPort(s32 port)
++{
++  s_forced_local_port = port;
++}
++
++void Netplay::SetInputDelay(s32 frames)
++{
++  s_forced_input_delay = frames < 0 ? 0 : (frames > 10 ? 10 : frames);
++}
++
+ bool Netplay::CreateSession(std::string nickname, s32 port, s32 max_players, std::string password)
+ {
+   s_local_session_password = password;
+@@ -1878,7 +1891,7 @@ bool Netplay::CreateSession(std::string nickname, s32 port, s32 max_players, std
+   // the memory cards for this game (based on game/global settings), and copy that to the temp card.
+   
+   // TODO: input delay. GGPO Should support changing it on the fly.
+-  const s32 input_delay = 1;
++  const s32 input_delay = s_forced_input_delay;
+ 
+   if (!Netplay::Start(true, std::move(nickname), std::string(), port, input_delay))
+   {
+@@ -1898,7 +1911,7 @@ bool Netplay::JoinSession(std::string nickname, const std::string& hostname, s32
+ {
+   s_local_session_password = password;
+   // TODO: input delay. GGPO Should support changing it on the fly.
+-  const s32 input_delay = 1;
++  const s32 input_delay = s_forced_input_delay;
+ 
+   if (!Netplay::Start(false, std::move(nickname), hostname, port, input_delay))
+   {
+diff --git a/src/core/netplay.h b/src/core/netplay.h
+index 082b3e6..2187e2d 100644
+--- a/src/core/netplay.h
++++ b/src/core/netplay.h
+@@ -28,6 +28,12 @@ enum : u8
+   NUM_ENET_CHANNELS,
+ };
+ 
++/// Dabrezz Retro: opciones fijadas desde la linea de comandos antes de crear o unirse a una sesion.
++/// Puerto UDP local al UNIRSE (0 = cualquiera): permite reutilizar el mapeo NAT abierto por el hole punching del lobby.
++void SetLocalPort(s32 port);
++/// Retraso de entrada local en frames (por defecto 1).
++void SetInputDelay(s32 frames);
++
+ bool CreateSession(std::string nickname, s32 port, s32 max_players, std::string password);
+ bool JoinSession(std::string nickname, const std::string& hostname, s32 port, std::string password);
+ 
+diff --git a/src/duckstation-qt/qthost.cpp b/src/duckstation-qt/qthost.cpp
+index 843b257..71b7476 100644
+--- a/src/duckstation-qt/qthost.cpp
++++ b/src/duckstation-qt/qthost.cpp
+@@ -101,6 +101,19 @@ static bool s_start_fullscreen_ui_fullscreen = false;
+ // TODO: REMOVE ME
+ static int s_netplay_test = -1;
+ 
++// Dabrezz Retro: sesion de netplay desde la linea de comandos (la app lanza el emulador ya emparejado con el rival)
++//   -dz-host <puerto>      anfitrion: arranca el juego dado y espera al invitado en ese puerto UDP
++//   -dz-join <ip:puerto>   invitado: se une al anfitrion (el juego y la BIOS se buscan por hash en la lista de juegos)
++//   -dz-nick <nombre> -dz-pass <clave> -dz-localport <puerto> -dz-delay <frames>
++static int s_dz_mode = 0; // 0 = nada, 1 = anfitrion, 2 = invitado
++static int s_dz_port = 31200;
++static int s_dz_local_port = 0;
++static int s_dz_delay = 1;
++static std::string s_dz_remote;
++static QString s_dz_nick = QStringLiteral("Player");
++static QString s_dz_pass;
++static std::shared_ptr<SystemBootParameters> s_dz_boot;
++
+ EmuThread* g_emu_thread;
+ GDBServer* g_gdb_server;
+ 
+@@ -2089,6 +2102,46 @@ bool QtHost::ParseCommandLineParametersAndInitializeConfig(QApplication& app,
+         s_netplay_test = StringUtil::FromChars<int>(args[++i].toStdString()).value_or(0);
+         continue;
+       }
++      else if (CHECK_ARG_PARAM("-dz-host"))
++      {
++        s_dz_mode = 1;
++        s_dz_port = StringUtil::FromChars<int>(args[++i].toStdString()).value_or(31200);
++        continue;
++      }
++      else if (CHECK_ARG_PARAM("-dz-join"))
++      {
++        const std::string target = args[++i].toStdString();
++        const std::string::size_type colon = target.rfind(':');
++        if (colon == std::string::npos)
++        {
++          QMessageBox::critical(nullptr, QStringLiteral("Error"), QStringLiteral("-dz-join necesita ip:puerto"));
++          return false;
++        }
++        s_dz_mode = 2;
++        s_dz_remote = target.substr(0, colon);
++        s_dz_port = StringUtil::FromChars<int>(target.substr(colon + 1)).value_or(31200);
++        continue;
++      }
++      else if (CHECK_ARG_PARAM("-dz-nick"))
++      {
++        s_dz_nick = args[++i];
++        continue;
++      }
++      else if (CHECK_ARG_PARAM("-dz-pass"))
++      {
++        s_dz_pass = args[++i];
++        continue;
++      }
++      else if (CHECK_ARG_PARAM("-dz-localport"))
++      {
++        s_dz_local_port = StringUtil::FromChars<int>(args[++i].toStdString()).value_or(0);
++        continue;
++      }
++      else if (CHECK_ARG_PARAM("-dz-delay"))
++      {
++        s_dz_delay = StringUtil::FromChars<int>(args[++i].toStdString()).value_or(1);
++        continue;
++      }
+ #ifdef WITH_RAINTEGRATION
+       else if (CHECK_ARG("-raintegration"))
+       {
+@@ -2205,7 +2258,12 @@ int main(int argc, char* argv[])
+   main_window->initialize();
+ 
+   // When running in batch mode, ensure game list is loaded, but don't scan for any new files.
+-  if (!s_batch_mode)
++  // Dabrezz Retro: el invitado de una sesion hace su propio escaneo justo antes de conectar; el de la ventana (en paralelo)
++  // vaciaba la lista mientras se buscaba el juego del anfitrion.
++  if (s_dz_mode == 2)
++  {
++  }
++  else if (!s_batch_mode)
+     main_window->refreshGameList(false);
+   else
+     GameList::Refresh(false, true);
+@@ -2220,12 +2278,37 @@ int main(int argc, char* argv[])
+   else
+     s_start_fullscreen_ui_fullscreen = false;
+ 
++  // Dabrezz Retro: opciones de red de la sesion
++  if (s_dz_mode != 0)
++  {
++    Netplay::SetLocalPort(s_dz_local_port);
++    Netplay::SetInputDelay(s_dz_delay);
++  }
++
+   // Skip the update check if we're booting a game directly.
+-  if (autoboot)
++  if (s_dz_mode == 1 && autoboot)
++    s_dz_boot = std::move(autoboot); // anfitrion: el juego se arranca justo antes de crear la sesion (mas abajo)
++  else if (autoboot)
+     g_emu_thread->bootSystem(std::move(autoboot));
+-  else if (!s_nogui_mode)
++  else if (!s_nogui_mode && s_dz_mode == 0)
+     main_window->startupUpdateCheck();
+ 
++  if (s_dz_mode == 1 && s_dz_boot)
++  {
++    Host::RunOnCPUThread([]() {
++      s_dz_boot->override_fast_boot = true;
++      g_emu_thread->bootSystem(std::move(s_dz_boot));
++      g_emu_thread->createNetplaySession(s_dz_nick, s_dz_port, 2, s_dz_pass);
++    });
++  }
++  else if (s_dz_mode == 2)
++  {
++    Host::RunOnCPUThread([]() {
++      GameList::Refresh(false, false, nullptr); // el invitado necesita conocer sus juegos antes de buscar el del anfitrion
++      g_emu_thread->joinNetplaySession(s_dz_nick, QString::fromStdString(s_dz_remote), s_dz_port, s_dz_pass);
++    });
++  }
++
+   if (s_netplay_test >= 0)
+   {
+     Host::RunOnCPUThread([]() {

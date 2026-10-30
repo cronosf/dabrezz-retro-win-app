@@ -9,6 +9,12 @@ Procedencia de los emuladores (para cumplir las licencias y poder regenerar vend
 Para actualizar: descargar el instalador nuevo, abrirlo con 7-Zip (sin ejecutarlo), extraer la carpeta emulator y
 ejecutar: python tools/make_emulator.py <carpeta emulator> [carpeta de salida]
 
+DuckStation (PS1): vendor/emulator-duckstation.zip se compila a partir de https://github.com/HeatXD/duckstation-netplay
+  (rama netplay_dev, commit 2cce4a404b7a80a9cba56388654ccb93a9ec70af, GPL v3) con el parche vendor/duckstation-netplay.patch
+  (solo agrega opciones de linea de comandos). Compilacion: Visual Studio 2022, "MSBuild duckstation.sln /t:duckstation-qt
+  /p:Configuration=Release /p:Platform=x64". El paquete se arma con: python tools/make_duckstation.py <carpeta bin\x64>.
+  Qt 6.1 (LGPL v3) viene del submodulo https://github.com/stenzek/duckstation-ext-qt-minimal.
+
 DirectX: vendor/directx-redist.zip es la carpeta Redist del "DirectX SDK (June 2010)" de Microsoft
   (https://download.microsoft.com/download/A/E/7/AE743F1F-632B-4809-87A9-AA1BB3458E31/DXSDK_Jun10.exe,
   SHA-256 705271DC83BFEE54D9B94E028426E288D5F070784B7446D164F48ECFBB2A02CB, firmado por Microsoft).

@@ -19,11 +19,11 @@ import re
 import urllib.parse
 import urllib.request
 
-SYSTEMS = ("fbneo", "snes9x", "ggpofba", "flycast")
+SYSTEMS = ("fbneo", "snes9x", "ggpofba", "flycast", "duckstation")
 NAME_RE = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_.\-]{0,79}$")
-EXTS = (".zip", ".7z", ".bin", ".rom")
+EXTS = (".zip", ".7z", ".bin", ".rom", ".chd", ".iso", ".img", ".pbp")      # los 4 ultimos: imagenes de disco de PS1 (DuckStation)
 SHA_RE = re.compile(r"^[0-9a-fA-F]{64}$")
-MAX_SIZE = 600 * 1024 * 1024
+MAX_SIZE = 1536 * 1024 * 1024        # un disco de PS1 en .bin/.img puede pasar de 700 MB
 MAX_MANIFEST = 4 * 1024 * 1024
 LOCAL = ("localhost", "127.0.0.1", "::1")
 

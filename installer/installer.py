@@ -125,8 +125,9 @@ def payload(name):
     return th.resource_path(os.path.join("payload", name))
 
 
-EMULATORS = ("fbneo", "snes9x", "ggpofba", "flycast")
-NOTICES = ("EMULATOR-NOTICE.txt", "FBNEO-LICENSE.txt", "SNES9X-LICENSE.txt", "FLYCAST-GPL2-LICENSE.txt", "DIRECTX-LICENSE.txt")
+EMULATORS = ("fbneo", "snes9x", "ggpofba", "flycast", "duckstation")
+NOTICES = ("EMULATOR-NOTICE.txt", "FBNEO-LICENSE.txt", "SNES9X-LICENSE.txt", "FLYCAST-GPL2-LICENSE.txt", "DUCKSTATION-GPL3-LICENSE.txt",
+           "DIRECTX-LICENSE.txt")
 
 
 def emulator_complete(dest, zp):
@@ -136,7 +137,7 @@ def emulator_complete(dest, zp):
         return all(os.path.isfile(os.path.join(dest, *i.filename.split("/"))) for i in z.infolist() if not i.is_dir())
 
 
-EMU_NAMES = {"fbneo": "FBNeo (arcade, Mega Drive, NES)", "snes9x": "Snes9x (SNES)", "ggpofba": "FB Alpha", "flycast": "Flycast"}
+EMU_NAMES = {"fbneo": "FBNeo (arcade, Mega Drive, NES)", "snes9x": "Snes9x (SNES)", "ggpofba": "FB Alpha", "flycast": "Flycast", "duckstation": "DuckStation (PS1)"}
 
 
 def missing_emulators(data):

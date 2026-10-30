@@ -12,6 +12,15 @@ exacto esta publicado en el proyecto (tools/make_emulator.py).
   flycast  Flycast (Dreamcast, Naomi, Atomiswave)        Licencia GPL v2: FLYCAST-GPL2-LICENSE.txt
            Codigo fuente: https://github.com/flyinghead/flycast  (y su variante con netplay "Dojo")
 
+  duckstation  DuckStation Netplay (PlayStation 1)        Licencia GPL v3: DUCKSTATION-GPL3-LICENSE.txt
+           Fork de DuckStation (Stenzek) con netplay por rollback (GGPO) de la comunidad (HeatXD), con un parche de
+           Dabrezz Retro que solo agrega opciones de linea de comandos para crear/unirse a una sesion (-dz-host,
+           -dz-join, -dz-nick, -dz-pass, -dz-localport, -dz-delay). Codigo fuente y parche (GPL v3):
+             https://github.com/HeatXD/duckstation-netplay  (rama netplay_dev, commit 2cce4a404b7a80a9cba56388654ccb93a9ec70af)
+             vendor/duckstation-netplay.patch en https://github.com/cronosf/dabrezz-retro-win-app
+           Usa las bibliotecas Qt 6 (LGPL v3, enlazadas dinamicamente: https://www.qt.io) y SDL2 (zlib).
+           Necesita una BIOS de PS1 que aporta cada jugador (no se distribuye).
+
 Por las licencias anteriores Dabrezz Retro es GRATUITO y no distribuye ROMs ni BIOS: cada jugador debe aportar
 los suyos (o descargarlos desde un catalogo que el propio jugador o la comunidad mantenga y tenga derecho a distribuir).
 

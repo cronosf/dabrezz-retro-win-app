@@ -24,6 +24,11 @@ HELP = (
     ("b", "La primera vez elige un nombre de usuario único (5 a 12 caracteres)."),
     ("b", "En Juegos o Multijugador elige un título, crea una sala o únete a la de otro jugador."),
     ("b", "La app se actualiza sola al abrirse cuando existe una versión nueva firmada."),
+    ("h", "PlayStation 1 (beta)"),
+    ("b", "Necesitas tu propia BIOS de PS1 (un archivo de 512 KB, por ejemplo scph1001.bin): cópiala a la carpeta bios del emulador "
+          "DuckStation (la app te la abre). Tu rival debe tener la MISMA BIOS y el mismo disco; no se pueden incluir."),
+    ("b", "Una partida es de 2 jugadores: el jugador 1 es el anfitrión y el 2 se une. Solo amistoso (sin ELO)."),
+    ("b", "Descarga el disco con DESCARGAR ROM y configura tus controles con PROBAR JUEGO (Ajustes > Controladores del emulador)."),
     ("h", "Términos y condiciones"),
     ("p", f"1. Gratuita. Dabrezz Retro es gratuita y se puede distribuir libremente sin cobrar por ella. Está desarrollada por {AUTHOR}. "
           "No se debe vender ni cobrar por su descarga, instalación o uso."),

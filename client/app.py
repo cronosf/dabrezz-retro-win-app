@@ -25,6 +25,7 @@ import client.romman as romman  # noqa: E402
 import client.theme as th  # noqa: E402
 from client.bridge import OverlayBridge  # noqa: E402
 import client.defender as defender  # noqa: E402
+import client.ps1 as ps1  # noqa: E402
 import client.secure as secure  # noqa: E402
 from client.help_ui import HelpUI  # noqa: E402
 from client.lobby_pages import LobbyPages  # noqa: E402
@@ -250,6 +251,8 @@ class App(Views, LoginPages, LobbyPages, StoreUI, HelpUI, UpdateUI, tk.Tk):
             falta.append("FBNeo (arcade, Mega Drive y NES)")
         if not os.path.exists(self.emulator_for("snes_x")):
             falta.append("Snes9x (SNES)")
+        if os.path.isdir(ps1.folder(self.data)) and not os.path.exists(ps1.exe_path(self.data)):   # la carpeta existe: lo borro el antivirus
+            falta.append("DuckStation (PS1)")
         if falta:
             self.log("Falta el emulador de " + " y de ".join(falta) + ". Casi seguro tu antivirus lo borró: en Seguridad de Windows → "
                      "Protección contra virus y amenazas → Historial de protección, restaura el archivo y permite el elemento; añade "
@@ -284,15 +287,19 @@ class App(Views, LoginPages, LobbyPages, StoreUI, HelpUI, UpdateUI, tk.Tk):
 
     @staticmethod
     def system_of(channel):
-        """Emulador de un canal: los snes_* los corre Snes9x; el resto, FBNeo."""
-        return "snes9x" if channel.startswith("snes_") else "fbneo"
+        """Emulador de un canal: snes_* -> Snes9x, ps1_* -> DuckStation; el resto, FBNeo."""
+        return "snes9x" if channel.startswith("snes_") else "duckstation" if channel.startswith("ps1_") else "fbneo"
 
     def emulator_for(self, channel):
         if self.system_of(channel) == "snes9x":
             return os.path.join(self.data, "emulators", "snes9x", "fcadesnes9x.exe")
+        if self.system_of(channel) == "duckstation":
+            return ps1.exe_path(self.data)
         return self.cfg["emulator"]
 
     def rom_exists(self, channel):
+        if self.system_of(channel) == "duckstation":
+            return ps1.image_path(self.roms_dest("duckstation"), channel) is not None
         if self.system_of(channel) == "snes9x":
             return os.path.exists(os.path.join(self.roms_dest("snes9x"), channel + ".zip"))
         dirs = [self.cfg["roms_dir"], os.path.join(self.data, "roms")]
@@ -388,6 +395,19 @@ class App(Views, LoginPages, LobbyPages, StoreUI, HelpUI, UpdateUI, tk.Tk):
                 return messagebox.showinfo(APP_NAME, "Falta la ROM: pulsa DESCARGAR ROM en la tarjeta del juego.")
             # Snes9x busca <emulador>\ROMs\<juego>.zip: se le pasa solo el nombre (con ruta o con .zip da "Invalid Zip archive")
             return subprocess.Popen([exe, sel[0]], cwd=os.path.dirname(exe))      # offline: aqui se configuran los controles (menu Input)
+        if sel and self.system_of(sel[0]) == "duckstation":
+            exe = self.emulator_for(sel[0])
+            if not os.path.exists(exe):
+                return messagebox.showinfo(APP_NAME, "No se encontró DuckStation (PS1). Si tu antivirus lo borró, restáuralo desde "
+                                           "Seguridad de Windows y vuelve a ejecutar el instalador.")
+            image = ps1.image_path(self.roms_dest("duckstation"), sel[0])
+            if not image:
+                return messagebox.showinfo(APP_NAME, "Falta el disco: pulsa DESCARGAR ROM en la tarjeta del juego.")
+            if not ps1.has_bios(self.data):
+                return self.need_bios()
+            ps1.prepare(self.data, self.roms_dest("duckstation"))
+            # solo: aqui se configuran los controles (Ajustes > Controladores del propio emulador); el netplay usa el mando 1
+            return subprocess.Popen([exe, image], cwd=os.path.dirname(exe))
         exe = self.cfg["emulator"]
         if not sel or not exe or not os.path.exists(exe):
             return messagebox.showinfo(APP_NAME, "Elige un juego y configura el emulador en AJUSTES.")
@@ -467,32 +487,67 @@ class App(Views, LoginPages, LobbyPages, StoreUI, HelpUI, UpdateUI, tk.Tk):
     # ---------- partida ----------
     def launch_emulator(self, host, port, player, rtt, relay):
         m = self.match
-        snes = self.system_of(m["channel"]) == "snes9x"
+        system = self.system_of(m["channel"])
+        snes, duck = system == "snes9x", system == "duckstation"
         exe = self.emulator_for(m["channel"])
         delay = max(0, -(-int(rtt) // 2 // 17)) if rtt is not None else None   # frames de 16,7 ms (media ida)
         self.log(("Conexión por relay" if relay else f"Conexión directa · {rtt} ms") +
                  (f" · delay sugerido: {delay} frames" if delay is not None else ""), "sys")
         if not self.rom_exists(m["channel"]):
-            self.log(f"Falta la ROM {m['channel']}.zip: pulsa DESCARGAR ROM en la tarjeta del juego.", "sys")
+            self.log(f"Falta el juego {m['channel']}: pulsa DESCARGAR ROM en la tarjeta del juego.", "sys")
         if not exe or not os.path.exists(exe):
             return self.log(f"Configura el emulador en AJUSTES. Rival: {host}:{port} (eres P{player})", "sys")
         local = self.net.local_udp_port()
-        # Se parte la plantilla ANTES de sustituir: ningun valor (ni siquiera los del servidor) puede añadir argumentos.
-        try:
-            argv = build_argv(SNES_ARGS if snes else self.cfg["emu_args"], m["channel"], host, port, local, player,
-                              m["rival_user_name"], min(delay or 0, 9))
-        except (KeyError, IndexError, ValueError):
-            return self.log("Argumentos del emulador invalidos: revisa AJUSTES.", "sys")
-        if not snes:
-            prepare_emulator_config(exe, self.cfg["roms_dir"] or os.path.join(self.data, "roms"))
+        if duck:                 # PS1: el jugador 1 es el anfitrion y el 2 se une (ver client/ps1.py)
+            cmd = self.duck_command(m, host, port, player, min(delay or 0, 9), local)
+            if cmd is None:
+                return
+        else:
+            # Se parte la plantilla ANTES de sustituir: ningun valor (ni siquiera los del servidor) puede añadir argumentos.
+            try:
+                argv = build_argv(SNES_ARGS if snes else self.cfg["emu_args"], m["channel"], host, port, local, player,
+                                  m["rival_user_name"], min(delay or 0, 9))
+            except (KeyError, IndexError, ValueError):
+                return self.log("Argumentos del emulador invalidos: revisa AJUSTES.", "sys")
+            if not snes:
+                prepare_emulator_config(exe, self.cfg["roms_dir"] or os.path.join(self.data, "roms"))
+            cmd = [exe, *argv]
         self.net.udp_close()     # libera el puerto: el emulador usa el mismo mapeo NAT
         self.auto = None
         if m["ranked"]:          # resultado automatico: se leen los archivos que escribe el detector del emulador (client/bridge.py)
             self.close_bridge()
             self.bridge = OverlayBridge(os.path.dirname(exe), m["first_to"],
                                         lambda ev: self.net.events.put({"t": "_emu", "ev": ev}))
-        self.emu = subprocess.Popen([exe, *argv], cwd=os.path.dirname(exe))
+        self.emu = subprocess.Popen(cmd, cwd=os.path.dirname(exe))
         self.log("Emulador iniciado.", "sys")
+
+    def duck_command(self, m, host, port, player, delay, local):
+        """Comando de DuckStation para esta partida, o None si falta algo (la BIOS o el disco)."""
+        roms = self.roms_dest("duckstation")
+        if not ps1.has_bios(self.data):
+            self.need_bios()
+            return None
+        ps1.prepare(self.data, roms)
+        exe = self.emulator_for(m["channel"])
+        nick = (self.me or {}).get("user_name", "Jugador")
+        if player == 1:                                   # anfitrion: arranca el juego y espera al rival
+            image = ps1.image_path(roms, m["channel"])
+            if not image:
+                self.log("Falta el disco del juego: pulsa DESCARGAR ROM en su tarjeta.", "sys")
+                return None
+            self.log("Eres el anfitrión: el rival se unirá a tu partida.", "sys")
+            return ps1.host_command(exe, image, local, nick, delay)
+        self.log("Te unes a la partida del anfitrión (necesitas la misma BIOS y el mismo disco).", "sys")
+        return ps1.join_command(exe, host, port, local, nick, delay)
+
+    def need_bios(self):
+        """Falta la BIOS de PS1 (no se distribuye): explica y ofrece abrir la carpeta donde copiarla."""
+        d = ps1.bios_dir(self.data)
+        os.makedirs(d, exist_ok=True)
+        if messagebox.askyesno(APP_NAME, "Para jugar PlayStation 1 necesitas una BIOS de PS1 (un archivo de 512 KB, por ejemplo "
+                               "scph1001.bin). No se puede incluir: copia la tuya a esta carpeta, y que tu rival tenga la MISMA.\n\n"
+                               f"{d}\n\n¿Abrir la carpeta ahora?"):
+            os.startfile(d)
 
     def stop_emulator(self):
         """La partida ranked llego a su meta (primero en N): se cierra el emulador para que no sigan jugando."""
