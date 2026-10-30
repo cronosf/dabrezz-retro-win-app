@@ -23,7 +23,12 @@ def server_package():
     """Paquete para Ubuntu (el servidor se mantiene fuera del repositorio publico: si no esta la carpeta, se omite)."""
     if not os.path.isdir(os.path.join(ROOT, "server")):
         return
-    skip = lambda ti: None if "__pycache__" in ti.name else ti  # noqa: E731
+    def skip(ti):
+        if "__pycache__" in ti.name:
+            return None
+        if ti.name.endswith(".sh"):
+            ti.mode = 0o755                                     # desde Windows el .sh salia sin permiso de ejecucion
+        return ti
     with tarfile.open(os.path.join(DIST, "dabrezz-retro-server.tar.gz"), "w:gz") as t:
         for d in ("shared", "server"):
             t.add(os.path.join(ROOT, d), arcname=f"dabrezz-retro-server/{d}", filter=skip)
