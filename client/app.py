@@ -24,6 +24,7 @@ import client.attest as attest  # noqa: E402
 import client.romman as romman  # noqa: E402
 import client.theme as th  # noqa: E402
 from client.bridge import OverlayBridge  # noqa: E402
+import client.defender as defender  # noqa: E402
 import client.secure as secure  # noqa: E402
 from client.help_ui import HelpUI  # noqa: E402
 from client.lobby_pages import LobbyPages  # noqa: E402
@@ -125,6 +126,7 @@ def detect_emulator(data):
 class App(Views, LoginPages, LobbyPages, StoreUI, HelpUI, UpdateUI, tk.Tk):
     auto_session = False
     rom_busy = False
+    av_asked = False
     def __init__(self):
         super().__init__()
         self.title(f"{APP_NAME} {VERSION}")
@@ -253,6 +255,24 @@ class App(Views, LoginPages, LobbyPages, StoreUI, HelpUI, UpdateUI, tk.Tk):
                      "Protección contra virus y amenazas → Historial de protección, restaura el archivo y permite el elemento; añade "
                      f"la carpeta {os.path.join(self.data, 'emulators')} a las exclusiones y vuelve a ejecutar el instalador.", "sys")
             self.show_download_result(False, "Falta un emulador (¿antivirus?): mira el chat")
+            if not self.av_asked:                      # solo una vez por sesion, y solo si de verdad falta un emulador
+                self.av_asked = True
+                emu = os.path.join(self.data, "emulators")
+                if messagebox.askyesno(APP_NAME, "Falta un emulador. Es probable que tu antivirus (Windows Defender) lo haya borrado, "
+                                       "porque los emuladores no están firmados digitalmente.\n\n"
+                                       f"¿Agregar esta carpeta a las exclusiones de Windows Security?\n\n{emu}\n\n"
+                                       "Windows pedirá permiso de administrador. Después restaura el archivo desde Historial de "
+                                       "protección o vuelve a ejecutar el instalador."):
+                    put = self.net.events.put
+
+                    def work():
+                        res = defender.add_exclusion(emu)
+                        put({"t": "_log", "text": {"ok": "Carpeta de emuladores agregada a las exclusiones. Ahora restaura el emulador "
+                                                   "desde Seguridad de Windows → Historial de protección, o vuelve a ejecutar el instalador.",
+                                                   "cancelado": "No se concedió el permiso de administrador: no se agregó la exclusión.",
+                                                   "error": "No se pudo agregar la exclusión (¿otro antivirus?). Agrégala a mano en "
+                                                            "Seguridad de Windows → Exclusiones."}[res]})
+                    threading.Thread(target=work, daemon=True).start()
 
     @staticmethod
     def apply_labels(labels):

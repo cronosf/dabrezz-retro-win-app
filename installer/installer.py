@@ -22,6 +22,7 @@ from tkinter import filedialog, messagebox, ttk
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 import client.theme as th  # noqa: E402
+from client.defender import add_exclusion, run_elevated  # noqa: E402  (ejecucion elevada y exclusion de Windows Security)
 from shared.dx_manifest import DX_SHA256  # noqa: E402
 from shared.protocol import APP_NAME, VERSION  # noqa: E402
 
@@ -135,6 +136,25 @@ def emulator_complete(dest, zp):
         return all(os.path.isfile(os.path.join(dest, *i.filename.split("/"))) for i in z.infolist() if not i.is_dir())
 
 
+EMU_NAMES = {"fbneo": "FBNeo (arcade, Mega Drive, NES)", "snes9x": "Snes9x (SNES)", "ggpofba": "FB Alpha", "flycast": "Flycast"}
+
+
+def missing_emulators(data):
+    """Emuladores a los que les falta algun archivo (nombres de carpeta)."""
+    base = os.path.join(data, "emulators")
+    return [n for n in EMULATORS if not emulator_complete(os.path.join(base, n), payload(f"emulator-{n}.zip"))]
+
+
+def wait_missing(data, seconds=4.0):
+    """Espera un momento (el antivirus tarda unos segundos en actuar) y devuelve los emuladores incompletos; sale en cuanto vea uno."""
+    end = time.time() + seconds
+    while True:
+        miss = missing_emulators(data)
+        if miss or time.time() >= end:
+            return miss
+        time.sleep(0.5)
+
+
 def install_emulators(data):
     """Extrae los emuladores en <datos>/emulators/<nombre> (sin ROMs) y deja sus licencias en emulators/licencias."""
     base = os.path.normpath(os.path.join(data, "emulators"))
@@ -168,23 +188,6 @@ def directx_installed():
     return all(os.path.exists(os.path.join(d, f)) for d in dirs for f in DX_FILES)
 
 
-def run_elevated(exe, args, cwd, verb="runas"):
-    """Ejecuta con permisos de administrador (aviso UAC de Windows) y espera. Devuelve el codigo de salida,
-    o None si la persona rechazo el permiso."""
-    class SEI(ctypes.Structure):
-        _fields_ = [("cbSize", wintypes.DWORD), ("fMask", wintypes.ULONG), ("hwnd", wintypes.HWND),
-                    ("lpVerb", wintypes.LPCWSTR), ("lpFile", wintypes.LPCWSTR), ("lpParameters", wintypes.LPCWSTR),
-                    ("lpDirectory", wintypes.LPCWSTR), ("nShow", ctypes.c_int), ("hInstApp", wintypes.HINSTANCE),
-                    ("lpIDList", ctypes.c_void_p), ("lpClass", wintypes.LPCWSTR), ("hkeyClass", wintypes.HKEY),
-                    ("dwHotKey", wintypes.DWORD), ("hIconOrMonitor", wintypes.HANDLE), ("hProcess", wintypes.HANDLE)]
-    info = SEI(cbSize=ctypes.sizeof(SEI), fMask=0x40, lpVerb=verb, lpFile=exe, lpParameters=args, lpDirectory=cwd, nShow=0)
-    if not ctypes.windll.shell32.ShellExecuteExW(ctypes.byref(info)):
-        return None
-    ctypes.windll.kernel32.WaitForSingleObject(info.hProcess, 0xFFFFFFFF)
-    code = wintypes.DWORD()
-    ctypes.windll.kernel32.GetExitCodeProcess(info.hProcess, ctypes.byref(code))
-    ctypes.windll.kernel32.CloseHandle(info.hProcess)
-    return code.value
 
 
 def verify_dx_folder(folder):
@@ -355,6 +358,8 @@ class Installer(tk.Tk):
                 json.dump({"app_dir": app, "data_dir": data, "version": VERSION}, fh, indent=2)
             self.step(50, "Instalando los emuladores…")
             install_emulators(data)
+            self.step(55, "Comprobando los emuladores…")
+            self.check_antivirus(data)
             self.step(60, "Creando accesos directos…")
             target = os.path.join(app, EXE)
             if self.v_desk.get():
@@ -371,6 +376,50 @@ class Installer(tk.Tk):
             self.after(0, lambda: self.done(target, app))
         except Exception as e:  # noqa: BLE001
             self.after(0, lambda: self.failed(e))
+
+    # ---------- antivirus: solo si borra un emulador ----------
+    def ui_call(self, fn):
+        """Ejecuta `fn` en el hilo de la ventana (los dialogos de Tk no pueden abrirse desde el hilo de instalacion) y devuelve su
+        resultado."""
+        done, box = threading.Event(), []
+
+        def run():
+            try:
+                self.attributes("-topmost", False)        # el aviso no debe quedar oculto detras de esta ventana
+                box.append(fn())
+            finally:
+                done.set()
+        self.after(0, run)
+        done.wait()
+        return box[0] if box else None
+
+    def check_antivirus(self, data):
+        """Si despues de extraer falta algun archivo de un emulador (el antivirus lo borro, un falso positivo habitual), pregunta si
+        se agrega la carpeta de emuladores a las exclusiones de Windows Security y lo reinstala. Si todo esta bien, no muestra nada."""
+        miss = wait_missing(data)
+        if not miss:
+            return
+        emu = os.path.join(data, "emulators")
+        names = ", ".join(EMU_NAMES[n] for n in miss)
+        if not self.ui_call(lambda: messagebox.askyesno(
+                APP_NAME, f"Tu antivirus (probablemente Windows Defender) eliminó archivos de: {names}.\n\n"
+                "Los emuladores no están firmados digitalmente y suelen marcarse por error (falso positivo).\n\n"
+                f"¿Agregar esta carpeta a las exclusiones de Windows Security y reinstalarlos?\n\n{emu}\n\n"
+                "Windows pedirá permiso de administrador. Solo se excluye esa carpeta.")):
+            return
+        res = add_exclusion(emu)
+        if res != "ok":
+            motivo = ("No se concedió el permiso de administrador." if res == "cancelado" else
+                      "No se pudo agregar la exclusión (puede que uses otro antivirus o que una directiva lo impida).")
+            self.ui_call(lambda: messagebox.showinfo(APP_NAME, motivo + "\n\nAgrégala a mano en Seguridad de Windows → Protección contra "
+                                                     f"virus y amenazas → Exclusiones:\n{emu}\ny vuelve a ejecutar el instalador."))
+            return
+        self.step(57, "Reinstalando los emuladores…")
+        install_emulators(data)
+        if wait_missing(data):
+            self.ui_call(lambda: messagebox.showinfo(
+                APP_NAME, "Aun así faltan archivos de algunos emuladores: probablemente otro antivirus los borra. Agrega la carpeta "
+                f"a sus exclusiones y vuelve a ejecutar el instalador:\n{emu}"))
 
     def failed(self, e):
         self.attributes("-topmost", False)        # si no, el aviso queda oculto detras de esta ventana y todo parece colgado
