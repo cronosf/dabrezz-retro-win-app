@@ -45,6 +45,9 @@ DEFAULTS = {
 
 
 ROM_RE = re.compile(r"^[A-Za-z0-9_]{1,40}$")
+# Snes9x (modo netplay directo): quark:direct,<juego>,<puerto local>,<ip rival>,<puerto rival>,<jugador 0/1>,<delay>; la ROM va en
+# <emulador>\ROMs\<juego>.zip. Solo se abre con este modo (no sirve para jugar sin conexion).
+SNES_ARGS = "quark:direct,{rom},{local_port},{host},{port},{player0},{delay}"
 
 
 def safe_ip(v):
@@ -235,7 +238,19 @@ class App(Views, LoginPages, LobbyPages, StoreUI, HelpUI, UpdateUI, tk.Tk):
         self.queued = False
         self.show_login()
 
+    @staticmethod
+    def system_of(channel):
+        """Emulador de un canal: los snes_* los corre Snes9x; el resto, FBNeo."""
+        return "snes9x" if channel.startswith("snes_") else "fbneo"
+
+    def emulator_for(self, channel):
+        if self.system_of(channel) == "snes9x":
+            return os.path.join(self.data, "emulators", "snes9x", "fcadesnes9x.exe")
+        return self.cfg["emulator"]
+
     def rom_exists(self, channel):
+        if self.system_of(channel) == "snes9x":
+            return os.path.exists(os.path.join(self.roms_dest("snes9x"), channel + ".zip"))
         dirs = [self.cfg["roms_dir"], os.path.join(self.data, "roms")]
         if self.cfg["emulator"]:
             dirs.append(os.path.join(os.path.dirname(self.cfg["emulator"]), "..", "..", "ROMs"))
@@ -319,6 +334,9 @@ class App(Views, LoginPages, LobbyPages, StoreUI, HelpUI, UpdateUI, tk.Tk):
 
     def test_game(self):
         sel = [self.sel_game] if self.sel_game else []
+        if sel and self.system_of(sel[0]) == "snes9x":
+            return messagebox.showinfo(APP_NAME, "Los juegos de SNES (experimental) solo se abren dentro de una partida: "
+                                       "el emulador de SNES no se puede probar sin conexión.")
         exe = self.cfg["emulator"]
         if not sel or not exe or not os.path.exists(exe):
             return messagebox.showinfo(APP_NAME, "Elige un juego y configura el emulador en AJUSTES.")
@@ -397,22 +415,25 @@ class App(Views, LoginPages, LobbyPages, StoreUI, HelpUI, UpdateUI, tk.Tk):
 
     # ---------- partida ----------
     def launch_emulator(self, host, port, player, rtt, relay):
-        exe = self.cfg["emulator"]
         m = self.match
+        snes = self.system_of(m["channel"]) == "snes9x"
+        exe = self.emulator_for(m["channel"])
         delay = max(0, -(-int(rtt) // 2 // 17)) if rtt is not None else None   # frames de 16,7 ms (media ida)
         self.log(("Conexión por relay" if relay else f"Conexión directa · {rtt} ms") +
                  (f" · delay sugerido: {delay} frames" if delay is not None else ""), "sys")
         if not self.rom_exists(m["channel"]):
-            self.log(f"Falta la ROM {m['channel']}.zip: pulsa DESCARGAR ROMS o cópiala a la carpeta roms.", "sys")
+            self.log(f"Falta la ROM {m['channel']}.zip: pulsa DESCARGAR ROM en la tarjeta del juego.", "sys")
         if not exe or not os.path.exists(exe):
             return self.log(f"Configura el emulador en AJUSTES. Rival: {host}:{port} (eres P{player})", "sys")
         local = self.net.local_udp_port()
         # Se parte la plantilla ANTES de sustituir: ningun valor (ni siquiera los del servidor) puede añadir argumentos.
         try:
-            argv = build_argv(self.cfg["emu_args"], m["channel"], host, port, local, player, m["rival_user_name"], min(delay or 0, 9))
+            argv = build_argv(SNES_ARGS if snes else self.cfg["emu_args"], m["channel"], host, port, local, player,
+                              m["rival_user_name"], min(delay or 0, 9))
         except (KeyError, IndexError, ValueError):
             return self.log("Argumentos del emulador invalidos: revisa AJUSTES.", "sys")
-        prepare_emulator_config(exe, self.cfg["roms_dir"] or os.path.join(self.data, "roms"))
+        if not snes:
+            prepare_emulator_config(exe, self.cfg["roms_dir"] or os.path.join(self.data, "roms"))
         self.net.udp_close()     # libera el puerto: el emulador usa el mismo mapeo NAT
         self.auto = None
         if m["ranked"]:          # resultado automatico: se leen los archivos que escribe el detector del emulador (client/bridge.py)

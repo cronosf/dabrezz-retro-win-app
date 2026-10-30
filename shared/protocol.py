@@ -2,7 +2,7 @@
 import json
 
 APP_NAME = "Dabrezz Retro"
-VERSION = "1.0.11"
+VERSION = "1.0.12"
 DEFAULT_TCP_PORT = 7600
 DEFAULT_UDP_PORT = 7601
 MAX_LINE = 8 * 1024
@@ -10,7 +10,7 @@ FIRST_TO = [2, 3, 5, 10]   # ranked a "primero en N victorias"
 
 # Canales = nombre de ROM de FBNeo (el cliente lo pasa tal cual al emulador). Primero los que tienen detector de
 # resultado (ranked automatico); al final los de solo amistoso. Los md_* son de Mega Drive y los nes_* de NES: tambien los
-# corre FBNeo (SNES no: FBNeo no lo soporta).
+# corre FBNeo. Los snes_* son de Super Nintendo: FBNeo no lo soporta, los corre Snes9x (experimental).
 CHANNEL_LABELS = {
     "sfiii3nr1": "Street Fighter III: 3rd Strike", "sfa3": "Street Fighter Alpha 3", "kof98": "The King of Fighters '98",
     "kof2002": "The King of Fighters 2002", "garou": "Garou: Mark of the Wolves", "samsho2": "Samurai Shodown II",
@@ -23,8 +23,13 @@ CHANNEL_LABELS = {
     "md_puyopuyo": "Puyo Puyo (Mega Drive)", "md_puyopuy2a": "Puyo Puyo 2 (Mega Drive)",
     "md_drrobotnu": "Dr. Robotnik's Mean Bean Machine (Mega Drive)",
     "nes_drmario": "Dr. Mario (NES)", "nes_yoshiscookie": "Yoshi's Cookie (NES)", "nes_warioswoods": "Wario's Woods (NES)",
+    # SNES (experimental): los corre Snes9x, no FBNeo. Sin detector de resultado: solo amistoso. La ROM va en snes_<juego>.zip.
+    "snes_ssf2": "Super Street Fighter II (SNES)", "snes_sf2": "Street Fighter II: The World Warrior (SNES)",
+    "snes_mk3": "Mortal Kombat 3 (SNES)", "snes_contra3": "Contra III: The Alien Wars (SNES)",
+    "snes_tmnt4": "TMNT IV: Turtles in Time (SNES)", "snes_sbomb2": "Super Bomberman 2 (SNES)",
 }
-FRIENDLY_ONLY = ("ssf2t", "vsav", "mslug3")      # sin detector en el emulador: solo amistoso, van al final de la lista
+FRIENDLY_ONLY = ("ssf2t", "vsav", "mslug3", "snes_ssf2", "snes_sf2", "snes_mk3", "snes_contra3", "snes_tmnt4", "snes_sbomb2")
+# sin detector en el emulador: solo amistoso, van al final de la lista
 DEFAULT_CHANNELS = [c for c in CHANNEL_LABELS if c not in FRIENDLY_ONLY] + list(FRIENDLY_ONLY)
 
 

@@ -10,13 +10,14 @@ from client.emotes import EMOTES, split_text
 from shared.protocol import CHANNEL_LABELS, DEFAULT_CHANNELS, VERSION
 
 CARD_W = 196
-PLATFORMS = {"Arcade": ("#8b00fd", "#3a0a8a"), "Mega Drive": ("#1f6fe0", "#0c2a70"), "NES": ("#e0402a", "#6e1410")}
-FILTERS = ("Todos", "Arcade", "Mega Drive", "NES", "⚡ Ranked")
+PLATFORMS = {"Arcade": ("#8b00fd", "#3a0a8a"), "Mega Drive": ("#1f6fe0", "#0c2a70"), "NES": ("#e0402a", "#6e1410"),
+             "SNES": ("#c9941a", "#5e4208")}
+FILTERS = ("Todos", "Arcade", "Mega Drive", "NES", "SNES (beta)", "⚡ Ranked")
 SEARCH_HINT = "Buscar juegos, títulos..."
 
 
 def platform_of(ch):
-    return "Mega Drive" if ch.startswith("md_") else "NES" if ch.startswith("nes_") else "Arcade"
+    return "Mega Drive" if ch.startswith("md_") else "NES" if ch.startswith("nes_") else "SNES" if ch.startswith("snes_") else "Arcade"
 
 
 def initials(ch):
@@ -220,7 +221,7 @@ class Views:
         tk.Label(self.home_body, text="Categorías", font=(th.BODY, 13, "bold"), fg="#ffffff", bg=th.BG).pack(anchor="w", pady=(20, 8))
         cats = tk.Frame(self.home_body, bg=th.BG)
         cats.pack(anchor="w")
-        for name, icon in (("Arcade", "🕹"), ("Mega Drive", "🎮"), ("NES", "👾"), ("⚡ Ranked", "🏆")):
+        for name, icon in (("Arcade", "🕹"), ("Mega Drive", "🎮"), ("NES", "👾"), ("SNES (beta)", "🕹"), ("⚡ Ranked", "🏆")):
             t = tk.Label(cats, text=f"{icon}\n{name}", width=14, pady=12, fg=th.TEXT, bg=th.PANEL, cursor="hand2",
                          font=(th.BODY, 10, "bold"), highlightthickness=1, highlightbackground=th.BORDER)
             t.pack(side="left", padx=(0, 12))
@@ -277,6 +278,8 @@ class Views:
             if self.filter == "⚡ Ranked" and ch not in self.auto_channels:
                 continue
             if self.filter in ("Arcade", "Mega Drive", "NES") and platform_of(ch) != self.filter:
+                continue
+            if self.filter == "SNES (beta)" and platform_of(ch) != "SNES":
                 continue
             if q and q not in CHANNEL_LABELS.get(ch, ch).lower() and q not in ch.lower():
                 continue
