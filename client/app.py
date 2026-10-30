@@ -36,7 +36,7 @@ from client.net import Net  # noqa: E402
 from shared.protocol import APP_NAME, CHANNEL_LABELS, VERSION  # noqa: E402
 
 DEFAULTS = {
-    "site": "https://dabrezzstore.com", "server_host": "", "server_tcp": 7600, "server_udp": 7601, "tls": True,
+    "site": "https://dabrezzstore.com", "server_host": "retro.dabrezzstore.com", "server_tcp": 7600, "server_udp": 7601, "tls": True,
     "email": "", "emulator": "", "roms_dir": "", "rom_manifest": "",
     # Emulador: quark:direct,<rom>,<puerto local>,<ip rival>,<puerto rival>,<jugador 0/1>,<delay>,<ranked>
     # (en modo direct el emulador ignora «ranked»). -w = ventana
@@ -138,6 +138,8 @@ class App(Views, LoginPages, LobbyPages, HelpUI, UpdateUI, tk.Tk):
             os.makedirs(os.path.join(self.data, sub), exist_ok=True)
         self.cfg_path = os.path.join(self.data, "config.json")
         self.cfg = {**DEFAULTS, **self._load_cfg()}
+        if self.cfg["server_host"] in ("", "10.55.82.172"):       # servidor anterior (host del sitio o IP de pruebas)
+            self.cfg["server_host"] = DEFAULTS["server_host"]
         if not self.cfg["emulator"]:
             self.cfg["emulator"] = detect_emulator(self.data)
         self.net = Net()
