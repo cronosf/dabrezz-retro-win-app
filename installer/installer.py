@@ -127,7 +127,7 @@ def payload(name):
 
 EMULATORS = ("fbneo", "snes9x", "ggpofba", "flycast", "duckstation")
 NOTICES = ("EMULATOR-NOTICE.txt", "FBNEO-LICENSE.txt", "SNES9X-LICENSE.txt", "FLYCAST-GPL2-LICENSE.txt", "DUCKSTATION-GPL3-LICENSE.txt",
-           "DIRECTX-LICENSE.txt")
+           "OPENBIOS-MIT-LICENSE.txt", "DIRECTX-LICENSE.txt")
 
 
 def emulator_complete(dest, zp):

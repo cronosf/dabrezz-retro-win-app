@@ -15,6 +15,10 @@ DuckStation (PS1): vendor/emulator-duckstation.zip se compila a partir de https:
   /p:Configuration=Release /p:Platform=x64". El paquete se arma con: python tools/make_duckstation.py <carpeta bin\x64>.
   Qt 6.1 (LGPL v3) viene del submodulo https://github.com/stenzek/duckstation-ext-qt-minimal.
 
+OpenBIOS (BIOS de PS1 libre, MIT): vendor/openbios.bin (512 KB, md5 c11db8c542b6ca411b6f5a7a474f0756) se instala en el paquete de
+  DuckStation (bios\openbios.bin). Origen: proyecto PCSX-Redux https://github.com/pcsx-redux/nugget (carpeta openbios); la copia
+  usada es identica (mismo hash) a la de https://github.com/ActionPL/duckstation_openbios_savestates y a la del cliente Arkadyzja.
+
 DirectX: vendor/directx-redist.zip es la carpeta Redist del "DirectX SDK (June 2010)" de Microsoft
   (https://download.microsoft.com/download/A/E/7/AE743F1F-632B-4809-87A9-AA1BB3458E31/DXSDK_Jun10.exe,
   SHA-256 705271DC83BFEE54D9B94E028426E288D5F070784B7446D164F48ECFBB2A02CB, firmado por Microsoft).

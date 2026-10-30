@@ -537,17 +537,14 @@ class App(Views, LoginPages, LobbyPages, StoreUI, HelpUI, UpdateUI, tk.Tk):
                 return None
             self.log("Eres el anfitrión: el rival se unirá a tu partida.", "sys")
             return ps1.host_command(exe, image, local, nick, delay)
-        self.log("Te unes a la partida del anfitrión (necesitas la misma BIOS y el mismo disco).", "sys")
+        self.log("Te unes a la partida del anfitrión (necesitas el mismo disco).", "sys")
         return ps1.join_command(exe, host, port, local, nick, delay)
 
     def need_bios(self):
-        """Falta la BIOS de PS1 (no se distribuye): explica y ofrece abrir la carpeta donde copiarla."""
-        d = ps1.bios_dir(self.data)
-        os.makedirs(d, exist_ok=True)
-        if messagebox.askyesno(APP_NAME, "Para jugar PlayStation 1 necesitas una BIOS de PS1 (un archivo de 512 KB, por ejemplo "
-                               "scph1001.bin). No se puede incluir: copia la tuya a esta carpeta, y que tu rival tenga la MISMA.\n\n"
-                               f"{d}\n\n¿Abrir la carpeta ahora?"):
-            os.startfile(d)
+        """Falta OpenBIOS (la BIOS libre que instala Dabrezz Retro): casi seguro la borro el antivirus o el paquete esta incompleto."""
+        messagebox.showinfo(APP_NAME, "Falta la BIOS de PS1 (openbios.bin) que instala Dabrezz Retro. Probablemente tu antivirus la "
+                            "borró: restáurala desde Seguridad de Windows (Historial de protección) o vuelve a ejecutar el instalador.\n\n"
+                            f"{ps1.bios_dir(self.data)}")
 
     def stop_emulator(self):
         """La partida ranked llego a su meta (primero en N): se cierra el emulador para que no sigan jugando."""

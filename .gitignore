@@ -5,6 +5,7 @@ __pycache__/
 *.pyc
 # paquetes grandes de terceros (se regeneran, ver README)
 vendor/*.zip
+vendor/openbios.bin
 # el servidor Linux se mantiene aparte
 server/
 # documentacion interna

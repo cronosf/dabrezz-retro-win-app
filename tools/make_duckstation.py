@@ -38,6 +38,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("bin_dir")
     ap.add_argument("--settings", help="settings.ini generado por una primera ejecucion del emulador compilado")
+    ap.add_argument("--openbios", default=os.path.join(ROOT, "vendor", "openbios.bin"), help="OpenBIOS (MIT, PCSX-Redux): la BIOS que se instala")
     ap.add_argument("--out", default=os.path.join(ROOT, "vendor", "emulator-duckstation.zip"))
     a = ap.parse_args()
     exe = os.path.join(a.bin_dir, "duckstation-qt-x64-Release.exe")
@@ -53,7 +54,7 @@ def main():
                 z.write(path, os.path.relpath(path, a.bin_dir).replace(os.sep, "/"))
                 n += 1
         z.writestr("portable.txt", "")
-        z.writestr("bios/.keep", "")
+        z.write(a.openbios, "bios/openbios.bin")        # BIOS libre (MIT): nadie necesita la de Sony
         z.writestr("ROMs/.keep", "")
         if a.settings:
             z.writestr("settings.default.ini", clean_settings(open(a.settings, encoding="utf-8").read()))
