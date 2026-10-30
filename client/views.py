@@ -31,7 +31,8 @@ class Views:
     first_to = [2, 3, 5, 10]
 
     # ---------- acceso ----------
-    def show_login(self):
+    def login_shell(self):
+        """Marco de la pantalla de acceso: imagen a la izquierda y panel derecho (se devuelve) donde va el formulario o una pagina."""
         f = self.swap()
         right = tk.Frame(f, bg=th.SIDEBAR, width=470)
         right.pack(side="right", fill="y")
@@ -41,7 +42,11 @@ class Views:
         tk.Label(left, image=th.image("hero.png"), bg=th.BG).place(relx=.5, rely=.43, anchor="center")
         tk.Label(left, text="LOS CLÁSICOS\nNUNCA PASAN DE MODA", font=(th.DISPLAY, 15), fg="#ffffff", bg=th.BG,
                  justify="center").place(relx=.5, rely=.88, anchor="center")
+        return right
 
+    def show_login(self):
+        self.stop_register()
+        right = self.login_shell()
         box = tk.Frame(right, bg=th.SIDEBAR)
         box.place(relx=.5, rely=.5, anchor="center")
         tk.Label(box, image=th.image("logo.png"), bg=th.SIDEBAR).pack(pady=(0, 4))
@@ -55,7 +60,7 @@ class Views:
         self.lbl_status.pack(pady=10, anchor="w")
         self.btn_login = ttk.Button(box, text="ENTRAR", style="Accent.TButton", command=self.auth)
         self.btn_login.pack(fill="x")
-        ttk.Button(box, text="CREAR CUENTA", command=self.register).pack(fill="x", pady=(8, 0))
+        ttk.Button(box, text="CREAR CUENTA", command=self.show_register_page).pack(fill="x", pady=(8, 0))
         row = tk.Frame(box, bg=th.SIDEBAR)
         row.pack(fill="x", pady=(14, 0))
         link = tk.Label(row, text="¿Olvidaste tu clave?", fg=th.LINK, bg=th.SIDEBAR, cursor="hand2", font=(th.BODY, 9))
@@ -63,10 +68,10 @@ class Views:
         link.bind("<Button-1>", lambda e: webbrowser.open(self.cfg["site"].rstrip("/") + "/forgot-password"))
         sett = tk.Label(row, text="Ajustes", fg=th.MUTED, bg=th.SIDEBAR, cursor="hand2", font=(th.BODY, 9))
         sett.pack(side="right")
-        sett.bind("<Button-1>", lambda e: self.show_settings())
+        sett.bind("<Button-1>", lambda e: self.show_settings_page())
         hlp = tk.Label(row, text="Ayuda", fg=th.MUTED, bg=th.SIDEBAR, cursor="hand2", font=(th.BODY, 9))
         hlp.pack(side="right", padx=(0, 14))
-        hlp.bind("<Button-1>", lambda e: self.show_help_window())
+        hlp.bind("<Button-1>", lambda e: self.show_help_page())
         tk.Label(box, text=f"Versión {VERSION}", fg=th.MUTED, bg=th.SIDEBAR, font=(th.BODY, 9)).pack(pady=(18, 0))
         self.bind("<Return>", lambda e: self.auth())
 

@@ -7,7 +7,6 @@ import os
 import shutil
 import subprocess
 import sys
-import tempfile
 import threading
 import tkinter as tk
 from tkinter import ttk
@@ -16,8 +15,10 @@ import client.theme as th
 import client.updater as updater
 from shared.protocol import VERSION
 
-UPDATE_DIR = os.path.join(tempfile.gettempdir(), "DabrezzRetro-update")
 CHECK_WAIT_MS = 2500                                            # si GitHub tarda mas, se muestra la app y se sigue buscando
+FLAG = "installing.flag"                                        # lo crea el instalador cuando ya muestra su ventana
+INSTALL_WAIT_MS = 30000
+INSTALLING_TEXT = "Instalando… el programa iniciará al terminar"
 
 
 class UpdateUI:
@@ -27,6 +28,11 @@ class UpdateUI:
 
     def updates_enabled(self):
         return bool(getattr(sys, "frozen", False) or os.environ.get("DABREZZ_UPDATE_TEST"))
+
+    def update_dir(self):
+        """Donde se guarda el instalador descargado: en la carpeta de datos de la app, NO en %TEMP% (en algunos equipos Windows
+        no permite ejecutar archivos desde Temp y el instalador no arrancaba)."""
+        return os.path.join(self.data, "update")
 
     # ---------- arranque ----------
     def boot(self):
@@ -46,9 +52,9 @@ class UpdateUI:
 
     def start_update_check(self):
         """Consulta GitHub (al abrir y cuando el servidor pide una version mas nueva). Solo en la app instalada."""
-        if not self.updates_enabled():
+        if not self.updates_enabled() or self.upd_win is not None:
             return
-        shutil.rmtree(UPDATE_DIR, ignore_errors=True)          # instaladores de actualizaciones anteriores
+        shutil.rmtree(self.update_dir(), ignore_errors=True)   # instaladores de actualizaciones anteriores
 
         def work():
             try:
@@ -96,7 +102,7 @@ class UpdateUI:
 
         def work():
             try:
-                put({"t": "_updready", "path": updater.download(info, UPDATE_DIR, progress)})
+                put({"t": "_updready", "path": updater.download(info, self.update_dir(), progress)})
             except (updater.UpdateError, OSError) as e:
                 put({"t": "_upderr", "msg": str(e)})
         threading.Thread(target=work, daemon=True).start()
@@ -112,15 +118,33 @@ class UpdateUI:
         print("actualizacion fallida:", msg, file=sys.stderr)
         self.finish_boot()
         self.deiconify()
+        if hasattr(self, "lbl_status") and self.lbl_status.winfo_exists():
+            self.lbl_status.config(text="No se pudo actualizar: " + msg, foreground=th.ERR)
 
     def launch_update(self, path):
-        """Descarga verificada: corre el instalador en modo actualizacion y la app se cierra para que pueda reemplazarla."""
+        """Descarga verificada: corre el instalador en modo actualizacion. La ventanita sigue visible hasta que el instalador
+        muestra la suya (misma posicion y aspecto); entonces la app se cierra para que pueda reemplazarla."""
+        flag = os.path.join(os.path.dirname(path), FLAG)
+        try:
+            os.remove(flag)
+        except OSError:
+            pass
+        try:
+            subprocess.Popen([path, "/update"], close_fds=True, creationflags=0x00000008 | 0x00000200)   # desligado de esta app
+        except OSError as e:
+            return self.update_failed(f"no se pudo iniciar el instalador ({e})")
         if self.upd_win is not None and self.upd_win.winfo_exists():
-            self.upd_bar.config(value=100)
-            self.upd_lbl.config(text="Instalando… la app se abrirá sola.", fg=th.OK)
-            self.update_idletasks()
-        subprocess.Popen([path, "/update"], close_fds=True, creationflags=0x00000008 | 0x00000200)   # desligado de esta app
-        self.on_close()
+            self.upd_lbl.config(text=INSTALLING_TEXT, fg=th.OK)
+            self.upd_bar.config(mode="indeterminate")
+            self.upd_bar.start(12)
+        waited = [0]
+
+        def poll():
+            waited[0] += 200
+            if os.path.exists(flag) or waited[0] >= INSTALL_WAIT_MS:
+                return self.on_close()
+            self.after(200, poll)
+        self.after(200, poll)
 
     def close_update(self):
         if self.upd_win is not None and self.upd_win.winfo_exists():

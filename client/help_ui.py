@@ -48,9 +48,10 @@ HELP = (
 
 
 class HelpUI:
-    def build_help(self, parent):
-        """Rellena `parent` con la ayuda: titulo, texto desplazable y boton de contacto."""
-        tk.Label(parent, text="Ayuda", font=(th.DISPLAY, 20), fg="#ffffff", bg=th.BG).pack(anchor="w")
+    def build_help(self, parent, heading=True):
+        """Rellena `parent` con la ayuda: titulo (opcional), texto desplazable y boton de contacto."""
+        if heading:
+            tk.Label(parent, text="Ayuda", font=(th.DISPLAY, 20), fg="#ffffff", bg=th.BG).pack(anchor="w")
         tk.Label(parent, text=f"Dabrezz Retro  ·  versión {VERSION}  ·  por {AUTHOR}", fg=th.MUTED, bg=th.BG,
                  font=(th.BODY, 10)).pack(anchor="w", pady=(2, 12))
         box = tk.Frame(parent, bg=th.PANEL)
@@ -72,11 +73,3 @@ class HelpUI:
         txt.tag_bind("mail", "<Leave>", lambda e: txt.config(cursor="arrow"))
         txt.config(state="disabled")
         return txt
-
-    def show_help_window(self):
-        """Ayuda desde la pantalla de acceso (donde aun no existe el menu lateral)."""
-        win = self.modal("Ayuda")
-        win.geometry("640x560")
-        pad = tk.Frame(win, bg=th.BG, padx=24, pady=18)
-        pad.pack(fill="both", expand=True)
-        self.build_help(pad)

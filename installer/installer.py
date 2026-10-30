@@ -212,9 +212,12 @@ class Installer(tk.Tk):
         super().__init__()
         self.update_mode = update
         self.title(f"Instalador {APP_NAME}")
+        th.apply(self)
+        cur = existing_install() if update else None
+        if cur:
+            return self._compact_ui(cur)
         self.geometry("640x620")
         self.resizable(False, False)
-        th.apply(self)
         root = default_root()
         self.v_app = tk.StringVar(value=root)
         self.v_data = tk.StringVar(value=os.path.join(root, "Datos"))
@@ -237,14 +240,39 @@ class Installer(tk.Tk):
         self.lbl.pack(anchor="w")
         self.btn = ttk.Button(f, text="INSTALAR", style="Accent.TButton", command=self.start)
         self.btn.pack(side="bottom", anchor="e")
-        cur = existing_install() if update else None
-        if cur:                                  # /update: misma instalacion, sin preguntar nada
-            self.title(f"Actualizando {APP_NAME}")
-            self.v_app.set(cur[0])
-            self.v_data.set(cur[1])
-            self.v_desk.set(os.path.exists(os.path.join(desktop(), "Dabrezz Retro.lnk")))
-            self.v_menu.set(os.path.exists(os.path.join(start_menu(), "Dabrezz Retro.lnk")))
-            self.after(500, self.start)
+
+    def _compact_ui(self, cur):
+        """/update con una instalacion existente: misma carpeta, sin preguntar nada. Solo una ventanita con la barra de
+        instalacion, igual a la de descarga de la app (el usuario no ve cambiar de ventana)."""
+        self.title(f"Actualizando {APP_NAME}")
+        self.btn = None
+        self.v_app = tk.StringVar(value=cur[0])
+        self.v_data = tk.StringVar(value=cur[1])
+        self.v_desk = tk.BooleanVar(value=os.path.exists(os.path.join(desktop(), "Dabrezz Retro.lnk")))
+        self.v_menu = tk.BooleanVar(value=os.path.exists(os.path.join(start_menu(), "Dabrezz Retro.lnk")))
+        self.configure(bg=th.ACCENT)
+        self.overrideredirect(True)
+        self.attributes("-topmost", True)
+        inner = tk.Frame(self, bg=th.BG, padx=34, pady=26)
+        inner.pack(padx=2, pady=2)
+        tk.Label(inner, image=th.image("logo_side.png"), bg=th.BG).pack()
+        tk.Label(inner, text=f"Actualizando a la versión {VERSION}", font=(th.DISPLAY, 13), fg="#ffffff", bg=th.BG).pack(pady=(14, 2))
+        tk.Label(inner, text="Instalando… el programa iniciará al terminar", fg=th.OK, bg=th.BG, font=(th.BODY, 9), wraplength=340).pack()
+        self.bar = ttk.Progressbar(inner, mode="determinate", maximum=100, length=340)
+        self.bar.pack(pady=(12, 4))
+        self.lbl = tk.Label(inner, text="", fg=th.MUTED, bg=th.BG, font=(th.BODY, 9), wraplength=340)
+        self.lbl.pack()
+        self.update_idletasks()
+        self.geometry(f"+{(self.winfo_screenwidth() - self.winfo_width()) // 2}+{(self.winfo_screenheight() - self.winfo_height()) // 3}")
+        self.after(300, self._signal_ready)
+        self.after(600, self.start)
+
+    def _signal_ready(self):
+        """Avisa a la app (que sigue mostrando su ventanita) de que ya se ve esta: puede cerrarse para liberar el .exe."""
+        try:
+            open(os.path.join(os.path.dirname(sys.executable), "installing.flag"), "w").close()
+        except OSError:
+            pass
 
     def row(self, parent, label, var, sync=False):
         ttk.Label(parent, text=label).pack(anchor="w", pady=(8, 2))
@@ -265,7 +293,8 @@ class Installer(tk.Tk):
         if not safe_dir(app) or not safe_dir(data) or os.path.normcase(app) == os.path.normcase(data):
             return messagebox.showerror(APP_NAME, "Elige carpetas válidas: no se permiten la raíz de un disco, tu carpeta de "
                                         "usuario, Windows ni Program Files, y deben ser distintas.")
-        self.btn.config(state="disabled")
+        if self.btn:
+            self.btn.config(state="disabled")
         threading.Thread(target=self.install, args=(app, data), daemon=True).start()
 
     def step(self, pct, text):
@@ -302,7 +331,14 @@ class Installer(tk.Tk):
             self.step(100, "¡Instalación completada!")
             self.after(0, lambda: self.done(target, app))
         except Exception as e:  # noqa: BLE001
-            self.after(0, lambda: (messagebox.showerror(APP_NAME, f"Error: {e}"), self.btn.config(state="normal")))
+            self.after(0, lambda: self.failed(e))
+
+    def failed(self, e):
+        messagebox.showerror(APP_NAME, f"Error: {e}")
+        if self.btn:
+            self.btn.config(state="normal")
+        else:                                     # ventanita de actualizacion: sin boton, se cierra (la app anterior sigue intacta)
+            self.destroy()
 
     def done(self, target, app):
         if self.update_mode:                      # actualizacion: se vuelve a abrir la app sin preguntar

@@ -15,7 +15,7 @@ from urllib.parse import urlparse
 
 if len(sys.argv) > 1 and sys.argv[1] == "--webform":      # el mismo exe hace de ventana modal del formulario web
     from client.webform import main as _webform
-    _webform(*sys.argv[2:6])
+    _webform(*sys.argv[2:7])
     sys.exit(0)
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
@@ -25,6 +25,7 @@ import client.romman as romman  # noqa: E402
 import client.theme as th  # noqa: E402
 from client.bridge import OverlayBridge  # noqa: E402
 from client.help_ui import HelpUI  # noqa: E402
+from client.login_pages import LoginPages  # noqa: E402
 from client.update_ui import UpdateUI  # noqa: E402
 from client.views import Views  # noqa: E402
 from client.net import Net  # noqa: E402
@@ -115,7 +116,7 @@ def detect_emulator(data):
     return p if os.path.exists(p) else ""
 
 
-class App(Views, HelpUI, UpdateUI, tk.Tk):
+class App(Views, LoginPages, HelpUI, UpdateUI, tk.Tk):
     def __init__(self):
         super().__init__()
         self.title(f"{APP_NAME} {VERSION}")
@@ -169,17 +170,6 @@ class App(Views, HelpUI, UpdateUI, tk.Tk):
         return self.frame
 
     # ---------- login (cuenta de la tienda) ----------
-    def register(self):
-        """Mismo formulario de registro de la web, en una ventana modal sin cabecera/pie ni boton de Google."""
-        self.lbl_status.config(text="", foreground=th.ERR)
-        self.update_idletasks()
-
-        def run():
-            ok = account.open_form(self.cfg["site"], "/register/?app=1", "registered=1", "Crear cuenta",
-                                   os.path.join(self.data, "webview"))
-            self.net.events.put({"t": "_registered", "ok": ok})
-        threading.Thread(target=run, daemon=True).start()
-
     def auth(self):
         self.cfg["email"] = self.v_email.get().strip()
         self.lbl_status.config(text="Conectando…", foreground=th.MUTED)
@@ -285,26 +275,42 @@ class App(Views, HelpUI, UpdateUI, tk.Tk):
         win = self.modal("Ajustes")
         pad = ttk.Frame(win, padding=20)
         pad.pack()
+        self.settings_form(pad, win.destroy, wide=True)
+
+    def settings_form(self, pad, on_done, wide=False, btn_parent=None):
+        """Formulario de ajustes. wide: etiqueta a la izquierda (ventana); si no, apilado (panel estrecho de la pantalla de acceso)."""
         vars_ = {}
         rows = (("Sitio de la tienda (cuenta)", "site", False), ("Servidor de juego (vacío = host del sitio)", "server_host", False),
                 ("Puerto TCP del servidor", "server_tcp", False), ("Puerto UDP del servidor", "server_udp", False),
                 ("Emulador (.exe)", "emulator", "file"), ("Carpeta de ROMs", "roms_dir", "dir"), ("Catálogo de ROMs (URL .json)", "rom_manifest", False),
                 ("Argumentos del emulador", "emu_args", False))
-        for i, (lbl, key, browse) in enumerate(rows):
-            ttk.Label(pad, text=lbl).grid(row=i, column=0, sticky="w", pady=5, padx=(0, 10))
+        pad.columnconfigure(0 if not wide else 1, weight=1)
+        r0 = 0
+        for lbl, key, browse in rows:
             vars_[key] = tk.StringVar(value=str(self.cfg[key]))
-            ttk.Entry(pad, textvariable=vars_[key], width=48).grid(row=i, column=1, pady=5)
+            if wide:
+                ttk.Label(pad, text=lbl).grid(row=r0, column=0, sticky="w", pady=5, padx=(0, 10))
+                ttk.Entry(pad, textvariable=vars_[key], width=48).grid(row=r0, column=1, pady=5, sticky="ew")
+                col = 2
+            else:
+                ttk.Label(pad, text=lbl, foreground=th.MUTED).grid(row=r0, column=0, columnspan=2, sticky="w", pady=(6, 1))
+                r0 += 1
+                ttk.Entry(pad, textvariable=vars_[key]).grid(row=r0, column=0, columnspan=1 if browse else 2, sticky="ew")
+                col = 1
             if browse:
                 def pick(k=key, b=browse):
                     p = filedialog.askopenfilename(filetypes=[("Ejecutable", "*.exe")]) if b == "file" else filedialog.askdirectory()
                     if p:
                         vars_[k].set(os.path.normpath(p))
-                ttk.Button(pad, text="...", width=3, command=pick).grid(row=i, column=2, padx=6)
+                ttk.Button(pad, text="...", width=3, command=pick).grid(row=r0, column=col, padx=(6, 0))
+            r0 += 1
+        span = 3 if wide else 2
         v_tls = tk.BooleanVar(value=bool(self.cfg["tls"]))
-        ttk.Checkbutton(pad, text="Conexión cifrada (TLS) con el servidor de juego (recomendado)", variable=v_tls).grid(columnspan=3, sticky="w")
+        ttk.Checkbutton(pad, text="Conexión cifrada (TLS) con el servidor de juego (recomendado)" if wide else "Conexión cifrada (TLS) (recomendado)",
+                        variable=v_tls).grid(row=r0, columnspan=span, sticky="w", pady=(8, 0))
         ttk.Label(pad, text="Variables: {rom} {host} {port} {local_port} {player} {player0} {delay} {channel} {rival}   ·   añade -w para ventana",
-                  style="Muted.TLabel").grid(columnspan=3, sticky="w", pady=4)
-        ttk.Label(pad, text=f"Datos: {self.data}", style="Muted.TLabel").grid(columnspan=3, sticky="w")
+                  style="Muted.TLabel", wraplength=0 if wide else 400).grid(row=r0 + 1, columnspan=span, sticky="w", pady=4)
+        ttk.Label(pad, text=f"Datos: {self.data}", style="Muted.TLabel", wraplength=0 if wide else 400).grid(row=r0 + 2, columnspan=span, sticky="w")
 
         def detect():
             p = detect_emulator(self.data)
@@ -314,14 +320,21 @@ class App(Views, HelpUI, UpdateUI, tk.Tk):
                 messagebox.showinfo(APP_NAME, "No se encontró el emulador incluido. Reinstala Dabrezz Retro o indica la ruta del .exe.")
 
         def save():
-            for k, v in vars_.items():
-                self.cfg[k] = int(v.get()) if k.startswith("server_t") or k == "server_udp" else v.get().strip()
+            try:
+                for k, v in vars_.items():
+                    self.cfg[k] = int(v.get()) if k.startswith("server_t") or k == "server_udp" else v.get().strip()
+            except ValueError:
+                return messagebox.showerror(APP_NAME, "Los puertos deben ser números.")
             self.cfg["tls"] = v_tls.get()
             self.save_cfg()
-            win.destroy()
-            self.render_channels()
-        r = ttk.Frame(pad)
-        r.grid(columnspan=3, pady=(12, 0))
+            on_done()
+            if self.me:
+                self.render_channels()
+        r = ttk.Frame(btn_parent or pad)
+        if btn_parent:
+            r.pack(pady=(10, 0))
+        else:
+            r.grid(row=r0 + 3, columnspan=span, pady=(12, 0))
         ttk.Button(r, text="DETECTAR EMULADOR", command=detect).pack(side="left", padx=4)
         ttk.Button(r, text="GUARDAR", style="Accent.TButton", command=save).pack(side="left", padx=4)
 
@@ -431,11 +444,7 @@ class App(Views, HelpUI, UpdateUI, tk.Tk):
 
     def handle(self, m):
         t = m["t"]
-        if t == "_registered":
-            if hasattr(self, "lbl_status"):
-                self.lbl_status.config(text="Cuenta creada. Ahora inicia sesión con tu correo y clave." if m["ok"] else "",
-                                       foreground=th.OK)
-        elif t == "auth":
+        if t == "auth":
             if not m["ok"]:
                 self.net.close()
                 self.close_nick()
@@ -559,6 +568,7 @@ class App(Views, HelpUI, UpdateUI, tk.Tk):
                        [(x["channel"], " vs ".join(x["players"]), "sí" if x["ranked"] else "no") for x in m["matches"]])
 
     def on_close(self):
+        self.stop_register()
         if self.emu and self.emu.poll() is None:
             self.emu.terminate()
         self.net.close()

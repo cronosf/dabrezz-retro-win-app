@@ -53,6 +53,20 @@ def login(site, email, password):
     return r["token"], r["user"]
 
 
+def open_form_embedded(site, path, marker, title, storage, parent_hwnd):
+    """Como open_form, pero la web se muestra DENTRO de la ventana de la app (hija del control `parent_hwnd`). Devuelve el
+    proceso (sale con 0 si el registro termino) o None si no se pudo iniciar."""
+    check_site(site)
+    url = f"{site.rstrip('/')}{path}"
+    args = [url, marker, title, storage, str(parent_hwnd)]
+    cmd = [sys.executable, "--webform", *args] if getattr(sys, "frozen", False) else [sys.executable, "-m", "client.webform", *args]
+    env = {**os.environ, "PYTHONPATH": os.path.dirname(os.path.dirname(os.path.abspath(__file__)))}
+    try:
+        return subprocess.Popen(cmd, env=env, creationflags=0x08000000)
+    except OSError:
+        return None
+
+
 def open_form(site, path, marker, title, storage):
     """Abre el formulario de la web en una ventana modal (igual que la app Android: ?app=1 oculta cabecera,
     pie y el boton de Google). Devuelve True si el registro termino (la web redirige a ...registered=1)."""
