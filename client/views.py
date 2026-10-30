@@ -6,7 +6,7 @@ import webbrowser
 from tkinter import ttk
 
 import client.theme as th
-from shared.protocol import CHANNEL_LABELS, DEFAULT_CHANNELS
+from shared.protocol import CHANNEL_LABELS, DEFAULT_CHANNELS, VERSION
 
 CARD_W = 196
 PLATFORMS = {"Arcade": ("#8b00fd", "#3a0a8a"), "Mega Drive": ("#1f6fe0", "#0c2a70"), "NES": ("#e0402a", "#6e1410")}
@@ -26,7 +26,8 @@ def initials(ch):
 
 
 class Views:
-    NAV = (("home", "Inicio", "⌂"), ("games", "Juegos", "🎮"), ("fav", "Favoritos", "♥"), ("multi", "Multijugador", "👥"))
+    NAV = (("home", "Inicio", "⌂"), ("games", "Juegos", "🎮"), ("fav", "Favoritos", "♥"), ("multi", "Multijugador", "👥"),
+           ("help", "Ayuda", "❓"))
     first_to = [2, 3, 5, 10]
 
     # ---------- acceso ----------
@@ -63,6 +64,10 @@ class Views:
         sett = tk.Label(row, text="Ajustes", fg=th.MUTED, bg=th.SIDEBAR, cursor="hand2", font=(th.BODY, 9))
         sett.pack(side="right")
         sett.bind("<Button-1>", lambda e: self.show_settings())
+        hlp = tk.Label(row, text="Ayuda", fg=th.MUTED, bg=th.SIDEBAR, cursor="hand2", font=(th.BODY, 9))
+        hlp.pack(side="right", padx=(0, 14))
+        hlp.bind("<Button-1>", lambda e: self.show_help_window())
+        tk.Label(box, text=f"Versión {VERSION}", fg=th.MUTED, bg=th.SIDEBAR, font=(th.BODY, 9)).pack(pady=(18, 0))
         self.bind("<Return>", lambda e: self.auth())
 
     # ---------- estructura: barra lateral + contenido ----------
@@ -101,7 +106,8 @@ class Views:
 
         self.content = tk.Frame(main, bg=th.BG)
         self.content.pack(fill="both", expand=True, padx=24, pady=(0, 18))
-        self.views = {n: tk.Frame(self.content, bg=th.BG) for n in ("home", "games", "multi")}
+        self.views = {n: tk.Frame(self.content, bg=th.BG) for n in ("home", "games", "multi", "help")}
+        self.build_help(self.views["help"])
         self.filter, self.view_name, self.sel_game = "Todos", "home", None
         self._build_home()
         self._build_games()

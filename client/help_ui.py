@@ -1,0 +1,82 @@
+"""Menu "Ayuda": informacion de la app, descripcion, terminos y condiciones y contacto (mixin de App)."""
+import tkinter as tk
+import webbrowser
+from tkinter import ttk
+
+import client.theme as th
+from shared.protocol import VERSION
+
+AUTHOR = "CRONOSF DEV"
+CONTACT = "cronosfvr@gmail.com"
+
+# (estilo, texto): "h" = titulo de seccion, "p" = parrafo, "b" = vineta
+HELP = (
+    ("h", "Acerca de Dabrezz Retro"),
+    ("p", "Dabrezz Retro es una plataforma de juego en línea para clásicos de arcade, Mega Drive y NES. Te permite crear o unirte a "
+          "partidas contra otros jugadores, con ranking, chat y resultados registrados automáticamente."),
+    ("b", "Partidas en línea con rollback: el juego responde como si estuvieras en local aunque haya latencia."),
+    ("b", "Ranking ELO: el resultado lo lee el servidor directamente del emulador de ambos jugadores, no lo reporta ninguno de los dos."),
+    ("b", "Sistema anti-colusión que limita y revisa partidas repetidas entre las mismas cuentas."),
+    ("b", "Tu cuenta es la de Dabrezz Store; en el juego solo se muestra tu nombre de usuario (nickname)."),
+    ("h", "Cómo se usa"),
+    ("b", "Inicia sesión con tu correo y clave de Dabrezz Store, o crea una cuenta desde el botón CREAR CUENTA."),
+    ("b", "La primera vez elige un nombre de usuario único (5 a 12 caracteres)."),
+    ("b", "En Juegos o Multijugador elige un título, crea una sala o únete a la de otro jugador."),
+    ("b", "La app se actualiza sola al abrirse cuando existe una versión nueva firmada."),
+    ("h", "Términos y condiciones"),
+    ("p", f"1. Gratuita. Dabrezz Retro es gratuita y se puede distribuir libremente sin cobrar por ella. Está desarrollada por {AUTHOR}. "
+          "No se debe vender ni cobrar por su descarga, instalación o uso."),
+    ("p", "2. Sin garantía. La app se ofrece \"tal cual\", sin garantías de disponibilidad, continuidad ni ausencia de errores. El servicio "
+          "puede cambiar, interrumpirse o cerrarse en cualquier momento."),
+    ("p", "3. Emuladores y juegos. Los emuladores incluidos pertenecen a sus autores y se distribuyen bajo sus propias licencias "
+          "(consulta la carpeta de avisos de licencias de la instalación). Los juegos (ROMs) son propiedad de sus titulares: "
+          "usa únicamente copias que tengas derecho a usar. Dabrezz Retro no es propietaria de ellos ni está afiliada a sus fabricantes."),
+    ("p", "4. Conducta. Está prohibido hacer trampas, usar clientes modificados o no oficiales, manipular resultados, acordar partidas "
+          "para inflar el ranking, suplantar a otros, usar nombres ofensivos o atacar el servicio. El incumplimiento puede causar "
+          "silenciamiento, restablecimiento del nombre, anulación de resultados o bloqueo de la cuenta."),
+    ("p", "5. Datos. El servidor guarda el identificador de tu cuenta de Dabrezz Store, tu nombre de usuario, tu ranking, el historial de "
+          "partidas y la dirección IP necesaria para conectar y detectar abusos. Tu nombre real y correo no se muestran a otros "
+          "jugadores. La tienda se usa solo para registrarte y verificar tu inicio de sesión."),
+    ("p", "6. Conexión entre jugadores. Para jugar en línea tu equipo se conecta con el del rival (o a través del servidor), por lo que "
+          "este puede conocer tu dirección IP durante la partida."),
+    ("p", f"7. Responsabilidad. {AUTHOR} no se hace responsable de daños, pérdida de datos o problemas derivados del uso de la app, "
+          "de los emuladores o de partidas con terceros."),
+    ("p", "8. Cambios. Estos términos pueden actualizarse con nuevas versiones de la app. Usarla implica aceptarlos."),
+    ("h", "Contacto y soporte"),
+    ("p", f"Desarrollada por {AUTHOR}. Para dudas, errores, sugerencias o reportes de abuso escribe a:"),
+)
+
+
+class HelpUI:
+    def build_help(self, parent):
+        """Rellena `parent` con la ayuda: titulo, texto desplazable y boton de contacto."""
+        tk.Label(parent, text="Ayuda", font=(th.DISPLAY, 20), fg="#ffffff", bg=th.BG).pack(anchor="w")
+        tk.Label(parent, text=f"Dabrezz Retro  ·  versión {VERSION}  ·  por {AUTHOR}", fg=th.MUTED, bg=th.BG,
+                 font=(th.BODY, 10)).pack(anchor="w", pady=(2, 12))
+        box = tk.Frame(parent, bg=th.PANEL)
+        box.pack(fill="both", expand=True)
+        txt = th.textbox(box, cursor="arrow", spacing3=6)
+        sb = ttk.Scrollbar(box, orient="vertical", command=txt.yview)
+        txt.config(yscrollcommand=sb.set)
+        sb.pack(side="right", fill="y")
+        txt.pack(side="left", fill="both", expand=True)
+        txt.tag_config("h", font=(th.DISPLAY, 12), foreground="#ffffff", spacing1=14, spacing3=6)
+        txt.tag_config("p", lmargin1=0, lmargin2=0)
+        txt.tag_config("b", lmargin1=14, lmargin2=28)
+        txt.tag_config("mail", foreground=th.LINK, underline=True, font=(th.BODY, 11, "bold"))
+        for kind, text in HELP:
+            txt.insert("end", ("•  " if kind == "b" else "") + text + "\n", kind)
+        txt.insert("end", CONTACT + "\n", "mail")
+        txt.tag_bind("mail", "<Button-1>", lambda e: webbrowser.open("mailto:" + CONTACT))
+        txt.tag_bind("mail", "<Enter>", lambda e: txt.config(cursor="hand2"))
+        txt.tag_bind("mail", "<Leave>", lambda e: txt.config(cursor="arrow"))
+        txt.config(state="disabled")
+        return txt
+
+    def show_help_window(self):
+        """Ayuda desde la pantalla de acceso (donde aun no existe el menu lateral)."""
+        win = self.modal("Ayuda")
+        win.geometry("640x560")
+        pad = tk.Frame(win, bg=th.BG, padx=24, pady=18)
+        pad.pack(fill="both", expand=True)
+        self.build_help(pad)

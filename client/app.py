@@ -24,6 +24,7 @@ import client.attest as attest  # noqa: E402
 import client.romman as romman  # noqa: E402
 import client.theme as th  # noqa: E402
 from client.bridge import OverlayBridge  # noqa: E402
+from client.help_ui import HelpUI  # noqa: E402
 from client.update_ui import UpdateUI  # noqa: E402
 from client.views import Views  # noqa: E402
 from client.net import Net  # noqa: E402
@@ -114,7 +115,7 @@ def detect_emulator(data):
     return p if os.path.exists(p) else ""
 
 
-class App(Views, UpdateUI, tk.Tk):
+class App(Views, HelpUI, UpdateUI, tk.Tk):
     def __init__(self):
         super().__init__()
         self.title(f"{APP_NAME} {VERSION}")
