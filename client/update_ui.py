@@ -50,6 +50,7 @@ class UpdateUI:
         self.booted = True
         self.show_login()
         self.deiconify()
+        self.after(100, self.try_saved_session)
 
     def start_update_check(self):
         """Consulta GitHub (al abrir y cuando el servidor pide una version mas nueva). Solo en la app instalada."""

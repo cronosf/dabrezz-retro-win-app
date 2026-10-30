@@ -34,22 +34,24 @@ class LoginPages:
 
     # ---------- Ajustes ----------
     def show_settings_page(self):
-        def build(body):
-            foot = tk.Frame(body, bg=th.BG)                  # botones siempre visibles, fuera del area desplazable
-            foot.pack(side="bottom", fill="x")
-            canvas = tk.Canvas(body, bg=th.BG, highlightthickness=0)
-            sb = ttk.Scrollbar(body, orient="vertical", command=canvas.yview)
-            canvas.configure(yscrollcommand=sb.set)
-            sb.pack(side="right", fill="y")
-            canvas.pack(side="left", fill="both", expand=True)
-            pad = ttk.Frame(canvas, padding=(0, 0, 12, 0))
-            win = canvas.create_window((0, 0), window=pad, anchor="nw")
-            pad.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
-            canvas.bind("<Configure>", lambda e: canvas.itemconfigure(win, width=e.width))
-            canvas.bind("<Enter>", lambda e: canvas.bind_all("<MouseWheel>", lambda ev: canvas.yview_scroll(-1 if ev.delta > 0 else 1, "units")))
-            canvas.bind("<Leave>", lambda e: canvas.unbind_all("<MouseWheel>"))
-            self.settings_form(pad, self.show_login, btn_parent=foot)
-        self.login_page("Ajustes", build)
+        self.login_page("Ajustes", lambda body: self.settings_panel(body, self.show_login))
+
+    def settings_panel(self, body, on_done, max_w=None):
+        """Formulario de ajustes con scroll y los botones siempre visibles; sirve para el login y para el lobby."""
+        foot = tk.Frame(body, bg=th.BG)                  # botones fuera del area desplazable
+        foot.pack(side="bottom", fill="x")
+        canvas = tk.Canvas(body, bg=th.BG, highlightthickness=0)
+        sb = ttk.Scrollbar(body, orient="vertical", command=canvas.yview)
+        canvas.configure(yscrollcommand=sb.set)
+        sb.pack(side="right", fill="y")
+        canvas.pack(side="left", fill="both", expand=True)
+        pad = ttk.Frame(canvas, padding=(0, 0, 12, 0))
+        win = canvas.create_window((0, 0), window=pad, anchor="nw")
+        pad.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+        canvas.bind("<Configure>", lambda e: canvas.itemconfigure(win, width=min(e.width, max_w) if max_w else e.width))
+        canvas.bind("<Enter>", lambda e: canvas.bind_all("<MouseWheel>", lambda ev: canvas.yview_scroll(-1 if ev.delta > 0 else 1, "units")))
+        canvas.bind("<Leave>", lambda e: canvas.unbind_all("<MouseWheel>"))
+        self.settings_form(pad, on_done, btn_parent=foot)
 
     # ---------- Registro (formulario web de la tienda, incrustado) ----------
     def show_register_page(self):

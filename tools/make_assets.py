@@ -150,16 +150,142 @@ def draw_icon(name, rgb, px, width=1.9):
     elif name == "settings":
         poly(_gear_points(), closed=True)
         d.ellipse(box(8.6, 8.6, 15.4, 15.4), outline=col, width=w)
+    elif name == "store":                                   # bolsa de compras
+        poly([(5, 8), (19, 8), (20.5, 21), (3.5, 21)], closed=True)
+        d.arc(box(8, 3, 16, 13), 180, 360, fill=col, width=w)
+    elif name == "logout":                                  # puerta con flecha de salida
+        poly([(11, 4), (4.5, 4), (4.5, 20), (11, 20)])
+        poly([(9.5, 12), (20, 12)])
+        poly([(15.5, 7), (20.5, 12), (15.5, 17)])
+    elif name == "user":
+        d.ellipse(box(7.5, 3.5, 16.5, 12.5), outline=col, width=w)
+        d.arc(box(3.5, 14, 20.5, 31), 195, 345, fill=col, width=w)
     return im.resize((px, px), Image.LANCZOS)
 
 
-ICON_NAMES = ("home", "games", "fav", "multi", "help", "settings")
+ICON_NAMES = ("home", "games", "fav", "multi", "store", "help", "settings", "user", "logout")
 
 
 def make_icons():
     for name in ICON_NAMES:
         draw_icon(name, TEXT_RGB, 22).save(os.path.join(OUT, f"ico_{name}.png"))          # menu lateral
         draw_icon(name, MUTED_RGB, 16, 2.1).save(os.path.join(OUT, f"ico_{name}_s.png"))     # enlaces pequenos
+
+
+# ---------- emoticonos del chat (se escriben como :codigo: y la app los muestra como imagen) ----------
+def _heart(cx, cy, s):
+    import math
+    pts = []
+    for i in range(0, 361, 8):
+        t = math.radians(i)
+        pts.append((cx + s * 16 * math.sin(t) ** 3 / 16, cy - s * (13 * math.cos(t) - 5 * math.cos(2 * t) - 2 * math.cos(3 * t) - math.cos(4 * t)) / 16))
+    return pts
+
+
+def draw_emote(name, px=24):
+    n = 24 * SS
+    im = Image.new("RGBA", (n, n), (0, 0, 0, 0))
+    d = ImageDraw.Draw(im)
+    box = lambda x0, y0, x1, y1: (x0 * SS, y0 * SS, x1 * SS, y1 * SS)   # noqa: E731
+    pts = lambda p: [(x * SS, y * SS) for x, y in p]                     # noqa: E731
+    lw = lambda v: round(v * SS)                                         # noqa: E731
+    dark, white = (58, 32, 8, 255), (255, 255, 255, 255)
+
+    def face(fill=(255, 210, 31, 255)):
+        d.ellipse(box(1.2, 1.2, 22.8, 22.8), fill=fill, outline=(196, 128, 12, 255), width=lw(1.1))
+
+    def eyes(r=1.25):
+        for cx in (8.2, 15.8):
+            d.ellipse(box(cx - r, 9 - r * 1.2, cx + r, 9 + r * 1.2), fill=dark)
+
+    def smile(top=9, bottom=19.5, width=1.7):
+        d.arc(box(6.2, top, 17.8, bottom), 25, 155, fill=dark, width=lw(width))
+
+    def frown():
+        d.arc(box(7, 14.5, 17, 23), 205, 335, fill=dark, width=lw(1.7))
+
+    if name in ("smile", "grin", "laugh", "wink", "love", "cool", "sad", "cry", "angry", "wow"):
+        face((255, 125, 70, 255) if name == "angry" else (255, 210, 31, 255))
+        if name == "smile":
+            eyes(); smile()
+        elif name == "grin":
+            eyes(); d.chord(box(5.5, 9.5, 18.5, 20.5), 0, 180, fill=dark); d.rectangle(box(7.4, 14.1, 16.6, 15.6), fill=white)
+        elif name == "laugh":
+            for cx in (8.2, 15.8):
+                d.arc(box(cx - 2.2, 7.4, cx + 2.2, 11.6), 200, 340, fill=dark, width=lw(1.5))
+            d.chord(box(5.5, 9.5, 18.5, 21), 0, 180, fill=dark)
+            for cx in (3.4, 20.6):
+                d.ellipse(box(cx - 1.1, 11.5, cx + 1.1, 15), fill=(70, 160, 255, 255))
+        elif name == "wink":
+            d.ellipse(box(6.9, 7.8, 9.5, 10.4), fill=dark)
+            d.arc(box(13.6, 7.6, 18, 11.6), 200, 340, fill=dark, width=lw(1.5))
+            smile()
+        elif name == "love":
+            for cx in (8.2, 15.8):
+                d.polygon(pts(_heart(cx, 9.3, 4.6)), fill=(235, 30, 70, 255))
+            smile()
+        elif name == "cool":
+            d.rounded_rectangle(box(3.6, 7.2, 11, 12.4), radius=2 * SS, fill=dark)
+            d.rounded_rectangle(box(13, 7.2, 20.4, 12.4), radius=2 * SS, fill=dark)
+            d.line(pts([(10.6, 8.6), (13.4, 8.6)]), fill=dark, width=lw(1.2))
+            smile()
+        elif name == "sad":
+            eyes(); frown()
+        elif name == "cry":
+            eyes(); frown(); d.ellipse(box(5.4, 11, 8, 16.5), fill=(70, 160, 255, 255))
+        elif name == "angry":
+            eyes(1.05)
+            d.line(pts([(5.2, 6.2), (10.6, 8.4)]), fill=dark, width=lw(1.5))
+            d.line(pts([(18.8, 6.2), (13.4, 8.4)]), fill=dark, width=lw(1.5))
+            frown()
+        elif name == "wow":
+            eyes(1.5); d.ellipse(box(10.2, 14, 13.8, 19.6), fill=dark)
+    elif name == "ok":
+        d.ellipse(box(1.2, 1.2, 22.8, 22.8), fill=(61, 220, 151, 255))
+        d.line(pts([(6.2, 12.4), (10.4, 16.6), (17.8, 7.8)]), fill=white, width=lw(2.6), joint="curve")
+    elif name == "no":
+        d.ellipse(box(1.2, 1.2, 22.8, 22.8), fill=(255, 107, 138, 255))
+        d.line(pts([(7.4, 7.4), (16.6, 16.6)]), fill=white, width=lw(2.6))
+        d.line(pts([(16.6, 7.4), (7.4, 16.6)]), fill=white, width=lw(2.6))
+    elif name == "fire":
+        d.polygon(pts([(12, 1.5), (16.5, 8), (19, 6.5), (20, 14), (17.5, 20.5), (12, 22.8), (6.5, 20.5), (4, 14), (6.5, 8.5), (9, 10)]), fill=(255, 120, 20, 255))
+        d.polygon(pts([(12, 10), (15.4, 15), (14.6, 20), (12, 21.4), (9.4, 20), (8.6, 15)]), fill=(255, 215, 40, 255))
+    elif name == "heart":
+        d.polygon(pts(_heart(12, 10.4, 10.5)), fill=(235, 30, 70, 255))
+        d.ellipse(box(6.2, 5.6, 8.6, 8), fill=(255, 150, 170, 255))
+    elif name == "star":
+        import math
+        p = [(12 + (11 if i % 2 == 0 else 4.7) * math.sin(math.pi * i / 5), 12.6 - (11 if i % 2 == 0 else 4.7) * math.cos(math.pi * i / 5)) for i in range(10)]
+        d.polygon(pts(p), fill=(255, 210, 31, 255), outline=(214, 150, 20, 255))
+    elif name == "trophy":
+        gold = (255, 200, 40, 255)
+        d.polygon(pts([(6.5, 3.5), (17.5, 3.5), (16.6, 11), (12, 15), (7.4, 11)]), fill=gold)
+        d.arc(box(2.5, 4.5, 8.5, 11.5), 90, 270, fill=gold, width=lw(1.6))
+        d.arc(box(15.5, 4.5, 21.5, 11.5), 270, 90, fill=gold, width=lw(1.6))
+        d.rectangle(box(10.8, 14.5, 13.2, 18.4), fill=gold)
+        d.rounded_rectangle(box(7.5, 18, 16.5, 21.5), radius=SS, fill=(214, 150, 20, 255))
+    elif name == "gamepad":
+        d.rounded_rectangle(box(1.5, 6, 22.5, 18.5), radius=6 * SS, fill=(139, 0, 253, 255))
+        d.line(pts([(7, 9.6), (7, 14.8)]), fill=white, width=lw(1.8)); d.line(pts([(4.4, 12.2), (9.6, 12.2)]), fill=white, width=lw(1.8))
+        for cx, cy in ((15.8, 10.6), (18.8, 13.6)):
+            d.ellipse(box(cx - 1.4, cy - 1.4, cx + 1.4, cy + 1.4), fill=(255, 210, 31, 255))
+    elif name in ("gg", "gl"):
+        from PIL import ImageFont
+        d.rounded_rectangle(box(0.8, 3.6, 23.2, 20.4), radius=4 * SS, fill=(139, 0, 253, 255) if name == "gg" else (31, 111, 224, 255))
+        try:
+            font = ImageFont.truetype("segoeuib.ttf", 11 * SS)
+        except OSError:
+            font = ImageFont.load_default()
+        d.text((12 * SS, 12.4 * SS), name.upper(), font=font, fill=white, anchor="mm")
+    return im.resize((px, px), Image.LANCZOS)
+
+
+def make_emotes():
+    import sys
+    sys.path.insert(0, ROOT)
+    from client.emotes import EMOTES
+    for name in EMOTES:
+        draw_emote(name).save(os.path.join(OUT, f"emo_{name}.png"))
 
 
 def main():
@@ -177,11 +303,13 @@ def main():
 
     logo.resize((172, round(logo.size[1] * 172 / logo.size[0])), Image.LANCZOS).save(os.path.join(OUT, "logo_side.png"))
     icon.resize((40, 40), Image.LANCZOS).save(os.path.join(OUT, "icon_small.png"))
+    icon.resize((96, 96), Image.LANCZOS).save(os.path.join(OUT, "icon_96.png"))      # pagina "Mi perfil"
 
     hero = feather(sheet.crop(HERO_BOX))
     hero.save(os.path.join(OUT, "hero.png"))
     hero.resize((300, round(hero.size[1] * 300 / hero.size[0])), Image.LANCZOS).save(os.path.join(OUT, "hero_small.png"))
     make_icons()
+    make_emotes()
     for f in sorted(os.listdir(OUT)):
         print(f.ljust(14), os.path.getsize(os.path.join(OUT, f)) // 1024, "KB")
 

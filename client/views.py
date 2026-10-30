@@ -6,6 +6,7 @@ import webbrowser
 from tkinter import ttk
 
 import client.theme as th
+from client.emotes import EMOTES, split_text
 from shared.protocol import CHANNEL_LABELS, DEFAULT_CHANNELS, VERSION
 
 CARD_W = 196
@@ -26,7 +27,8 @@ def initials(ch):
 
 
 class Views:
-    NAV = (("home", "Inicio"), ("games", "Juegos"), ("fav", "Favoritos"), ("multi", "Multijugador"), ("help", "Ayuda"))
+    NAV = (("home", "Inicio"), ("games", "Juegos"), ("fav", "Favoritos"), ("multi", "Multijugador"), ("store", "Dabrezz Store"),
+           ("help", "Ayuda"))
     first_to = [2, 3, 5, 10]
 
     # ---------- acceso ----------
@@ -52,9 +54,13 @@ class Views:
         ttk.Label(box, text="Inicia sesión con tu cuenta de Dabrezz Store", style="Side.TLabel", foreground=th.MUTED).pack(pady=(0, 20))
         self.v_email = tk.StringVar(value=self.cfg["email"])
         self.v_pass = tk.StringVar()
-        for lbl, var, show in (("Correo", self.v_email, ""), ("Clave", self.v_pass, "•")):
+        for lbl, var, show in (("Correo", self.v_email, ""), ("Contraseña", self.v_pass, "•")):
             ttk.Label(box, text=lbl, style="Side.TLabel", foreground=th.MUTED).pack(anchor="w", pady=(6, 2))
             ttk.Entry(box, textvariable=var, show=show, width=36).pack(fill="x")
+        self.v_remember = tk.BooleanVar(value=bool(self.cfg.get("remember", False)))
+        tk.Checkbutton(box, text=" Recordar sesión", variable=self.v_remember, fg=th.TEXT, bg=th.SIDEBAR, selectcolor=th.FIELD,
+                       activebackground=th.SIDEBAR, activeforeground=th.TEXT, bd=0, highlightthickness=0, cursor="hand2",
+                       font=(th.BODY, 9)).pack(anchor="w", pady=(10, 0))
         self.lbl_status = tk.Label(box, text="", fg=th.ERR, bg=th.SIDEBAR, wraplength=330, justify="left", font=(th.BODY, 9))
         self.lbl_status.pack(pady=10, anchor="w")
         self.btn_login = ttk.Button(box, text="ENTRAR", style="Accent.TButton", command=self.auth)
@@ -62,7 +68,7 @@ class Views:
         ttk.Button(box, text="CREAR CUENTA", command=self.show_register_page).pack(fill="x", pady=(8, 0))
         row = tk.Frame(box, bg=th.SIDEBAR)
         row.pack(fill="x", pady=(14, 0))
-        link = tk.Label(row, text="¿Olvidaste tu clave?", fg=th.LINK, bg=th.SIDEBAR, cursor="hand2", font=(th.BODY, 9))
+        link = tk.Label(row, text="¿Olvidaste tu contraseña?", fg=th.LINK, bg=th.SIDEBAR, cursor="hand2", font=(th.BODY, 9))
         link.pack(side="left")
         link.bind("<Button-1>", lambda e: webbrowser.open(self.cfg["site"].rstrip("/") + "/forgot-password"))
         for text, key, command, pad in (("Ajustes", "settings", self.show_settings_page, 0), ("Ayuda", "help", self.show_help_page, 14)):
@@ -86,12 +92,22 @@ class Views:
         self.nav = {}
         for key, text in self.NAV:
             self._nav_item(side, key, text, lambda k=key: self.show_view(k))
-        self._nav_item(side, "settings", "Configuración", self.show_settings)
-        user = tk.Frame(side, bg=th.SIDEBAR)
+        self._nav_item(side, "settings", "Configuración", lambda: self.show_view("settings"))
+        user = tk.Frame(side, bg=th.SIDEBAR, cursor="hand2")        # clic: Mi perfil
         user.pack(side="bottom", fill="x", padx=14, pady=16)
-        tk.Label(user, image=th.image("icon_small.png"), bg=th.SIDEBAR).pack(side="left")
-        self.lbl_me = tk.Label(user, text="", fg=th.TEXT, bg=th.SIDEBAR, font=(th.BODY, 9, "bold"), justify="left", anchor="w")
+        tk.Label(user, image=th.image("icon_small.png"), bg=th.SIDEBAR, cursor="hand2").pack(side="left")
+        self.lbl_me = tk.Label(user, text="", fg=th.TEXT, bg=th.SIDEBAR, font=(th.BODY, 9, "bold"), justify="left", anchor="w",
+                               cursor="hand2")
         self.lbl_me.pack(side="left", padx=10)
+        for w in (user, *user.winfo_children()):
+            w.bind("<Button-1>", lambda e: self.show_view("profile"))
+            w.bind("<Enter>", lambda e: self.lbl_me.config(fg=th.LINK))
+            w.bind("<Leave>", lambda e: self.lbl_me.config(fg=th.TEXT))
+        out = tk.Label(user, image=th.image("ico_logout.png"), bg=th.SIDEBAR, cursor="hand2", padx=6, pady=6)   # cerrar sesion
+        out.pack(side="right")
+        out.bind("<Button-1>", lambda e: self.logout())
+        out.bind("<Enter>", lambda e: out.config(bg=th.PANEL))
+        out.bind("<Leave>", lambda e: out.config(bg=th.SIDEBAR))
 
         main = tk.Frame(f, bg=th.BG)
         main.pack(side="left", fill="both", expand=True)
@@ -111,7 +127,8 @@ class Views:
 
         self.content = tk.Frame(main, bg=th.BG)
         self.content.pack(fill="both", expand=True, padx=24, pady=(0, 18))
-        self.views = {n: tk.Frame(self.content, bg=th.BG) for n in ("home", "games", "multi", "help")}
+        self.views = {n: tk.Frame(self.content, bg=th.BG) for n in ("home", "games", "multi", "help", "store", "settings", "profile", "table")}
+        self._store_built = False
         self.build_help(self.views["help"])
         self.filter, self.view_name, self.sel_game = "Todos", "home", None
         self._build_home()
@@ -132,17 +149,23 @@ class Views:
 
     def show_view(self, name):
         view = "games" if name == "fav" else name
-        self.view_name = name
+        self.view_name = "multi" if name == "table" else name        # Ranking / Historial / En vivo cuelgan de Multijugador
         for v in self.views.values():
             v.pack_forget()
         self.views[view].pack(fill="both", expand=True)
         for k, w in self.nav.items():
-            w.config(bg=th.NAV_SEL if k == name else th.SIDEBAR)
+            w.config(bg=th.NAV_SEL if k == self.view_name else th.SIDEBAR)
         if view == "games":
             self.games_title.config(text="Favoritos" if name == "fav" else "Juegos")
             self.layout_games()
         elif view == "home":
             self._fill_home()
+        elif view == "settings":
+            self._fill_settings()
+        elif view == "profile":
+            self._fill_profile()
+        elif view == "store":
+            self._fill_store()
 
     def search_text(self):
         t = self.v_search.get().strip().lower()
@@ -346,13 +369,23 @@ class Views:
         self.chat.pack(fill="both", expand=True)
         self.chat.tag_config("name", foreground=th.LINK)
         self.chat.tag_config("sys", foreground=th.YELLOW)
-        inp = ttk.Frame(mid, style="Panel.TFrame")
+        self.emo_tray = tk.Frame(mid, bg=th.FIELD, padx=6, pady=6)          # bandeja de emoticonos (se muestra con el boton)
+        for i, code in enumerate(EMOTES):
+            lbl = tk.Label(self.emo_tray, image=th.image(f"emo_{code}.png"), bg=th.FIELD, cursor="hand2", padx=3, pady=3)
+            lbl.grid(row=i // 10, column=i % 10)
+            lbl.bind("<Button-1>", lambda ev, c=code: self.insert_emote(c))
+            lbl.bind("<Enter>", lambda ev, w=lbl: w.config(bg=th.NAV_SEL))
+            lbl.bind("<Leave>", lambda ev, w=lbl: w.config(bg=th.FIELD))
+        self.chat_inp = inp = ttk.Frame(mid, style="Panel.TFrame")
         inp.pack(fill="x", pady=(8, 0))
+        ttk.Button(inp, image=th.image("emo_smile.png"), command=self.toggle_emotes).pack(side="left", padx=(0, 8))
         self.v_msg = tk.StringVar()
-        e = ttk.Entry(inp, textvariable=self.v_msg)
+        self.chat_entry = e = ttk.Entry(inp, textvariable=self.v_msg)
         e.pack(side="left", fill="x", expand=True)
         e.bind("<Return>", self.send_chat)
         ttk.Button(inp, text="ENVIAR", style="Accent.TButton", command=self.send_chat).pack(side="left", padx=(8, 0))
+        self.log("Elige un juego en la sección Juegos (abre su tarjeta) para entrar a su sala y chatear con los jugadores. "
+                 "Usa el botón 🙂 para los emoticonos.", "sys")
 
         right = ttk.Frame(body, style="Panel.TFrame", padding=12)
         right.grid(row=0, column=1, sticky="ns", padx=(14, 0))
@@ -385,9 +418,25 @@ class Views:
         self.chat.config(state="normal")
         if name:
             self.chat.insert("end", name + ": ", "name")
-        self.chat.insert("end", text + "\n", tag)
+        for chunk, code in split_text(text):                # :smile: -> imagen
+            if code:
+                self.chat.image_create("end", image=th.image(f"emo_{code}.png"), padx=1)
+            else:
+                self.chat.insert("end", chunk, tag)
+        self.chat.insert("end", "\n")
         self.chat.config(state="disabled")
         self.chat.see("end")
+
+    def toggle_emotes(self):
+        if self.emo_tray.winfo_ismapped():
+            self.emo_tray.pack_forget()
+        else:
+            self.emo_tray.pack(fill="x", pady=(6, 0), before=self.chat_inp)
+
+    def insert_emote(self, code):
+        self.chat_entry.insert("end", f":{code}: ")
+        self.chat_entry.focus_set()
+        self.chat_entry.icursor("end")
 
     # ---------- nombre de usuario obligatorio (primera vez) ----------
     NICK_RE = re.compile(r"^[A-Za-z0-9_]{5,12}$")

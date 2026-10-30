@@ -24,8 +24,11 @@ import client.attest as attest  # noqa: E402
 import client.romman as romman  # noqa: E402
 import client.theme as th  # noqa: E402
 from client.bridge import OverlayBridge  # noqa: E402
+import client.secure as secure  # noqa: E402
 from client.help_ui import HelpUI  # noqa: E402
+from client.lobby_pages import LobbyPages  # noqa: E402
 from client.login_pages import LoginPages  # noqa: E402
+from client.store_ui import StoreUI  # noqa: E402
 from client.update_ui import UpdateUI  # noqa: E402
 from client.views import Views  # noqa: E402
 from client.net import Net  # noqa: E402
@@ -116,7 +119,8 @@ def detect_emulator(data):
     return p if os.path.exists(p) else ""
 
 
-class App(Views, LoginPages, HelpUI, UpdateUI, tk.Tk):
+class App(Views, LoginPages, LobbyPages, StoreUI, HelpUI, UpdateUI, tk.Tk):
+    auto_session = False
     def __init__(self):
         super().__init__()
         self.title(f"{APP_NAME} {VERSION}")
@@ -172,22 +176,62 @@ class App(Views, LoginPages, HelpUI, UpdateUI, tk.Tk):
     # ---------- login (cuenta de la tienda) ----------
     def auth(self):
         self.cfg["email"] = self.v_email.get().strip()
+        remember = bool(self.v_remember.get())
+        self.cfg["remember"] = remember
+        if not remember:
+            self.cfg.pop("session", None)
+        self.auto_session = False
         self.lbl_status.config(text="Conectando…", foreground=th.MUTED)
         self.btn_login.config(state="disabled")
-        threading.Thread(target=self._login_thread, args=(self.cfg["site"], self.cfg["email"], self.v_pass.get()),
+        threading.Thread(target=self._login_thread, args=(self.cfg["site"], self.cfg["email"], self.v_pass.get(), remember),
                          daemon=True).start()
 
-    def _login_thread(self, site, email, pw):
+    def _login_thread(self, site, email, pw, remember=False):
         try:
-            self.jwt, _ = account.login(site, email, pw)
-            host = self.cfg["server_host"] or urlparse(site).hostname
-            self.net.connect(host, int(self.cfg["server_tcp"]), int(self.cfg["server_udp"]), self.cfg["tls"])
-            if not self.net.hello.wait(6):
-                raise OSError("El servidor no respondio al saludo")
-            self.net.send(t="login", token=self.jwt, ver=VERSION, proof=attest.proof(self.net.nonce, VERSION))
+            self.jwt, _ = account.login(site, email, pw, remember)
+            if remember:                              # solo el token de sesion, cifrado con tu cuenta de Windows (nunca la clave)
+                try:
+                    self.cfg["session"] = secure.protect(self.jwt)
+                except OSError:
+                    self.cfg.pop("session", None)
+            self._connect_game(self.jwt)
             self.jwt = None      # ya no hace falta: no se conserva en memoria
         except (account.ApiError, OSError) as e:
-            self.net.events.put({"t": "auth", "ok": False, "msg": str(e)})
+            self.net.events.put({"t": "auth", "ok": False, "msg": str(e), "local": True})
+
+    def _connect_game(self, token):
+        host = self.cfg["server_host"] or urlparse(self.cfg["site"]).hostname
+        self.net.connect(host, int(self.cfg["server_tcp"]), int(self.cfg["server_udp"]), self.cfg["tls"])
+        if not self.net.hello.wait(6):
+            raise OSError("El servidor no respondio al saludo")
+        self.net.send(t="login", token=token, ver=VERSION, proof=attest.proof(self.net.nonce, VERSION))
+
+    def try_saved_session(self):
+        """"Recordar sesion": al abrir la app entra solo con el token guardado (si sigue vigente); si no, muestra el formulario."""
+        blob = self.cfg.get("session") if self.cfg.get("remember") else None
+        token = secure.unprotect(blob) if blob else None
+        if not token or not hasattr(self, "btn_login"):
+            return
+        self.auto_session = True
+        self.lbl_status.config(text="Entrando con tu sesión guardada…", foreground=th.MUTED)
+        self.btn_login.config(state="disabled")
+
+        def work():
+            try:
+                self._connect_game(token)
+            except OSError as e:
+                self.net.events.put({"t": "auth", "ok": False, "msg": str(e), "local": True})
+        threading.Thread(target=work, daemon=True).start()
+
+    def logout(self):
+        """Cierra la sesion y olvida la guardada (hay que volver a escribir la contraseña)."""
+        self.cfg.pop("session", None)
+        self.cfg["remember"] = False
+        self.save_cfg()
+        self.net.close()
+        self.me = self.channel = self.match = None
+        self.queued = False
+        self.show_login()
 
     def rom_exists(self, channel):
         dirs = [self.cfg["roms_dir"], os.path.join(self.data, "roms")]
@@ -197,7 +241,9 @@ class App(Views, LoginPages, HelpUI, UpdateUI, tk.Tk):
 
     def send_chat(self, _=None):
         text = self.v_msg.get().strip()
-        if text and self.channel:
+        if text and not self.channel:
+            return self.log("Primero entra a un juego desde la sección Juegos: el chat es de la sala de cada juego.", "sys")
+        if text:
             self.net.send(t="chat", text=text)
         self.v_msg.set("")
 
@@ -271,12 +317,6 @@ class App(Views, LoginPages, HelpUI, UpdateUI, tk.Tk):
         win.grab_set()
         return win
 
-    def show_settings(self):
-        win = self.modal("Ajustes")
-        pad = ttk.Frame(win, padding=20)
-        pad.pack()
-        self.settings_form(pad, win.destroy, wide=True)
-
     def settings_form(self, pad, on_done, wide=False, btn_parent=None):
         """Formulario de ajustes. wide: etiqueta a la izquierda (ventana); si no, apilado (panel estrecho de la pantalla de acceso)."""
         vars_ = {}
@@ -337,18 +377,6 @@ class App(Views, LoginPages, HelpUI, UpdateUI, tk.Tk):
             r.grid(row=r0 + 3, columnspan=span, pady=(12, 0))
         ttk.Button(r, text="DETECTAR EMULADOR", command=detect).pack(side="left", padx=4)
         ttk.Button(r, text="GUARDAR", style="Accent.TButton", command=save).pack(side="left", padx=4)
-
-    def table(self, title, cols, rows):
-        win = tk.Toplevel(self, bg=th.BG)
-        win.title(title)
-        th.set_icon(win)
-        tv = ttk.Treeview(win, columns=[c[0] for c in cols], show="headings", height=15)
-        for c, w, t in cols:
-            tv.heading(c, text=t)
-            tv.column(c, width=w, anchor="center")
-        for r in rows:
-            tv.insert("", "end", values=r)
-        tv.pack(padx=16, pady=16)
 
     # ---------- partida ----------
     def launch_emulator(self, host, port, player, rtt, relay):
@@ -450,8 +478,14 @@ class App(Views, LoginPages, HelpUI, UpdateUI, tk.Tk):
                 self.close_nick()
                 if m.get("update_required"):          # el servidor ya no acepta esta version: busca la nueva en GitHub
                     self.start_update_check()
+                msg = m["msg"]
+                if self.auto_session and not m.get("local") and not m.get("update_required"):
+                    self.cfg.pop("session", None)        # el servidor no acepto el token guardado (vencio): se pide la contraseña
+                    self.save_cfg()
+                    msg = "Tu sesión guardada venció. Inicia sesión de nuevo."
+                self.auto_session = False
                 if hasattr(self, "lbl_status"):
-                    self.lbl_status.config(text=m["msg"], foreground=th.ERR)
+                    self.lbl_status.config(text=msg, foreground=th.ERR)
                     self.btn_login.config(state="normal")
                 return
             if m.get("need_nick"):                  # primera vez: antes de entrar debe elegir su nombre de usuario
@@ -466,6 +500,10 @@ class App(Views, LoginPages, HelpUI, UpdateUI, tk.Tk):
             self.save_cfg()
             self.net.udp_open(m["token"])
             self.show_lobby()
+        elif t == "_store":
+            self.on_store_items(m)
+        elif t == "_storeimg":
+            self.on_store_image(m)
         elif t == "_update":
             self.on_update_available(m["info"])
         elif t == "_updnone":

@@ -48,8 +48,8 @@ def _request(site, path, body=None, token=None, timeout=12):
         raise ApiError(f"No se pudo contactar con {site}: {getattr(e, 'reason', e)}") from None
 
 
-def login(site, email, password):
-    r = _request(site, "auth/login", {"email": email.strip(), "password": password, "remember": False})
+def login(site, email, password, remember=False):
+    r = _request(site, "auth/login", {"email": email.strip(), "password": password, "remember": bool(remember)})
     return r["token"], r["user"]
 
 

@@ -8,6 +8,7 @@ from shared.protocol import VERSION
 
 AUTHOR = "CRONOSF DEV"
 CONTACT = "cronosfvr@gmail.com"
+STORE_URL = "https://dabrezzstore.com"
 
 # (estilo, texto): "h" = titulo de seccion, "p" = parrafo, "b" = vineta
 HELP = (
@@ -68,8 +69,13 @@ class HelpUI:
         for kind, text in HELP:
             txt.insert("end", ("•  " if kind == "b" else "") + text + "\n", kind)
         txt.insert("end", CONTACT + "\n", "mail")
-        txt.tag_bind("mail", "<Button-1>", lambda e: webbrowser.open("mailto:" + CONTACT))
-        txt.tag_bind("mail", "<Enter>", lambda e: txt.config(cursor="hand2"))
-        txt.tag_bind("mail", "<Leave>", lambda e: txt.config(cursor="arrow"))
+        txt.insert("end", "\nTienda oficial\n", "h")
+        txt.insert("end", "Compra consolas, cartuchos y accesorios retro en:\n", "p")
+        txt.insert("end", STORE_URL + "\n", "store")
+        txt.tag_config("store", foreground=th.LINK, underline=True, font=(th.BODY, 11, "bold"))
+        for tag, url in (("mail", "mailto:" + CONTACT), ("store", STORE_URL)):
+            txt.tag_bind(tag, "<Button-1>", lambda e, u=url: webbrowser.open(u))
+            txt.tag_bind(tag, "<Enter>", lambda e: txt.config(cursor="hand2"))
+            txt.tag_bind(tag, "<Leave>", lambda e: txt.config(cursor="arrow"))
         txt.config(state="disabled")
         return txt
