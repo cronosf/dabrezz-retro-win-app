@@ -1,0 +1,15 @@
+[Solo para desarrollo, no se instala en el equipo del usuario]
+Procedencia de los emuladores (para cumplir las licencias y poder regenerar vendor/emulator-*.zip):
+  Instalador oficial:  https://web.fightcade.com/download/Fightcade-win32-latest.exe
+  SHA-256 instalador:  81db623ee85d65cdaf0ad9e7c65e583ed3a29150c47d940e389ff634dde1af78
+  Carpetas usadas:     emulator\fbneo, snes9x, flycast, ggpofba (excluidos fcv39.exe y las carpetas ROMs\;
+                       no se incluyen fcade.exe ni frm.exe, que son herramientas del cliente original)
+  Codigo fuente FBNeo: https://github.com/fightcadeorg/fightcade-fbneo
+  Procesado con:       tools/make_emulator.py (cambia textos visibles, renombra la carpeta de resultados, quita la firma)
+Para actualizar: descargar el instalador nuevo, abrirlo con 7-Zip (sin ejecutarlo), extraer la carpeta emulator y
+ejecutar: python tools/make_emulator.py <carpeta emulator> [carpeta de salida]
+
+DirectX: vendor/directx-redist.zip es la carpeta Redist del "DirectX SDK (June 2010)" de Microsoft
+  (https://download.microsoft.com/download/A/E/7/AE743F1F-632B-4809-87A9-AA1BB3458E31/DXSDK_Jun10.exe,
+  SHA-256 705271DC83BFEE54D9B94E028426E288D5F070784B7446D164F48ECFBB2A02CB, firmado por Microsoft).
+  DIRECTX-LICENSE.txt autoriza redistribuir esa carpeta.

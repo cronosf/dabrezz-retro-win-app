@@ -1,0 +1,19 @@
+Emuladores incluidos en Dabrezz Retro
+=====================================
+Dabrezz Retro instala varios emuladores de codigo abierto con soporte de netplay (rollback). Todos son de sus
+autores originales; los unicos cambios son textos visibles (nombre de la aplicacion en ventanas, menus y ayuda)
+y el nombre de la carpeta de archivos de resultado (dabrezz\). No se modifico ninguna logica. El procedimiento
+exacto esta publicado en el proyecto (tools/make_emulator.py).
+
+  fbneo    FinalBurn Neo (arcade, Neo Geo, NES y mas)   Proyecto: https://neo-source.com
+           Licencia: FBNEO-LICENSE.txt (no se puede vender ni buscar lucro con el emulador)
+  snes9x   Snes9x (Super Nintendo)                       Licencia: SNES9X-LICENSE.txt (uso no comercial)
+  ggpofba  FB Alpha con GGPO (juegos arcade antiguos)    Licencia: la misma de FBNEO-LICENSE.txt
+  flycast  Flycast (Dreamcast, Naomi, Atomiswave)        Licencia GPL v2: FLYCAST-GPL2-LICENSE.txt
+           Codigo fuente: https://github.com/flyinghead/flycast  (y su variante con netplay "Dojo")
+
+Por las licencias anteriores Dabrezz Retro es GRATUITO y no distribuye ROMs ni BIOS: cada jugador debe aportar
+los suyos (o descargarlos desde un catalogo que el propio jugador o la comunidad mantenga y tenga derecho a distribuir).
+
+Tambien se instala el runtime redistribuible de Microsoft DirectX (junio 2010) que algunos emuladores necesitan;
+su licencia esta en DIRECTX-LICENSE.txt.

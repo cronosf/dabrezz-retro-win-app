@@ -1,0 +1,17 @@
+# artefactos y datos locales
+dist/
+data/
+__pycache__/
+*.pyc
+# paquetes grandes de terceros (se regeneran, ver README)
+vendor/*.zip
+# el servidor Linux se mantiene aparte
+server/
+# documentacion interna
+PROYECTO.md
+# secretos: nunca a git
+client/_build_secret.py
+*.key
+*.pem
+.env
+server.env

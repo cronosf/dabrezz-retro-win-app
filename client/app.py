@@ -1,0 +1,571 @@
+"""Cliente Dabrezz Retro (Windows): login con la cuenta de la tienda, lobby, chat, retos, matchmaking y emulador."""
+import json
+import os
+import queue
+import shlex
+import subprocess
+import sys
+import threading
+import tkinter as tk
+import webbrowser
+from tkinter import filedialog, messagebox, ttk
+import ipaddress
+import re
+from urllib.parse import urlparse
+
+if len(sys.argv) > 1 and sys.argv[1] == "--webform":      # el mismo exe hace de ventana modal del formulario web
+    from client.webform import main as _webform
+    _webform(*sys.argv[2:6])
+    sys.exit(0)
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+import client.account as account  # noqa: E402
+import client.attest as attest  # noqa: E402
+import client.romman as romman  # noqa: E402
+import client.theme as th  # noqa: E402
+from client.bridge import OverlayBridge  # noqa: E402
+from client.update_ui import UpdateUI  # noqa: E402
+from client.views import Views  # noqa: E402
+from client.net import Net  # noqa: E402
+from shared.protocol import APP_NAME, CHANNEL_LABELS, VERSION  # noqa: E402
+
+DEFAULTS = {
+    "site": "https://dabrezzstore.com", "server_host": "", "server_tcp": 7600, "server_udp": 7601, "tls": True,
+    "email": "", "emulator": "", "roms_dir": "", "rom_manifest": "",
+    # Emulador: quark:direct,<rom>,<puerto local>,<ip rival>,<puerto rival>,<jugador 0/1>,<delay>,<ranked>
+    # (en modo direct el emulador ignora «ranked»). -w = ventana
+    # Variables: {rom} {host} {port} {local_port} {player} {player0} {delay} {channel} {rival}
+    "emu_args": "quark:direct,{rom},{local_port},{host},{port},{player0},{delay},0",
+}
+
+
+ROM_RE = re.compile(r"^[A-Za-z0-9_]{1,40}$")
+
+
+def safe_ip(v):
+    """Direccion IP valida (la que envia el servidor) o None."""
+    try:
+        return str(ipaddress.ip_address(str(v)))
+    except ValueError:
+        return None
+
+
+def safe_port(v):
+    return v if isinstance(v, int) and 1024 <= v <= 65535 else None
+
+
+def prepare_emulator_config(exe, roms_dir):
+    """Configura el emulador en config/fcadefbneo.ini (se parte de fcadefbneo.default.ini si aun no existe):
+    la carpeta de ROMs (szAppRomPaths[0]) y bVidSaveOverlayFiles=1, que hace que el detector de memoria del
+    emulador escriba el marcador en <emulador>\\dabrezz\\ (de ahi sale el resultado automatico).
+    El resto de la configuracion del jugador (controles...) no se toca."""
+    cfg = os.path.join(os.path.dirname(exe), "config")
+    ini, default = os.path.join(cfg, "fcadefbneo.ini"), os.path.join(cfg, "fcadefbneo.default.ini")
+    src = ini if os.path.exists(ini) else default
+    if not os.path.exists(src):
+        return
+    wanted = {"bVidSaveOverlayFiles": "bVidSaveOverlayFiles 1"}
+    if roms_dir:
+        wanted["szAppRomPaths[0]"] = "szAppRomPaths[0] " + roms_dir.rstrip("\\/") + "\\"
+    with open(src, encoding="mbcs", errors="replace") as f:
+        lines = f.read().splitlines()
+    out, done = [], set()
+    for ln in lines:
+        key = ln.split(" ", 1)[0]
+        if key in wanted:
+            ln = wanted[key]
+            done.add(key)
+        out.append(ln)
+    out += [v for k, v in wanted.items() if k not in done]
+    if out == lines and src == ini:
+        return
+    with open(ini, "w", encoding="mbcs", errors="replace", newline="") as f:
+        f.write("\r\n".join(out) + "\r\n")
+    os.makedirs(os.path.join(os.path.dirname(exe), "dabrezz"), exist_ok=True)
+
+
+def build_argv(template, channel, host, port, local_port, player, rival, delay=0):
+    """Argumentos del emulador. Se parte la plantilla ANTES de sustituir: ningun valor (ni los que manda el servidor)
+    puede añadir ni separar argumentos."""
+    vals = dict(rom=channel, host=host, port=port, local_port=local_port, player=player, player0=player - 1, delay=int(delay),
+                channel=channel, rival=re.sub(r"[^\w .\-]", "", rival)[:24])
+    return [tok.format(**vals) for tok in shlex.split(template, posix=False)]
+
+
+def app_dir():
+    return os.path.dirname(sys.executable) if getattr(sys, "frozen", False) else os.path.dirname(os.path.abspath(__file__))
+
+
+def data_dir():
+    """Carpeta elegida en el instalador (install.json junto al exe); por defecto ./data."""
+    try:
+        with open(os.path.join(app_dir(), "install.json"), encoding="utf-8") as f:
+            d = json.load(f).get("data_dir")
+            if d:
+                return d
+    except (OSError, ValueError):
+        pass
+    return os.path.join(app_dir(), "data")
+
+
+def detect_emulator(data):
+    """El emulador que instala Dabrezz Retro, en <datos>\\emulators\\fbneo."""
+    p = os.path.join(data, "emulators", "fbneo", "fcadefbneo.exe")
+    return p if os.path.exists(p) else ""
+
+
+class App(Views, UpdateUI, tk.Tk):
+    def __init__(self):
+        super().__init__()
+        self.title(f"{APP_NAME} {VERSION}")
+        self.geometry("1180x700")
+        self.minsize(980, 600)
+        th.apply(self)
+        self.data = data_dir()
+        for sub in ("", "roms", "emulators", "replays", "webview"):
+            os.makedirs(os.path.join(self.data, sub), exist_ok=True)
+        self.cfg_path = os.path.join(self.data, "config.json")
+        self.cfg = {**DEFAULTS, **self._load_cfg()}
+        if not self.cfg["emulator"]:
+            self.cfg["emulator"] = detect_emulator(self.data)
+        self.net = Net()
+        self.me = None
+        self.jwt = None
+        self.channel = None
+        self.match = None
+        self.emu = None
+        self.bridge = None
+        self.server_rom_manifest = ""
+        self.auto_channels = set()
+        self.auto = None
+        self.queued = False
+        self.frame = None
+        self.channels = {}
+        self.last_ping = 0
+        self.rtt = 0
+        self.protocol("WM_DELETE_WINDOW", self.on_close)
+        self.show_login()
+        self.after(100, self.pump)
+        self.after(1500, self.start_update_check)      # al abrir: busca una version nueva en GitHub
+        self.after(5000, self.ping_loop)
+
+    # ---------- config ----------
+    def _load_cfg(self):
+        try:
+            with open(self.cfg_path, encoding="utf-8") as f:
+                return json.load(f)
+        except (OSError, ValueError):
+            return {}
+
+    def save_cfg(self):
+        with open(self.cfg_path, "w", encoding="utf-8") as f:
+            json.dump(self.cfg, f, indent=2)
+
+    def swap(self):
+        if self.frame:
+            self.frame.destroy()
+        self.frame = ttk.Frame(self)
+        self.frame.pack(fill="both", expand=True)
+        return self.frame
+
+    # ---------- login (cuenta de la tienda) ----------
+    def register(self):
+        """Mismo formulario de registro de la web, en una ventana modal sin cabecera/pie ni boton de Google."""
+        self.lbl_status.config(text="", foreground=th.ERR)
+        self.update_idletasks()
+
+        def run():
+            ok = account.open_form(self.cfg["site"], "/register/?app=1", "registered=1", "Crear cuenta",
+                                   os.path.join(self.data, "webview"))
+            self.net.events.put({"t": "_registered", "ok": ok})
+        threading.Thread(target=run, daemon=True).start()
+
+    def auth(self):
+        self.cfg["email"] = self.v_email.get().strip()
+        self.lbl_status.config(text="Conectando…", foreground=th.MUTED)
+        self.btn_login.config(state="disabled")
+        threading.Thread(target=self._login_thread, args=(self.cfg["site"], self.cfg["email"], self.v_pass.get()),
+                         daemon=True).start()
+
+    def _login_thread(self, site, email, pw):
+        try:
+            self.jwt, _ = account.login(site, email, pw)
+            host = self.cfg["server_host"] or urlparse(site).hostname
+            self.net.connect(host, int(self.cfg["server_tcp"]), int(self.cfg["server_udp"]), self.cfg["tls"])
+            if not self.net.hello.wait(6):
+                raise OSError("El servidor no respondio al saludo")
+            self.net.send(t="login", token=self.jwt, ver=VERSION, proof=attest.proof(self.net.nonce, VERSION))
+            self.jwt = None      # ya no hace falta: no se conserva en memoria
+        except (account.ApiError, OSError) as e:
+            self.net.events.put({"t": "auth", "ok": False, "msg": str(e)})
+
+    def rom_exists(self, channel):
+        dirs = [self.cfg["roms_dir"], os.path.join(self.data, "roms")]
+        if self.cfg["emulator"]:
+            dirs.append(os.path.join(os.path.dirname(self.cfg["emulator"]), "..", "..", "ROMs"))
+        return any(d and os.path.exists(os.path.join(d, channel + ".zip")) for d in dirs)
+
+    def send_chat(self, _=None):
+        text = self.v_msg.get().strip()
+        if text and self.channel:
+            self.net.send(t="chat", text=text)
+        self.v_msg.set("")
+
+    def selected_user(self):
+        sel = self.tv_users.selection()
+        return int(sel[0]) if sel and int(sel[0]) != (self.me or {}).get("id") else None
+
+    def challenge(self, ranked):
+        u = self.selected_user()
+        if u and ranked and self.channel not in self.auto_channels:
+            return messagebox.showinfo(APP_NAME, "Este juego no tiene resultado automático: solo se puede jugar amistoso.")
+        if u:
+            self.net.send(t="challenge", to=u, ranked=ranked, first_to=int(self.v_ft.get()))
+            self.log(f"Reto enviado ({'ranked a ' + self.v_ft.get() if ranked else 'amistoso'})", "sys")
+
+    def toggle_queue(self):
+        if not self.channel:
+            return messagebox.showinfo(APP_NAME, "Entra primero a un juego (doble clic).")
+        if not self.queued and self.channel not in self.auto_channels:
+            return messagebox.showinfo(APP_NAME, "Este juego no tiene resultado automático: la búsqueda es ranked. Usa retos amistosos.")
+        self.net.send(t="queue", on=not self.queued)
+
+    def roms_dest(self, system):
+        """Carpeta donde cada emulador busca sus ROMs."""
+        if system == "fbneo":
+            return self.cfg["roms_dir"] or os.path.join(self.data, "roms")
+        return os.path.join(self.data, "emulators", system, "ROMs")
+
+    def download_roms(self):
+        """Descarga las ROMs que falten del juego elegido (y sus dependencias, p. ej. la BIOS) desde el catalogo."""
+        sel = [self.sel_game] if self.sel_game else []
+        url = self.cfg["rom_manifest"] or self.server_rom_manifest
+        if not sel:
+            return messagebox.showinfo(APP_NAME, "Elige un juego de la lista.")
+        if not url:
+            return messagebox.showinfo(APP_NAME, "No hay un catálogo de ROMs configurado. Copia las ROMs a la carpeta roms "
+                                       "o indica la URL del catálogo en AJUSTES.")
+        game, put = sel[0], self.net.events.put
+
+        def work():
+            try:
+                put({"t": "_log", "text": f"Buscando {game} en el catálogo…"})
+                last = [0.0]
+
+                def progress(name, got, total):
+                    import time
+                    if time.time() - last[0] > 1.5 or got == total:
+                        last[0] = time.time()
+                        put({"t": "_log", "text": f"Descargando {name}: {got * 100 // total}%"})
+                done = romman.ensure(romman.fetch_manifest(url), game, self.roms_dest, progress)
+                put({"t": "_log", "text": ("ROMs listas: " + ", ".join(done)) if done else f"{game}: ya tienes todas las ROMs."})
+            except romman.RomError as e:
+                put({"t": "_log", "text": f"ROMs: {e}"})
+            put({"t": "_romsdone"})
+        threading.Thread(target=work, daemon=True).start()
+
+    def test_game(self):
+        sel = [self.sel_game] if self.sel_game else []
+        exe = self.cfg["emulator"]
+        if not sel or not exe or not os.path.exists(exe):
+            return messagebox.showinfo(APP_NAME, "Elige un juego y configura el emulador en AJUSTES.")
+        prepare_emulator_config(exe, self.cfg["roms_dir"] or os.path.join(self.data, "roms"))
+        subprocess.Popen([exe, sel[0]], cwd=os.path.dirname(exe))   # offline: aqui se configuran los controles
+
+    # ---------- ajustes ----------
+    def modal(self, title):
+        win = tk.Toplevel(self, bg=th.BG)
+        win.title(title)
+        th.set_icon(win)
+        win.transient(self)
+        win.grab_set()
+        return win
+
+    def show_settings(self):
+        win = self.modal("Ajustes")
+        pad = ttk.Frame(win, padding=20)
+        pad.pack()
+        vars_ = {}
+        rows = (("Sitio de la tienda (cuenta)", "site", False), ("Servidor de juego (vacío = host del sitio)", "server_host", False),
+                ("Puerto TCP del servidor", "server_tcp", False), ("Puerto UDP del servidor", "server_udp", False),
+                ("Emulador (.exe)", "emulator", "file"), ("Carpeta de ROMs", "roms_dir", "dir"), ("Catálogo de ROMs (URL .json)", "rom_manifest", False),
+                ("Argumentos del emulador", "emu_args", False))
+        for i, (lbl, key, browse) in enumerate(rows):
+            ttk.Label(pad, text=lbl).grid(row=i, column=0, sticky="w", pady=5, padx=(0, 10))
+            vars_[key] = tk.StringVar(value=str(self.cfg[key]))
+            ttk.Entry(pad, textvariable=vars_[key], width=48).grid(row=i, column=1, pady=5)
+            if browse:
+                def pick(k=key, b=browse):
+                    p = filedialog.askopenfilename(filetypes=[("Ejecutable", "*.exe")]) if b == "file" else filedialog.askdirectory()
+                    if p:
+                        vars_[k].set(os.path.normpath(p))
+                ttk.Button(pad, text="...", width=3, command=pick).grid(row=i, column=2, padx=6)
+        v_tls = tk.BooleanVar(value=bool(self.cfg["tls"]))
+        ttk.Checkbutton(pad, text="Conexión cifrada (TLS) con el servidor de juego (recomendado)", variable=v_tls).grid(columnspan=3, sticky="w")
+        ttk.Label(pad, text="Variables: {rom} {host} {port} {local_port} {player} {player0} {delay} {channel} {rival}   ·   añade -w para ventana",
+                  style="Muted.TLabel").grid(columnspan=3, sticky="w", pady=4)
+        ttk.Label(pad, text=f"Datos: {self.data}", style="Muted.TLabel").grid(columnspan=3, sticky="w")
+
+        def detect():
+            p = detect_emulator(self.data)
+            if p:
+                vars_["emulator"].set(p)
+            else:
+                messagebox.showinfo(APP_NAME, "No se encontró el emulador incluido. Reinstala Dabrezz Retro o indica la ruta del .exe.")
+
+        def save():
+            for k, v in vars_.items():
+                self.cfg[k] = int(v.get()) if k.startswith("server_t") or k == "server_udp" else v.get().strip()
+            self.cfg["tls"] = v_tls.get()
+            self.save_cfg()
+            win.destroy()
+            self.render_channels()
+        r = ttk.Frame(pad)
+        r.grid(columnspan=3, pady=(12, 0))
+        ttk.Button(r, text="DETECTAR EMULADOR", command=detect).pack(side="left", padx=4)
+        ttk.Button(r, text="GUARDAR", style="Accent.TButton", command=save).pack(side="left", padx=4)
+
+    def table(self, title, cols, rows):
+        win = tk.Toplevel(self, bg=th.BG)
+        win.title(title)
+        th.set_icon(win)
+        tv = ttk.Treeview(win, columns=[c[0] for c in cols], show="headings", height=15)
+        for c, w, t in cols:
+            tv.heading(c, text=t)
+            tv.column(c, width=w, anchor="center")
+        for r in rows:
+            tv.insert("", "end", values=r)
+        tv.pack(padx=16, pady=16)
+
+    # ---------- partida ----------
+    def launch_emulator(self, host, port, player, rtt, relay):
+        exe = self.cfg["emulator"]
+        m = self.match
+        delay = max(0, -(-int(rtt) // 2 // 17)) if rtt is not None else None   # frames de 16,7 ms (media ida)
+        self.log(("Conexión por relay" if relay else f"Conexión directa · {rtt} ms") +
+                 (f" · delay sugerido: {delay} frames" if delay is not None else ""), "sys")
+        if not self.rom_exists(m["channel"]):
+            self.log(f"Falta la ROM {m['channel']}.zip: pulsa DESCARGAR ROMS o cópiala a la carpeta roms.", "sys")
+        if not exe or not os.path.exists(exe):
+            return self.log(f"Configura el emulador en AJUSTES. Rival: {host}:{port} (eres P{player})", "sys")
+        local = self.net.local_udp_port()
+        # Se parte la plantilla ANTES de sustituir: ningun valor (ni siquiera los del servidor) puede añadir argumentos.
+        try:
+            argv = build_argv(self.cfg["emu_args"], m["channel"], host, port, local, player, m["rival_user_name"], min(delay or 0, 9))
+        except (KeyError, IndexError, ValueError):
+            return self.log("Argumentos del emulador invalidos: revisa AJUSTES.", "sys")
+        prepare_emulator_config(exe, self.cfg["roms_dir"] or os.path.join(self.data, "roms"))
+        self.net.udp_close()     # libera el puerto: el emulador usa el mismo mapeo NAT
+        self.auto = None
+        if m["ranked"]:          # resultado automatico: se leen los archivos que escribe el detector del emulador (client/bridge.py)
+            self.close_bridge()
+            self.bridge = OverlayBridge(os.path.dirname(exe), m["first_to"],
+                                        lambda ev: self.net.events.put({"t": "_emu", "ev": ev}))
+        self.emu = subprocess.Popen([exe, *argv], cwd=os.path.dirname(exe))
+        self.log("Emulador iniciado.", "sys")
+
+    def stop_emulator(self):
+        """La partida ranked llego a su meta (primero en N): se cierra el emulador para que no sigan jugando."""
+        if self.emu and self.emu.poll() is None:
+            self.emu.terminate()
+
+    def close_bridge(self):
+        if getattr(self, "bridge", None):
+            self.bridge.close()
+            self.bridge = None
+
+    def on_peer(self, m):
+        host = (self.net.host if m.get("relay") and not m.get("host") else m.get("host"))
+        if not safe_port(m.get("port")) or (safe_ip(host) is None and not (m.get("relay") and host == self.net.host)):
+            return self.log("El servidor envió una dirección inválida; se ignora.", "sys")
+        if not self.match or self.match.get("launching") and not m.get("relay"):
+            return
+        self.match["launching"] = True
+        if m.get("relay"):
+            return self.net.events.put({"t": "_launch", "host": host, "port": m["port"],
+                                        "player": m["player"], "rtt": None, "relay": True})
+
+        def probe():
+            rtt = self.net.probe(m["host"], m["port"])
+            if rtt is None:
+                self.net.events.put({"t": "_log", "text": "Sin camino directo; pidiendo relay al servidor…"})
+                self.net.send(t="relay")
+            else:
+                self.net.events.put({"t": "_launch", "host": m["host"], "port": m["port"], "player": m["player"],
+                                     "rtt": rtt, "relay": False})
+        self.log(f"Conectando con {self.match['rival_user_name']}…", "sys")
+        threading.Thread(target=probe, daemon=True).start()
+
+    def finish_match(self):
+        m, self.match = self.match, None
+        if not m:
+            return
+        auto = getattr(self, "auto", None)
+        if m["ranked"] and auto and auto["finished"]:
+            pass                                    # resultado detectado por el emulador: el servidor lo cruza con el del rival
+        else:
+            self.net.send(t="leave_match")          # amistoso, o ranked que se cerro antes de terminar (se aborta sin ELO)
+        self.close_bridge()
+        self.match = m if m["ranked"] else None     # en ranked se espera match_end del servidor
+
+    # ---------- eventos ----------
+    def ping_loop(self):
+        if self.net.alive and self.me:
+            import time
+            self.last_ping = time.time()
+            self.net.send(t="ping", ts=self.last_ping, rtt=self.rtt)
+        self.after(5000, self.ping_loop)
+
+    def pump(self):
+        try:
+            while True:
+                self.handle(self.net.events.get_nowait())
+        except queue.Empty:
+            pass
+        except Exception as e:  # noqa: BLE001
+            print("pump:", e, file=sys.stderr)
+        if self.emu and self.emu.poll() is not None:
+            self.emu = None
+            self.finish_match()
+        self.after(100, self.pump)
+
+    def handle(self, m):
+        t = m["t"]
+        if t == "_registered":
+            if hasattr(self, "lbl_status"):
+                self.lbl_status.config(text="Cuenta creada. Ahora inicia sesión con tu correo y clave." if m["ok"] else "",
+                                       foreground=th.OK)
+        elif t == "auth":
+            if not m["ok"]:
+                self.net.close()
+                self.close_nick()
+                if m.get("update_required"):          # el servidor ya no acepta esta version: busca la nueva en GitHub
+                    self.start_update_check()
+                if hasattr(self, "lbl_status"):
+                    self.lbl_status.config(text=m["msg"], foreground=th.ERR)
+                    self.btn_login.config(state="normal")
+                return
+            if m.get("need_nick"):                  # primera vez: antes de entrar debe elegir su nombre de usuario
+                self.ask_nick()
+                return
+            self.close_nick()
+            self.me = {k: m.get(k) for k in ("id", "user_name", "role")}
+            self.me.update(elo=1500, wins=0, losses=0)
+            self.first_to = m.get("first_to") or self.first_to
+            self.server_rom_manifest = m.get("rom_manifest") or ""
+            self.auto_channels = set(m.get("auto_channels") or [])
+            self.save_cfg()
+            self.net.udp_open(m["token"])
+            self.show_lobby()
+        elif t == "_update":
+            self.on_update_available(m["info"])
+        elif t == "_updprog":
+            self.update_progress(m["pct"])
+        elif t == "_updready":
+            self.launch_update(m["path"])
+        elif t == "_upderr":
+            self.update_failed(m["msg"])
+        elif t == "nick_status":
+            self.nick_status(m)
+        elif t == "disconnected":
+            self.close_nick()
+            if self.me:
+                messagebox.showwarning(APP_NAME, "Conexión perdida con el servidor.")
+            self.me = self.channel = self.match = None
+            self.show_login()
+            self.lbl_status.config(text="Desconectado", foreground=th.ERR)
+        elif t == "error":
+            self.log(m["msg"], "sys")
+        elif t == "_romsdone":
+            self.render_channels()
+        elif t == "_log":
+            self.log(m["text"], "sys")
+        elif t == "pong":
+            import time
+            self.rtt = round((time.time() - float(m["ts"])) * 1000)
+            if hasattr(self, "lbl_foot"):
+                self.lbl_foot.config(text=f"Ping al servidor: {self.rtt} ms")
+        elif t == "channels":
+            self.channels = m["channels"]
+            self.render_channels()
+        elif t == "joined":
+            self.channel = m["channel"]
+            self.lbl_chan.config(text=CHANNEL_LABELS.get(self.channel, self.channel))
+            self.log(f"Entraste a {self.channel}", "sys")
+        elif t == "roster" and m["channel"] == self.channel:
+            self.tv_users.delete(*self.tv_users.get_children())
+            for u in m["users"]:
+                if u["id"] == self.me["id"]:
+                    self.refresh_me(elo=u["elo"], wins=u["wins"], losses=u["losses"])
+                self.tv_users.insert("", "end", iid=str(u["id"]), values=(u["elo"], f"{u['wins']}-{u['losses']}", f"{u['ping']}ms"),
+                                     text=("⚔ " if u["busy"] else "") + u["user_name"])
+        elif t == "chat":
+            self.log(m["text"], name=m["user_name"])
+        elif t == "challenge":
+            ok = messagebox.askyesno(APP_NAME, f"{m['from_user_name']} te reta ({'ranked a ' + str(m['first_to']) if m['ranked'] else 'amistoso'}) en {m['channel']}.\n¿Aceptas?")
+            self.net.send(t="accept" if ok else "decline", to=m["from"])
+        elif t == "declined":
+            self.log(f"{m['by_user_name']} rechazó el reto", "sys")
+        elif t == "queued":
+            self.queued = m["on"]
+            self.btn_queue.config(text="CANCELAR BÚSQUEDA" if self.queued else "BUSCAR PARTIDA")
+        elif t == "match":
+            if not ROM_RE.fullmatch(str(m.get("channel", ""))) or m["channel"] not in self.channels:
+                return self.log("Partida con un juego desconocido; se ignora.", "sys")
+            self.match = m
+            self.queued = False
+            self.btn_queue.config(text="BUSCAR PARTIDA")
+            if not self.net.udp:
+                self.net.udp_open(self.net.token)
+            self.log(f"Partida {'ranked a ' + str(m['first_to']) + ' ' if m['ranked'] else ''}contra {m['rival_user_name']}", "sys")
+            self.net.send(t="udp_ready")
+        elif t == "peer":
+            self.on_peer(m)
+        elif t == "_emu":
+            ev = m["ev"]
+            self.auto = {"p1": ev["p1"], "p2": ev["p2"], "finished": ev["ev"] == "finished"}
+            self.net.send(t="events", events=[ev])
+            if ev["ev"] == "finished":
+                self.log(f"Resultado detectado por el emulador: P1 {ev['p1']} - {ev['p2']} P2", "sys")
+                self.after(4000, self.stop_emulator)       # unos segundos para ver el final y se cierra
+        elif t == "_launch":
+            if self.match:
+                self.launch_emulator(m["host"], m["port"], m["player"], m["rtt"], m["relay"])
+        elif t == "match_end":
+            self.match = None
+            self.after(1500, self.flush_update)         # una actualizacion que llego durante la partida
+            
+            self.auto = None
+            self.close_bridge()
+            self.refresh_me(elo=m["elo"], wins=m["wins"], losses=m["losses"])
+            if self.net.alive and not self.net.udp:
+                self.net.udp_open(self.net.token)
+            self.log({"finished": "Partida finalizada", "aborted": "Partida abortada",
+                      "disputed": "Resultado en disputa: no cambia el ELO"}.get(m["status"], "Fin"), "sys")
+            f = m.get("elo_factor", 1)
+            if m["status"] == "finished" and f < 1:    # anti-colusion: repetir rival vale cada vez menos
+                self.log("Sin cambio de ELO: ya jugaste muchas veces contra este rival hoy." if f == 0 else
+                         f"ELO reducido al {round(f * 100)}% por jugar varias veces contra el mismo rival hoy.", "sys")
+        elif t == "top":
+            self.table(f"Ranking · {m['channel']}", (("n", 190, "JUGADOR"), ("elo", 70, "ELO"), ("w", 60, "W"), ("l", 60, "L")),
+                       [(u["user_name"], u["elo"], u["wins"], u["losses"]) for u in m["users"]])
+        elif t == "history":
+            self.table("Historial", (("g", 90, "JUEGO"), ("a", 130, "P1"), ("b", 130, "P2"), ("s", 80, "ESTADO"), ("d", 140, "FECHA")),
+                       [(x["game"], x["p1_user_name"], x["p2_user_name"], x["status"], x["started_at"][:16]) for x in m["matches"]])
+        elif t == "live":
+            self.table("Partidas en vivo", (("g", 100, "JUEGO"), ("a", 150, "JUGADORES"), ("r", 70, "RANKED")),
+                       [(x["channel"], " vs ".join(x["players"]), "sí" if x["ranked"] else "no") for x in m["matches"]])
+
+    def on_close(self):
+        if self.emu and self.emu.poll() is None:
+            self.emu.terminate()
+        self.net.close()
+        self.destroy()
+
+
+def main():
+    App().mainloop()
+
+
+if __name__ == "__main__":
+    main()
