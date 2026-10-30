@@ -258,14 +258,18 @@ class Installer(tk.Tk):
         self.geometry("640x620")
         self.resizable(False, False)
         root = default_root()
-        self.v_app = tk.StringVar(value=root)
-        self.v_data = tk.StringVar(value=os.path.join(root, "Datos"))
-        self.v_desk = tk.BooleanVar(value=True)
-        self.v_menu = tk.BooleanVar(value=True)
+        prev = existing_install()                  # instalacion anterior: se propone la MISMA carpeta (se conservan config, ROMs y sesion)
+        self.v_app = tk.StringVar(value=prev[0] if prev else root)
+        self.v_data = tk.StringVar(value=prev[1] if prev else os.path.join(root, "Datos"))
+        self.v_desk = tk.BooleanVar(value=os.path.exists(os.path.join(desktop(), "Dabrezz Retro.lnk")) if prev else True)
+        self.v_menu = tk.BooleanVar(value=os.path.exists(os.path.join(start_menu(), "Dabrezz Retro.lnk")) if prev else True)
         f = ttk.Frame(self, padding=28)
         f.pack(fill="both", expand=True)
         tk.Label(f, image=th.image("logo_side.png"), bg=th.BG).pack(anchor="w")
         ttk.Label(f, text=f"Versión {VERSION} · Netplay arcade con rollback", style="Muted.TLabel").pack(anchor="w", pady=(6, 14))
+        if prev:
+            tk.Label(f, text="Se encontró una instalación anterior: se actualiza en la misma carpeta y se conservan tu configuración, "
+                     "ROMs y sesión.", fg=th.OK, bg=th.BG, font=(th.BODY, 9), wraplength=560, justify="left").pack(anchor="w", pady=(0, 6))
         self.row(f, "Carpeta del programa", self.v_app, sync=True)
         self.row(f, "Carpeta de datos (ROMs, emuladores, config)", self.v_data)
         ttk.Checkbutton(f, text="Acceso directo en el escritorio", variable=self.v_desk).pack(anchor="w", pady=(10, 0))
@@ -277,7 +281,7 @@ class Installer(tk.Tk):
         self.bar.pack(fill="x", pady=(18, 4))
         self.lbl = ttk.Label(f, text="", style="Muted.TLabel")
         self.lbl.pack(anchor="w")
-        self.btn = ttk.Button(f, text="INSTALAR", style="Accent.TButton", command=self.start)
+        self.btn = ttk.Button(f, text="ACTUALIZAR" if prev else "INSTALAR", style="Accent.TButton", command=self.start)
         self.btn.pack(side="bottom", anchor="e")
 
     def _compact_ui(self, cur):
