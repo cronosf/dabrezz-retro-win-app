@@ -73,6 +73,35 @@ def copy_retry(src, dst, seconds=30):
             time.sleep(0.5)
 
 
+def is_locked(path):
+    """Un .exe en ejecucion no se puede abrir para escribir: asi se sabe si la app anterior sigue abierta."""
+    try:
+        open(path, "ab").close()
+        return False
+    except FileNotFoundError:
+        return False
+    except OSError:
+        return True
+
+
+def free_exe(path, grace=6, force=10):
+    """Actualizacion: espera a que la app anterior se cierre sola; si no lo hace (minimizada, colgada...), cierra los procesos de ESE
+    .exe (se identifican por su ruta completa, no por el nombre) y espera a que se libere."""
+    end = time.time() + grace
+    while is_locked(path) and time.time() < end:
+        time.sleep(0.3)
+    if not is_locked(path):
+        return True
+    q = path.replace("'", "''")
+    ps = ("Get-CimInstance Win32_Process | Where-Object { $_.ExecutablePath -eq '%s' } | "
+          "ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }" % q)
+    subprocess.run(["powershell", "-NoProfile", "-Command", ps], creationflags=0x08000000, timeout=40)
+    end = time.time() + force
+    while is_locked(path) and time.time() < end:
+        time.sleep(0.3)
+    return not is_locked(path)
+
+
 def sha256_file(path):
     h = hashlib.sha256()
     with open(path, "rb") as f:
@@ -309,6 +338,9 @@ class Installer(tk.Tk):
             open(os.path.join(data, MARKER), "w").close()
             self.step(20, "Instalando DirectX (necesario para los emuladores)…")
             install_directx()
+            if self.update_mode:
+                self.step(30, "Cerrando la versión anterior…")
+                free_exe(os.path.join(app, EXE))
             self.step(35, "Copiando archivos…")
             copy_retry(th.resource_path(os.path.join("payload", EXE)), os.path.join(app, EXE))
             copy_retry(sys.executable, os.path.join(app, UNINSTALL))
@@ -334,6 +366,7 @@ class Installer(tk.Tk):
             self.after(0, lambda: self.failed(e))
 
     def failed(self, e):
+        self.attributes("-topmost", False)        # si no, el aviso queda oculto detras de esta ventana y todo parece colgado
         messagebox.showerror(APP_NAME, f"Error: {e}")
         if self.btn:
             self.btn.config(state="normal")

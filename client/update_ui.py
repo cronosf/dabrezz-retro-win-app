@@ -147,7 +147,10 @@ class UpdateUI:
         def poll():
             waited[0] += 200
             if os.path.exists(flag) or waited[0] >= INSTALL_WAIT_MS:
-                return self.on_close()
+                try:
+                    self.on_close()
+                finally:
+                    os._exit(0)          # salida garantizada: el instalador necesita el .exe libre para reemplazarlo
             self.after(200, poll)
         self.after(200, poll)
 
