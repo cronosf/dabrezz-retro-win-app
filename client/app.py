@@ -136,6 +136,7 @@ class App(Views, LoginPages, LobbyPages, StoreUI, HelpUI, UpdateUI, tk.Tk):
             self.cfg["emulator"] = detect_emulator(self.data)
         self.net = Net()
         self.me = None
+        self.rosters = {}
         self.jwt = None
         self.channel = None
         self.match = None
@@ -450,6 +451,14 @@ class App(Views, LoginPages, LobbyPages, StoreUI, HelpUI, UpdateUI, tk.Tk):
         self.match = m if m["ranked"] else None     # en ranked se espera match_end del servidor
 
     # ---------- eventos ----------
+    def show_roster(self, users):
+        self.tv_users.delete(*self.tv_users.get_children())
+        for u in users:
+            if self.me and u["id"] == self.me["id"]:
+                self.refresh_me(elo=u["elo"], wins=u["wins"], losses=u["losses"])
+            self.tv_users.insert("", "end", iid=str(u["id"]), values=(u["elo"], f"{u['wins']}-{u['losses']}", f"{u['ping']}ms"),
+                                 text=("⚔ " if u["busy"] else "") + u["user_name"])
+
     def ping_loop(self):
         if self.net.alive and self.me:
             import time
@@ -541,13 +550,11 @@ class App(Views, LoginPages, LobbyPages, StoreUI, HelpUI, UpdateUI, tk.Tk):
             self.channel = m["channel"]
             self.lbl_chan.config(text=CHANNEL_LABELS.get(self.channel, self.channel))
             self.log(f"Entraste a {self.channel}", "sys")
-        elif t == "roster" and m["channel"] == self.channel:
-            self.tv_users.delete(*self.tv_users.get_children())
-            for u in m["users"]:
-                if u["id"] == self.me["id"]:
-                    self.refresh_me(elo=u["elo"], wins=u["wins"], losses=u["losses"])
-                self.tv_users.insert("", "end", iid=str(u["id"]), values=(u["elo"], f"{u['wins']}-{u['losses']}", f"{u['ping']}ms"),
-                                     text=("⚔ " if u["busy"] else "") + u["user_name"])
+            self.show_roster(self.rosters.get(self.channel, []))    # el servidor manda la lista ANTES de "joined"
+        elif t == "roster":
+            self.rosters[m["channel"]] = m["users"]
+            if m["channel"] == self.channel:
+                self.show_roster(m["users"])
         elif t == "chat":
             self.log(m["text"], name=m["user_name"])
         elif t == "challenge":
