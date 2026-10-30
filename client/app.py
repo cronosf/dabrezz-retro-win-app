@@ -343,8 +343,13 @@ class App(Views, LoginPages, LobbyPages, StoreUI, HelpUI, UpdateUI, tk.Tk):
     def test_game(self):
         sel = [self.sel_game] if self.sel_game else []
         if sel and self.system_of(sel[0]) == "snes9x":
-            return messagebox.showinfo(APP_NAME, "Los juegos de SNES (experimental) solo se abren dentro de una partida: "
-                                       "el emulador de SNES no se puede probar sin conexión.")
+            exe = self.emulator_for(sel[0])
+            if not os.path.exists(exe):
+                return messagebox.showinfo(APP_NAME, "No se encontró el emulador de SNES. Reinstala Dabrezz Retro.")
+            if not self.rom_exists(sel[0]):
+                return messagebox.showinfo(APP_NAME, "Falta la ROM: pulsa DESCARGAR ROM en la tarjeta del juego.")
+            # Snes9x busca <emulador>\ROMs\<juego>.zip: se le pasa solo el nombre (con ruta o con .zip da "Invalid Zip archive")
+            return subprocess.Popen([exe, sel[0]], cwd=os.path.dirname(exe))      # offline: aqui se configuran los controles (menu Input)
         exe = self.cfg["emulator"]
         if not sel or not exe or not os.path.exists(exe):
             return messagebox.showinfo(APP_NAME, "Elige un juego y configura el emulador en AJUSTES.")
