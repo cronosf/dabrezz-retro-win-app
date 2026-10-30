@@ -144,9 +144,8 @@ class App(Views, UpdateUI, tk.Tk):
         self.last_ping = 0
         self.rtt = 0
         self.protocol("WM_DELETE_WINDOW", self.on_close)
-        self.show_login()
         self.after(100, self.pump)
-        self.after(1500, self.start_update_check)      # al abrir: busca una version nueva en GitHub
+        self.boot()                                    # oculta hasta saber si hay una version nueva en GitHub
         self.after(5000, self.ping_loop)
 
     # ---------- config ----------
@@ -459,6 +458,8 @@ class App(Views, UpdateUI, tk.Tk):
             self.show_lobby()
         elif t == "_update":
             self.on_update_available(m["info"])
+        elif t == "_updnone":
+            self.finish_boot()
         elif t == "_updprog":
             self.update_progress(m["pct"])
         elif t == "_updready":

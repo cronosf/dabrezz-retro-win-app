@@ -1,4 +1,8 @@
-"""Ventanas de actualizacion de la app (la logica y la verificacion de la firma estan en client/updater.py)."""
+"""Actualizacion automatica de la app (la logica y la verificacion de la firma estan en client/updater.py).
+
+Al abrir, la app arranca oculta y consulta GitHub. Si hay una version nueva NO se ve ni el login ni la ventana principal: solo una
+ventanita con la barra de progreso mientras se descarga y verifica; al terminar corre el instalador (/update) que vuelve a abrir la app.
+"""
 import os
 import shutil
 import subprocess
@@ -13,15 +17,36 @@ import client.updater as updater
 from shared.protocol import VERSION
 
 UPDATE_DIR = os.path.join(tempfile.gettempdir(), "DabrezzRetro-update")
+CHECK_WAIT_MS = 2500                                            # si GitHub tarda mas, se muestra la app y se sigue buscando
 
 
 class UpdateUI:
     upd_win = None
     pending_update = None
+    booted = False
+
+    def updates_enabled(self):
+        return bool(getattr(sys, "frozen", False) or os.environ.get("DABREZZ_UPDATE_TEST"))
+
+    # ---------- arranque ----------
+    def boot(self):
+        """Arranque con la ventana principal oculta hasta saber si hay actualizacion."""
+        if not self.updates_enabled():
+            return self.finish_boot()
+        self.withdraw()
+        self.start_update_check()
+        self.after(CHECK_WAIT_MS, self.finish_boot)
+
+    def finish_boot(self):
+        if self.booted or self.upd_win is not None:
+            return
+        self.booted = True
+        self.show_login()
+        self.deiconify()
 
     def start_update_check(self):
-        """Al abrir la app (y cuando el servidor pide una version mas nueva) consulta GitHub. Solo en la app instalada."""
-        if not (getattr(sys, "frozen", False) or os.environ.get("DABREZZ_UPDATE_TEST")):
+        """Consulta GitHub (al abrir y cuando el servidor pide una version mas nueva). Solo en la app instalada."""
+        if not self.updates_enabled():
             return
         shutil.rmtree(UPDATE_DIR, ignore_errors=True)          # instaladores de actualizaciones anteriores
 
@@ -29,55 +54,38 @@ class UpdateUI:
             try:
                 info = updater.check(VERSION)
             except (updater.UpdateError, OSError):
-                return                                          # sin red o sin API: se reintenta en el proximo arranque
-            if info:
-                self.net.events.put({"t": "_update", "info": info})
+                info = None                                     # sin red o sin API: se reintenta en el proximo arranque
+            self.net.events.put({"t": "_update", "info": info} if info else {"t": "_updnone"})
         threading.Thread(target=work, daemon=True).start()
 
     def on_update_available(self, info):
         if self.match or self.upd_win is not None:              # no interrumpir una partida
             self.pending_update = info
             return
-        self._update_dialog(info)
+        self._update_window(info)
 
     def flush_update(self):
         info, self.pending_update = self.pending_update, None
         if info:
             self.on_update_available(info)
 
-    def _update_dialog(self, info):
-        win = self.upd_win = tk.Toplevel(self, bg=th.BG)
-        win.title("Actualización disponible")
-        th.set_icon(win)
-        win.transient(self)
-        win.resizable(False, False)
-        win.protocol("WM_DELETE_WINDOW", self.close_update)
-        pad = tk.Frame(win, bg=th.BG, padx=32, pady=24)
-        pad.pack()
-        tk.Label(pad, image=th.image("logo_side.png"), bg=th.BG).pack(anchor="w")
-        tk.Label(pad, text=f"Nueva versión {info['version']}", font=(th.DISPLAY, 15), fg="#ffffff", bg=th.BG).pack(anchor="w", pady=(14, 2))
-        tk.Label(pad, text=f"Tienes la {VERSION}. La actualización está firmada y se verifica antes de instalarse.",
-                 fg=th.MUTED, bg=th.BG, font=(th.BODY, 9), wraplength=380, justify="left").pack(anchor="w")
-        if info["notes"].strip():
-            tk.Label(pad, text=info["notes"].strip()[:600], fg=th.TEXT, bg=th.PANEL, font=(th.BODY, 9), wraplength=380,
-                     justify="left", anchor="w", padx=10, pady=8).pack(fill="x", pady=(12, 0))
-        self.upd_bar = ttk.Progressbar(pad, mode="determinate", maximum=100)
-        self.upd_lbl = tk.Label(pad, text="", fg=th.MUTED, bg=th.BG, font=(th.BODY, 9), wraplength=380, justify="left")
-        row = tk.Frame(pad, bg=th.BG)
-        row.pack(fill="x", pady=(16, 0))
-        self.upd_btn = ttk.Button(row, text="ACTUALIZAR AHORA", style="Accent.TButton", command=lambda: self._update_start(info))
-        self.upd_btn.pack(side="left", fill="x", expand=True)
-        self.upd_later = ttk.Button(row, text="MÁS TARDE", command=self.close_update)
-        self.upd_later.pack(side="left", padx=(8, 0))
+    # ---------- unica ventana durante la actualizacion ----------
+    def _update_window(self, info):
+        self.withdraw()                                         # ni login ni lobby: solo la barra de progreso
+        win = self.upd_win = tk.Toplevel(self, bg=th.ACCENT)
+        win.overrideredirect(True)
+        win.attributes("-topmost", True)
+        inner = tk.Frame(win, bg=th.BG, padx=34, pady=26)
+        inner.pack(padx=2, pady=2)
+        tk.Label(inner, image=th.image("logo_side.png"), bg=th.BG).pack()
+        tk.Label(inner, text=f"Actualizando a la versión {info['version']}", font=(th.DISPLAY, 13), fg="#ffffff", bg=th.BG).pack(pady=(14, 2))
+        self.upd_lbl = tk.Label(inner, text="Descargando…", fg=th.MUTED, bg=th.BG, font=(th.BODY, 9), wraplength=340)
+        self.upd_lbl.pack()
+        self.upd_bar = ttk.Progressbar(inner, mode="determinate", maximum=100, length=340)
+        self.upd_bar.pack(pady=(12, 0))
         win.update_idletasks()
-        win.geometry(f"+{self.winfo_rootx() + (self.winfo_width() - win.winfo_width()) // 2}+{self.winfo_rooty() + 70}")
-
-    def _update_start(self, info):
-        self.upd_btn.config(state="disabled")
-        self.upd_later.config(state="disabled")
-        self.upd_bar.pack(fill="x", pady=(14, 4))
-        self.upd_lbl.pack(anchor="w")
-        self.upd_lbl.config(text="Descargando…", fg=th.MUTED)
+        sw, sh = win.winfo_screenwidth(), win.winfo_screenheight()
+        win.geometry(f"+{(sw - win.winfo_width()) // 2}+{(sh - win.winfo_height()) // 3}")
         put, last = self.net.events.put, [-1]
 
         def progress(got, total):
@@ -99,15 +107,18 @@ class UpdateUI:
             self.upd_lbl.config(text=f"Descargando… {pct}%")
 
     def update_failed(self, msg):
-        if self.upd_win is not None and self.upd_win.winfo_exists():
-            self.upd_lbl.config(text="No se pudo actualizar: " + msg, fg=th.ERR)
-            self.upd_btn.config(state="normal")
-            self.upd_later.config(state="normal")
+        """Si falla, se cierra la ventanita y la app sigue con la version actual (reintenta en el proximo arranque)."""
+        self.close_update()
+        print("actualizacion fallida:", msg, file=sys.stderr)
+        self.finish_boot()
+        self.deiconify()
 
     def launch_update(self, path):
-        """Descarga verificada: se abre el instalador en modo actualizacion y la app se cierra para que pueda reemplazarla."""
-        self.upd_lbl.config(text="Instalando… la app se reiniciará sola.", fg=th.OK)
-        self.update_idletasks()
+        """Descarga verificada: corre el instalador en modo actualizacion y la app se cierra para que pueda reemplazarla."""
+        if self.upd_win is not None and self.upd_win.winfo_exists():
+            self.upd_bar.config(value=100)
+            self.upd_lbl.config(text="Instalando… la app se abrirá sola.", fg=th.OK)
+            self.update_idletasks()
         subprocess.Popen([path, "/update"], close_fds=True, creationflags=0x00000008 | 0x00000200)   # desligado de esta app
         self.on_close()
 
