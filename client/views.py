@@ -124,6 +124,12 @@ class Views:
         self.v_search.trace_add("write", lambda *a: self.on_search())
         self.lbl_foot = tk.Label(top, text="", fg=th.MUTED, bg=th.BG, font=(th.BODY, 9))
         self.lbl_foot.pack(side="right")
+        # estado de la descarga de ROMs: visible en cualquier pantalla (barra de progreso + texto)
+        self.dl_box = tk.Frame(top, bg=th.PANEL, padx=12, pady=6)
+        self.dl_lbl = tk.Label(self.dl_box, text="", fg=th.TEXT, bg=th.PANEL, font=(th.BODY, 9), anchor="w")
+        self.dl_lbl.pack(side="left")
+        self.dl_bar = ttk.Progressbar(self.dl_box, mode="determinate", maximum=100, length=150)
+        self._dl_hide_job = None
 
         self.content = tk.Frame(main, bg=th.BG)
         self.content.pack(fill="both", expand=True, padx=24, pady=(0, 18))
@@ -303,6 +309,10 @@ class Views:
         star = tk.Label(card, text="☆", fg=th.YELLOW, bg=bottom, font=(th.BODY, 13), cursor="hand2")
         star.place(x=CARD_W - 30, y=2)
         star.bind("<Button-1>", lambda e, c=ch: (self.toggle_fav(c), "break")[1])
+        card.dl = tk.Label(card, text="⬇  DESCARGAR ROM", fg="#ffffff", bg=th.ACCENT, font=(th.BODY, 8, "bold"), pady=5, cursor="hand2")
+        card.dl.bind("<Button-1>", lambda e, c=ch: (self.download_roms(c), "break")[1])    # sin ROM: baja solo esta, sin abrir el juego
+        card.dl.bind("<Enter>", lambda e, w=card.dl: w.config(bg=th.ACCENT_D))
+        card.dl.bind("<Leave>", lambda e, w=card.dl: w.config(bg=th.ACCENT))
         for w in (card, art, title, meta):
             w.bind("<Button-1>", lambda e, c=ch: self.open_game(c))
         card.meta, card.star = meta, star
@@ -312,9 +322,31 @@ class Views:
 
     def _update_card(self, card, ch):
         n = self.channels.get(ch, 0)
-        rom = "✔ ROM" if self.rom_exists(ch) else "sin ROM"
-        card.meta.config(text=f"{rom}  ·  {'⚡ ranked' if ch in self.auto_channels else 'amistoso'}  ·  {n} en línea")
+        has = self.rom_exists(ch)
+        card.meta.config(text=f"{'✔ ROM' if has else 'sin ROM'}  ·  {'⚡ ranked' if ch in self.auto_channels else 'amistoso'}  ·  {n} en línea")
         card.star.config(text="★" if ch in self.cfg.get("favorites", []) else "☆")
+        if has:
+            card.dl.pack_forget()
+        elif not card.dl.winfo_ismapped():
+            card.dl.pack(fill="x", padx=10, pady=(0, 10))
+
+    # ---------- estado de la descarga de ROMs (barra superior) ----------
+    def show_download(self, text, pct):
+        if self._dl_hide_job:
+            self.after_cancel(self._dl_hide_job)
+            self._dl_hide_job = None
+        self.dl_lbl.config(text=f"⬇  {text}  ·  {pct}%" if pct else f"⬇  {text}", fg=th.TEXT)
+        self.dl_bar.config(value=pct)
+        self.dl_bar.pack(side="left", padx=(10, 0))
+        self.dl_box.pack(side="right", padx=(0, 16))
+
+    def show_download_result(self, ok, text):
+        self.dl_bar.pack_forget()
+        self.dl_lbl.config(text=("✔  " if ok else "✘  ") + text, fg=th.OK if ok else th.ERR)
+        self.dl_box.pack(side="right", padx=(0, 16))
+        if self._dl_hide_job:
+            self.after_cancel(self._dl_hide_job)
+        self._dl_hide_job = self.after(8000 if ok else 15000, self.dl_box.pack_forget)
 
     def toggle_fav(self, ch):
         favs = list(self.cfg.get("favorites", []))

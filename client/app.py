@@ -121,6 +121,7 @@ def detect_emulator(data):
 
 class App(Views, LoginPages, LobbyPages, StoreUI, HelpUI, UpdateUI, tk.Tk):
     auto_session = False
+    rom_busy = False
     def __init__(self):
         super().__init__()
         self.title(f"{APP_NAME} {VERSION}")
@@ -273,32 +274,47 @@ class App(Views, LoginPages, LobbyPages, StoreUI, HelpUI, UpdateUI, tk.Tk):
             return self.cfg["roms_dir"] or os.path.join(self.data, "roms")
         return os.path.join(self.data, "emulators", system, "ROMs")
 
-    def download_roms(self):
-        """Descarga las ROMs que falten del juego elegido (y sus dependencias, p. ej. la BIOS) desde el catalogo."""
-        sel = [self.sel_game] if self.sel_game else []
+    def download_roms(self, game=None):
+        """Descarga las ROMs que falten del juego (el elegido, o el de la tarjeta) y sus dependencias (p. ej. la BIOS) desde el catalogo.
+        El avance se ve en la barra superior en cualquier pantalla."""
+        game = game or self.sel_game
         url = self.cfg["rom_manifest"] or self.server_rom_manifest
-        if not sel:
+        if not game:
             return messagebox.showinfo(APP_NAME, "Elige un juego de la lista.")
         if not url:
             return messagebox.showinfo(APP_NAME, "No hay un catálogo de ROMs configurado. Copia las ROMs a la carpeta roms "
-                                       "o indica la URL del catálogo en AJUSTES.")
-        game, put = sel[0], self.net.events.put
+                                       "o indica la URL del catálogo en CONFIGURACIÓN.")
+        if self.rom_busy:
+            return
+        self.rom_busy = True
+        put = self.net.events.put
+        label = CHANNEL_LABELS.get(game, game)
+
+        def result(ok, text):
+            put({"t": "_log", "text": text})
+            put({"t": "_romresult", "ok": ok, "text": text})
 
         def work():
             try:
-                put({"t": "_log", "text": f"Buscando {game} en el catálogo…"})
+                put({"t": "_romprog", "text": f"Buscando {label} en el catálogo…", "pct": 0})
+                manifest = romman.fetch_manifest(url)
+                if game not in manifest["games"]:
+                    return result(False, f"{label} no está en el catálogo de ROMs.")
                 last = [0.0]
 
                 def progress(name, got, total):
                     import time
-                    if time.time() - last[0] > 1.5 or got == total:
+                    if time.time() - last[0] > 0.3 or got == total:
                         last[0] = time.time()
-                        put({"t": "_log", "text": f"Descargando {name}: {got * 100 // total}%"})
-                done = romman.ensure(romman.fetch_manifest(url), game, self.roms_dest, progress)
-                put({"t": "_log", "text": ("ROMs listas: " + ", ".join(done)) if done else f"{game}: ya tienes todas las ROMs."})
+                        put({"t": "_romprog", "text": f"Descargando {name}", "pct": got * 100 // total})
+                done = romman.ensure(manifest, game, self.roms_dest, progress)
+                result(True, f"ROM lista: {label}" if done else f"{label}: ya tienes todas las ROMs.")
             except romman.RomError as e:
-                put({"t": "_log", "text": f"ROMs: {e}"})
-            put({"t": "_romsdone"})
+                result(False, f"No se pudo descargar la ROM: {e}")
+            except OSError as e:
+                result(False, f"No se pudo guardar la ROM: {e}")
+            finally:
+                put({"t": "_romsdone"})
         threading.Thread(target=work, daemon=True).start()
 
     def test_game(self):
@@ -534,7 +550,12 @@ class App(Views, LoginPages, LobbyPages, StoreUI, HelpUI, UpdateUI, tk.Tk):
             self.lbl_status.config(text="Desconectado", foreground=th.ERR)
         elif t == "error":
             self.log(m["msg"], "sys")
+        elif t == "_romprog":
+            self.show_download(m["text"], m["pct"])
+        elif t == "_romresult":
+            self.show_download_result(m["ok"], m["text"])
         elif t == "_romsdone":
+            self.rom_busy = False
             self.render_channels()
         elif t == "_log":
             self.log(m["text"], "sys")
