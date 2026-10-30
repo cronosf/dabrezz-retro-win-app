@@ -7,6 +7,7 @@ import os
 import shutil
 import subprocess
 import sys
+import tempfile
 import threading
 import tkinter as tk
 from tkinter import ttk
@@ -30,9 +31,9 @@ class UpdateUI:
         return bool(getattr(sys, "frozen", False) or os.environ.get("DABREZZ_UPDATE_TEST"))
 
     def update_dir(self):
-        """Donde se guarda el instalador descargado: en la carpeta de datos de la app, NO en %TEMP% (en algunos equipos Windows
-        no permite ejecutar archivos desde Temp y el instalador no arrancaba)."""
-        return os.path.join(self.data, "update")
+        """Carpeta temporal del instalador descargado: no deja nada permanente en el disco (el instalador la borra al terminar y
+        la app limpia restos en el siguiente arranque)."""
+        return os.path.join(tempfile.gettempdir(), "DabrezzRetro-update")
 
     # ---------- arranque ----------
     def boot(self):
@@ -132,7 +133,10 @@ class UpdateUI:
         try:
             subprocess.Popen([path, "/update"], close_fds=True, creationflags=0x00000008 | 0x00000200)   # desligado de esta app
         except OSError as e:
-            return self.update_failed(f"no se pudo iniciar el instalador ({e})")
+            # Algunos Windows no dejan ejecutar archivos desde %TEMP% con un usuario normal: se pide permiso de administrador
+            err = self.run_as_admin(path)
+            if err:
+                return self.update_failed(err if err.startswith("se ") else f"{err} ({e})")
         if self.upd_win is not None and self.upd_win.winfo_exists():
             self.upd_lbl.config(text=INSTALLING_TEXT, fg=th.OK)
             self.upd_bar.config(mode="indeterminate")
@@ -145,6 +149,15 @@ class UpdateUI:
                 return self.on_close()
             self.after(200, poll)
         self.after(200, poll)
+
+    @staticmethod
+    def run_as_admin(path):
+        """Lanza el instalador pidiendo permisos de administrador (aviso de Windows). Devuelve None si arranco o el motivo del fallo."""
+        import ctypes
+        rc = ctypes.windll.shell32.ShellExecuteW(None, "runas", path, "/update", os.path.dirname(path), 1)
+        if rc > 32:
+            return None
+        return "se canceló el permiso de administrador" if rc == 5 else f"no se pudo iniciar el instalador (código {rc})"
 
     def close_update(self):
         if self.upd_win is not None and self.upd_win.winfo_exists():

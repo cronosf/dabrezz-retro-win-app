@@ -340,9 +340,23 @@ class Installer(tk.Tk):
         else:                                     # ventanita de actualizacion: sin boton, se cierra (la app anterior sigue intacta)
             self.destroy()
 
+    @staticmethod
+    def cleanup_download():
+        """El instalador descargado por la app vive en %TEMP%\\DabrezzRetro-update: se borra al terminar (no puede borrarse a si
+        mismo, lo hace cmd cuando ya salio). Solo si corre desde esa carpeta."""
+        exe = os.path.abspath(sys.executable)
+        folder = os.path.dirname(exe)
+        if getattr(sys, "frozen", False) and os.path.basename(folder) == "DabrezzRetro-update":
+            subprocess.Popen(f'cmd /c ping 127.0.0.1 -n 4 >nul & del /f /q "{exe}" "{os.path.join(folder, "installing.flag")}" & rmdir "{folder}"',
+                             shell=True, creationflags=0x08000000)
+
     def done(self, target, app):
         if self.update_mode:                      # actualizacion: se vuelve a abrir la app sin preguntar
-            subprocess.Popen([target], cwd=app)
+            if ctypes.windll.shell32.IsUserAnAdmin():
+                subprocess.Popen(["explorer.exe", target])      # el instalador va elevado: la app se abre con permisos normales
+            else:
+                subprocess.Popen([target], cwd=app)
+            self.cleanup_download()
             return self.destroy()
         if messagebox.askyesno(APP_NAME, "Instalación completada. ¿Abrir Dabrezz Retro ahora?"):
             subprocess.Popen([target], cwd=app)

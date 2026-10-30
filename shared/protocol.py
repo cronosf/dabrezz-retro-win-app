@@ -2,7 +2,7 @@
 import json
 
 APP_NAME = "Dabrezz Retro"
-VERSION = "1.0.6"
+VERSION = "1.0.7"
 DEFAULT_TCP_PORT = 7600
 DEFAULT_UDP_PORT = 7601
 MAX_LINE = 8 * 1024
