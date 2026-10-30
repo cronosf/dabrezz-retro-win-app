@@ -85,6 +85,83 @@ def write_ico(path, full, close):
         f.write(data + body)
 
 
+TEXT_RGB, MUTED_RGB = (242, 240, 255), (157, 155, 200)      # client/theme.py: TEXT y MUTED
+SS = 12                                                      # sobremuestreo: se dibuja en una rejilla de 24 x 12 y se reduce (bordes suaves)
+
+
+def _heart_points():
+    import math
+    pts = []
+    for i in range(0, 361, 6):
+        t = math.radians(i)
+        x = 16 * math.sin(t) ** 3
+        y = 13 * math.cos(t) - 5 * math.cos(2 * t) - 2 * math.cos(3 * t) - math.cos(4 * t)
+        pts.append((12 + x * 0.54, 11.2 - y * 0.54))
+    return pts
+
+
+def _gear_points():
+    import math
+    pts, teeth = [], 8
+    for k in range(teeth):
+        a0 = 2 * math.pi * k / teeth
+        for da, r in ((-0.20, 7.4), (-0.12, 10.2), (0.12, 10.2), (0.20, 7.4)):
+            a = a0 + da * 2 * math.pi / teeth * 2.0
+            pts.append((12 + r * math.cos(a), 12 + r * math.sin(a)))
+    return pts
+
+
+def draw_icon(name, rgb, px, width=1.9):
+    """Icono de lineas (rejilla 24x24, estilo de la hoja de marca) como PNG transparente de px x px."""
+    n = 24 * SS
+    im = Image.new("RGBA", (n, n), (0, 0, 0, 0))
+    d = ImageDraw.Draw(im)
+    col = rgb + (255,)
+    w = round(width * SS)
+    s = lambda pts: [(x * SS, y * SS) for x, y in pts]       # noqa: E731
+    box = lambda x0, y0, x1, y1: (x0 * SS, y0 * SS, x1 * SS, y1 * SS)   # noqa: E731
+
+    def poly(pts, closed=False):
+        p = s(pts) + ([s(pts)[0]] if closed else [])
+        d.line(p, fill=col, width=w, joint="curve")
+        for x, y in (p[0], p[-1]):                                       # puntas redondeadas
+            d.ellipse((x - w / 2, y - w / 2, x + w / 2, y + w / 2), fill=col)
+
+    if name == "home":
+        poly([(3, 11.5), (12, 3.5), (21, 11.5)])
+        poly([(5.5, 10), (5.5, 20.5), (18.5, 20.5), (18.5, 10)])
+        poly([(10, 20.5), (10, 14.5), (14, 14.5), (14, 20.5)])
+    elif name == "games":
+        d.rounded_rectangle(box(2.5, 6.5, 21.5, 17.5), radius=5.5 * SS, outline=col, width=w)
+        poly([(7.5, 10), (7.5, 14)]); poly([(5.5, 12), (9.5, 12)])
+        for cx, cy in ((15.5, 10.8), (18, 13.4)):
+            d.ellipse(box(cx - 1.1, cy - 1.1, cx + 1.1, cy + 1.1), fill=col)
+    elif name == "fav":
+        poly(_heart_points(), closed=True)
+    elif name == "multi":
+        d.ellipse(box(5.5, 4.5, 12.5, 11.5), outline=col, width=w)
+        d.arc(box(2.5, 13, 15.5, 27), 180, 360, fill=col, width=w)
+        d.ellipse(box(14.5, 6, 19.5, 11), outline=col, width=w)
+        d.arc(box(15, 13.5, 23, 24), 200, 340, fill=col, width=w)
+    elif name == "help":
+        d.ellipse(box(3, 3, 21, 21), outline=col, width=w)
+        d.ellipse(box(10.8, 6.6, 13.2, 9), fill=col)
+        poly([(12, 11), (12, 17)])
+    elif name == "settings":
+        poly(_gear_points(), closed=True)
+        d.ellipse(box(8.6, 8.6, 15.4, 15.4), outline=col, width=w)
+    return im.resize((px, px), Image.LANCZOS)
+
+
+ICON_NAMES = ("home", "games", "fav", "multi", "help", "settings")
+
+
+def make_icons():
+    for name in ICON_NAMES:
+        draw_icon(name, TEXT_RGB, 22).save(os.path.join(OUT, f"ico_{name}.png"))          # menu lateral
+        draw_icon(name, MUTED_RGB, 16, 2.1).save(os.path.join(OUT, f"ico_{name}_s.png"))     # enlaces pequenos
+
+
 def main():
     sheet = Image.open(SHEET).convert("RGB")
     os.makedirs(OUT, exist_ok=True)
@@ -104,6 +181,7 @@ def main():
     hero = feather(sheet.crop(HERO_BOX))
     hero.save(os.path.join(OUT, "hero.png"))
     hero.resize((300, round(hero.size[1] * 300 / hero.size[0])), Image.LANCZOS).save(os.path.join(OUT, "hero_small.png"))
+    make_icons()
     for f in sorted(os.listdir(OUT)):
         print(f.ljust(14), os.path.getsize(os.path.join(OUT, f)) // 1024, "KB")
 

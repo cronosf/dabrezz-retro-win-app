@@ -26,8 +26,7 @@ def initials(ch):
 
 
 class Views:
-    NAV = (("home", "Inicio", "⌂"), ("games", "Juegos", "🎮"), ("fav", "Favoritos", "♥"), ("multi", "Multijugador", "👥"),
-           ("help", "Ayuda", "❓"))
+    NAV = (("home", "Inicio"), ("games", "Juegos"), ("fav", "Favoritos"), ("multi", "Multijugador"), ("help", "Ayuda"))
     first_to = [2, 3, 5, 10]
 
     # ---------- acceso ----------
@@ -66,12 +65,13 @@ class Views:
         link = tk.Label(row, text="¿Olvidaste tu clave?", fg=th.LINK, bg=th.SIDEBAR, cursor="hand2", font=(th.BODY, 9))
         link.pack(side="left")
         link.bind("<Button-1>", lambda e: webbrowser.open(self.cfg["site"].rstrip("/") + "/forgot-password"))
-        sett = tk.Label(row, text="Ajustes", fg=th.MUTED, bg=th.SIDEBAR, cursor="hand2", font=(th.BODY, 9))
-        sett.pack(side="right")
-        sett.bind("<Button-1>", lambda e: self.show_settings_page())
-        hlp = tk.Label(row, text="Ayuda", fg=th.MUTED, bg=th.SIDEBAR, cursor="hand2", font=(th.BODY, 9))
-        hlp.pack(side="right", padx=(0, 14))
-        hlp.bind("<Button-1>", lambda e: self.show_help_page())
+        for text, key, command, pad in (("Ajustes", "settings", self.show_settings_page, 0), ("Ayuda", "help", self.show_help_page, 14)):
+            lnk = tk.Label(row, text=" " + text, image=th.image(f"ico_{key}_s.png"), compound="left", fg=th.MUTED, bg=th.SIDEBAR,
+                           cursor="hand2", font=(th.BODY, 9))
+            lnk.pack(side="right", padx=(0, pad))
+            lnk.bind("<Button-1>", lambda e, c=command: c())
+            lnk.bind("<Enter>", lambda e, w=lnk: w.config(fg=th.TEXT))
+            lnk.bind("<Leave>", lambda e, w=lnk: w.config(fg=th.MUTED))
         tk.Label(box, text=f"Versión {VERSION}", fg=th.MUTED, bg=th.SIDEBAR, font=(th.BODY, 9)).pack(pady=(18, 0))
         self.bind("<Return>", lambda e: self.auth())
 
@@ -84,9 +84,9 @@ class Views:
         side.pack_propagate(False)
         tk.Label(side, image=th.image("logo_side.png"), bg=th.SIDEBAR).pack(pady=(20, 24))
         self.nav = {}
-        for key, text, icon in self.NAV:
-            self._nav_item(side, key, f"{icon}   {text}", lambda k=key: self.show_view(k))
-        self._nav_item(side, "settings", "⚙   Configuración", self.show_settings)
+        for key, text in self.NAV:
+            self._nav_item(side, key, text, lambda k=key: self.show_view(k))
+        self._nav_item(side, "settings", "Configuración", self.show_settings)
         user = tk.Frame(side, bg=th.SIDEBAR)
         user.pack(side="bottom", fill="x", padx=14, pady=16)
         tk.Label(user, image=th.image("icon_small.png"), bg=th.SIDEBAR).pack(side="left")
@@ -122,8 +122,8 @@ class Views:
         self.show_view("home")
 
     def _nav_item(self, parent, key, text, command):
-        lbl = tk.Label(parent, text=text, anchor="w", padx=22, pady=11, fg=th.TEXT, bg=th.SIDEBAR, cursor="hand2",
-                       font=(th.BODY, 11))
+        lbl = tk.Label(parent, text="  " + text, image=th.image(f"ico_{key}.png"), compound="left", anchor="w", padx=22, pady=11,
+                       fg=th.TEXT, bg=th.SIDEBAR, cursor="hand2", font=(th.BODY, 11))
         lbl.pack(fill="x", padx=12, pady=2)
         lbl.bind("<Button-1>", lambda e: command())
         lbl.bind("<Enter>", lambda e: lbl.config(bg=th.NAV_SEL if self.view_name == key else th.PANEL))
