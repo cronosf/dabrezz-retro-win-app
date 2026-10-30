@@ -41,7 +41,17 @@ class Net:
         buf = b""
         try:
             while self.alive and sock is self.sock:
-                data = sock.recv(65536)
+                # Con TLS un recv() bloqueado en este hilo impide que otro hilo envie por el mismo socket (el login nunca salia y el
+                # servidor cerraba a los 15 s). Se lee con un plazo corto y con el mismo candado que send().
+                with self._lock:
+                    sock.settimeout(0.05)
+                    try:
+                        data = sock.recv(65536)
+                    except (socket.timeout, ssl.SSLWantReadError):
+                        data = None
+                if data is None:
+                    time.sleep(0.01)
+                    continue
                 if not data:
                     break
                 buf += data
@@ -67,6 +77,7 @@ class Net:
     def send(self, **msg):
         with self._lock:
             try:
+                self.sock.settimeout(5)
                 self.sock.sendall(encode(msg))
             except (OSError, AttributeError):
                 pass
