@@ -29,8 +29,7 @@ def initials(ch):
 
 
 class Views:
-    NAV = (("home", "Inicio"), ("games", "Juegos"), ("fav", "Favoritos"), ("multi", "Multijugador"), ("store", "Dabrezz Store"),
-           ("help", "Ayuda"))
+    NAV = (("home", "Inicio"), ("games", "Juegos"), ("fav", "Favoritos"), ("multi", "Multijugador"), ("help", "Ayuda"))
     first_to = [2, 3, 5, 10]
 
     # ---------- acceso ----------
@@ -53,7 +52,7 @@ class Views:
         box = tk.Frame(right, bg=th.SIDEBAR)
         box.place(relx=.5, rely=.5, anchor="center")
         tk.Label(box, image=th.image("logo.png"), bg=th.SIDEBAR).pack(pady=(0, 4))
-        ttk.Label(box, text="Inicia sesión con tu cuenta de Dabrezz Store", style="Side.TLabel", foreground=th.MUTED).pack(pady=(0, 20))
+        ttk.Label(box, text="Inicia sesión con tu cuenta", style="Side.TLabel", foreground=th.MUTED).pack(pady=(0, 20))
         self.v_email = tk.StringVar(value=self.cfg["email"])
         self.v_pass = tk.StringVar()
         for lbl, var, show in (("Correo", self.v_email, ""), ("Contraseña", self.v_pass, "•")):
@@ -135,8 +134,7 @@ class Views:
 
         self.content = tk.Frame(main, bg=th.BG)
         self.content.pack(fill="both", expand=True, padx=24, pady=(0, 18))
-        self.views = {n: tk.Frame(self.content, bg=th.BG) for n in ("home", "games", "multi", "help", "store", "settings", "profile", "table")}
-        self._store_built = False
+        self.views = {n: tk.Frame(self.content, bg=th.BG) for n in ("home", "games", "multi", "help", "settings", "profile", "table")}
         self.build_help(self.views["help"])
         self.filter, self.view_name, self.sel_game = "Todos", "home", None
         self._build_home()
@@ -173,8 +171,6 @@ class Views:
             self._fill_settings()
         elif view == "profile":
             self._fill_profile()
-        elif view == "store":
-            self._fill_store()
 
     def search_text(self):
         t = self.v_search.get().strip().lower()

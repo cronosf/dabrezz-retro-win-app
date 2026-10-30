@@ -8,7 +8,6 @@ from shared.protocol import VERSION
 
 AUTHOR = "CRONOSF DEV"
 CONTACT = "cronosfvr@gmail.com"
-STORE_URL = "https://dabrezzstore.com"
 
 # (estilo, texto): "h" = titulo de seccion, "p" = parrafo, "b" = vineta
 HELP = (
@@ -18,9 +17,9 @@ HELP = (
     ("b", "Partidas en línea con rollback: el juego responde como si estuvieras en local aunque haya latencia."),
     ("b", "Ranking ELO: el resultado lo lee el servidor directamente del emulador de ambos jugadores, no lo reporta ninguno de los dos."),
     ("b", "Sistema anti-colusión que limita y revisa partidas repetidas entre las mismas cuentas."),
-    ("b", "Tu cuenta es la de Dabrezz Store; en el juego solo se muestra tu nombre de usuario (nickname)."),
+    ("b", "En el juego solo se muestra tu nombre de usuario (nickname), nunca tu nombre real ni tu correo."),
     ("h", "Cómo se usa"),
-    ("b", "Inicia sesión con tu correo y clave de Dabrezz Store, o crea una cuenta desde el botón CREAR CUENTA."),
+    ("b", "Inicia sesión con tu correo y contraseña, o crea una cuenta desde el botón CREAR CUENTA."),
     ("b", "La primera vez elige un nombre de usuario único (5 a 12 caracteres)."),
     ("b", "En Juegos o Multijugador elige un título, crea una sala o únete a la de otro jugador."),
     ("b", "La app se actualiza sola al abrirse cuando existe una versión nueva firmada."),
@@ -40,9 +39,9 @@ HELP = (
     ("p", "4. Conducta. Está prohibido hacer trampas, usar clientes modificados o no oficiales, manipular resultados, acordar partidas "
           "para inflar el ranking, suplantar a otros, usar nombres ofensivos o atacar el servicio. El incumplimiento puede causar "
           "silenciamiento, restablecimiento del nombre, anulación de resultados o bloqueo de la cuenta."),
-    ("p", "5. Datos. El servidor guarda el identificador de tu cuenta de Dabrezz Store, tu nombre de usuario, tu ranking, el historial de "
+    ("p", "5. Datos. El servidor guarda el identificador de tu cuenta, tu nombre de usuario, tu ranking, el historial de "
           "partidas y la dirección IP necesaria para conectar y detectar abusos. Tu nombre real y correo no se muestran a otros "
-          "jugadores. La tienda se usa solo para registrarte y verificar tu inicio de sesión."),
+          "jugadores. La verificación de tu inicio de sesión la hace el servicio de cuentas, sin guardar tu contraseña."),
     ("p", "6. Conexión entre jugadores. Para jugar en línea tu equipo se conecta con el del rival (o a través del servidor), por lo que "
           "este puede conocer tu dirección IP durante la partida."),
     ("p", f"7. Responsabilidad. {AUTHOR} no se hace responsable de daños, pérdida de datos o problemas derivados del uso de la app, "
@@ -74,11 +73,7 @@ class HelpUI:
         for kind, text in HELP:
             txt.insert("end", ("•  " if kind == "b" else "") + text + "\n", kind)
         txt.insert("end", CONTACT + "\n", "mail")
-        txt.insert("end", "\nTienda oficial\n", "h")
-        txt.insert("end", "Compra consolas, cartuchos y accesorios retro en:\n", "p")
-        txt.insert("end", STORE_URL + "\n", "store")
-        txt.tag_config("store", foreground=th.LINK, underline=True, font=(th.BODY, 11, "bold"))
-        for tag, url in (("mail", "mailto:" + CONTACT), ("store", STORE_URL)):
+        for tag, url in (("mail", "mailto:" + CONTACT),):
             txt.tag_bind(tag, "<Button-1>", lambda e, u=url: webbrowser.open(u))
             txt.tag_bind(tag, "<Enter>", lambda e: txt.config(cursor="hand2"))
             txt.tag_bind(tag, "<Leave>", lambda e: txt.config(cursor="arrow"))

@@ -1,4 +1,4 @@
-"""Cliente Dabrezz Retro (Windows): login con la cuenta de la tienda, lobby, chat, retos, matchmaking y emulador."""
+"""Cliente Dabrezz Retro (Windows): login con la cuenta, lobby, chat, retos, matchmaking y emulador."""
 import json
 import os
 import queue
@@ -30,7 +30,6 @@ import client.secure as secure  # noqa: E402
 from client.help_ui import HelpUI  # noqa: E402
 from client.lobby_pages import LobbyPages  # noqa: E402
 from client.login_pages import LoginPages  # noqa: E402
-from client.store_ui import StoreUI  # noqa: E402
 from client.update_ui import UpdateUI  # noqa: E402
 from client.views import Views  # noqa: E402
 from client.net import Net  # noqa: E402
@@ -124,7 +123,7 @@ def detect_emulator(data):
     return p if os.path.exists(p) else ""
 
 
-class App(Views, LoginPages, LobbyPages, StoreUI, HelpUI, UpdateUI, tk.Tk):
+class App(Views, LoginPages, LobbyPages, HelpUI, UpdateUI, tk.Tk):
     auto_session = False
     rom_busy = False
     av_asked = False
@@ -181,7 +180,7 @@ class App(Views, LoginPages, LobbyPages, StoreUI, HelpUI, UpdateUI, tk.Tk):
         self.frame.pack(fill="both", expand=True)
         return self.frame
 
-    # ---------- login (cuenta de la tienda) ----------
+    # ---------- login ----------
     def auth(self):
         self.cfg["email"] = self.v_email.get().strip()
         remember = bool(self.v_remember.get())
@@ -426,7 +425,7 @@ class App(Views, LoginPages, LobbyPages, StoreUI, HelpUI, UpdateUI, tk.Tk):
     def settings_form(self, pad, on_done, wide=False, btn_parent=None):
         """Formulario de ajustes. wide: etiqueta a la izquierda (ventana); si no, apilado (panel estrecho de la pantalla de acceso)."""
         vars_ = {}
-        rows = (("Sitio de la tienda (cuenta)", "site", False), ("Servidor de juego (vacío = host del sitio)", "server_host", False),
+        rows = (("Sitio de la cuenta", "site", False), ("Servidor de juego (vacío = host del sitio)", "server_host", False),
                 ("Puerto TCP del servidor", "server_tcp", False), ("Puerto UDP del servidor", "server_udp", False),
                 ("Emulador (.exe)", "emulator", "file"), ("Carpeta de ROMs", "roms_dir", "dir"), ("Catálogo de ROMs (URL .json)", "rom_manifest", False),
                 ("Argumentos del emulador", "emu_args", False))
@@ -650,10 +649,6 @@ class App(Views, LoginPages, LobbyPages, StoreUI, HelpUI, UpdateUI, tk.Tk):
             self.save_cfg()
             self.net.udp_open(m["token"])
             self.show_lobby()
-        elif t == "_store":
-            self.on_store_items(m)
-        elif t == "_storeimg":
-            self.on_store_image(m)
         elif t == "_update":
             self.on_update_available(m["info"])
         elif t == "_updnone":

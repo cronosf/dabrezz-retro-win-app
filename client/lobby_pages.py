@@ -64,7 +64,7 @@ class LobbyPages:
         tk.Label(names, text=me.get("user_name") or "—", font=(th.DISPLAY, 20), fg="#ffffff", bg=th.PANEL).pack(anchor="w")
         tk.Label(names, text="Nombre de usuario (el único que ven los demás jugadores)", fg=th.MUTED, bg=th.PANEL,
                  font=(th.BODY, 9)).pack(anchor="w")
-        rows = [("Correo", self.cfg.get("email") or "—"), ("Cuenta", "Dabrezz Store" + (" · administrador" if me.get("role") == "admin" else ""))]
+        rows = [("Correo", self.cfg.get("email") or "—"), ("Cuenta", "Dabrezz Retro" + (" · administrador" if me.get("role") == "admin" else ""))]
         if self.channel:
             rows.append(("Ranking", f"ELO {me.get('elo', 1500)} · {me.get('wins', 0)}G {me.get('losses', 0)}P en {self.channel}"))
         grid = tk.Frame(card, bg=th.PANEL)
@@ -76,7 +76,6 @@ class LobbyPages:
         btns = tk.Frame(card, bg=th.PANEL)
         btns.pack(fill="x", pady=(24, 0))
         ttk.Button(btns, text="CAMBIAR CONTRASEÑA", style="Accent.TButton", command=lambda: webbrowser.open(site + "/account/")).pack(side="left")
-        ttk.Button(btns, text="IR A LA TIENDA", command=lambda: webbrowser.open(site)).pack(side="left", padx=8)
-        ttk.Button(btns, text="CERRAR SESIÓN", command=self.logout).pack(side="left")
-        tk.Label(card, text="La contraseña se cambia en tu cuenta de Dabrezz Store (se abre en el navegador).", fg=th.MUTED, bg=th.PANEL,
+        ttk.Button(btns, text="CERRAR SESIÓN", command=self.logout).pack(side="left", padx=8)
+        tk.Label(card, text="La contraseña se cambia en la página de tu cuenta (se abre en el navegador).", fg=th.MUTED, bg=th.PANEL,
                  font=(th.BODY, 9)).pack(anchor="w", pady=(12, 0))
