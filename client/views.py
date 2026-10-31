@@ -101,10 +101,13 @@ class Views:
         user = tk.Frame(side, bg=th.SIDEBAR, cursor="hand2")        # clic: Mi perfil
         user.pack(side="bottom", fill="x", padx=14, pady=16)
         tk.Label(user, image=th.image("icon_small.png"), bg=th.SIDEBAR, cursor="hand2").pack(side="left")
-        self.lbl_me = tk.Label(user, text="", fg=th.TEXT, bg=th.SIDEBAR, font=(th.BODY, 9, "bold"), justify="left", anchor="w",
+        who = tk.Frame(user, bg=th.SIDEBAR, cursor="hand2")
+        who.pack(side="left", padx=10)
+        self.lbl_me = tk.Label(who, text="", fg=th.TEXT, bg=th.SIDEBAR, font=(th.BODY, 9, "bold"), justify="left", anchor="w",
                                cursor="hand2")
-        self.lbl_me.pack(side="left", padx=10)
-        for w in (user, *user.winfo_children()):
+        self.lbl_me.pack(anchor="w")
+        tk.Label(who, text=f"Versión v{VERSION}", fg=th.MUTED, bg=th.SIDEBAR, font=(th.BODY, 8), anchor="w", cursor="hand2").pack(anchor="w")
+        for w in (user, *user.winfo_children(), *who.winfo_children()):
             w.bind("<Button-1>", lambda e: self.show_view("profile"))
             w.bind("<Enter>", lambda e: self.lbl_me.config(fg=th.LINK))
             w.bind("<Leave>", lambda e: self.lbl_me.config(fg=th.TEXT))
