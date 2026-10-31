@@ -7,7 +7,7 @@ emulador solo sincroniza 2, no se puede jugar de 5 por internet.
   * RetroArch (client/retro.py): netplay de varios jugadores. Se usa para PS1 y N64 siempre, para SNES cuando la sala es de 3 o mas, y para el
     ranked de SNES (lectura de memoria). Comprobado en local con 5 instancias de Snes9x (jugadores 1 a 5).
 """
-NETPLAY_MAX = {"fbneo": 2, "snes9x": 2, "ps1": 4, "n64": 4}
+NETPLAY_MAX = {"fbneo": 2, "snes9x": 2, "ps1": 4, "n64": 4, "mednafen": 2}
 RETRO_MAX = {"snes": 5, "ps1": 4, "n64": 4}          # jugadores que admite el netplay de RetroArch con cada nucleo (Super Multitap / multitap)
 
 # Jugadores que admite el propio juego (los que no aparecen aqui: 2; los de N64, 4). Super Bomberman 2: 4 con Super Multitap; 3, 4 y 5: hasta 5
@@ -19,7 +19,8 @@ GAME_MAX = {
 
 
 def system_of(channel):
-    return "snes9x" if channel.startswith("snes_") else "ps1" if channel.startswith("ps1_") else "n64" if channel.startswith("n64_") else "fbneo"
+    return ("snes9x" if channel.startswith("snes_") else "ps1" if channel.startswith("ps1_") else "n64" if channel.startswith("n64_") else
+            "mednafen" if channel.startswith("psxm_") else "fbneo")
 
 
 def retro_system(channel):
@@ -41,6 +42,16 @@ def netplay_max(channel):
 
 def room_capacity(channel):
     return min(game_max(channel), netplay_max(channel))
+
+
+def uses_mednafen(channel):
+    """Los discos de PS1 "psxm_*" (Bust a Groove 1 y 2) se juegan con Mednafen y su netplay (servidor Mednafen-Server)."""
+    return channel.startswith("psxm_")
+
+
+def uses_session(channel, players):
+    """Juegos cuya partida se lanza con una sesion propia (RetroArch o Mednafen) en vez del emulador GGPO de 1 contra 1."""
+    return uses_mednafen(channel) or uses_retro(channel, players)
 
 
 def uses_retro(channel, players):

@@ -126,9 +126,9 @@ def payload(name):
     return th.resource_path(os.path.join("payload", name))
 
 
-EMULATORS = ("fbneo", "snes9x", "ggpofba", "flycast", "retroarch")
+EMULATORS = ("fbneo", "snes9x", "ggpofba", "flycast", "retroarch", "mednafen")
 NOTICES = ("EMULATOR-NOTICE.txt", "FBNEO-LICENSE.txt", "SNES9X-LICENSE.txt", "FLYCAST-GPL2-LICENSE.txt",
-           "OPENBIOS-MIT-LICENSE.txt", "BUNGEE-OFL-LICENSE.txt", "RETROARCH-NOTICE.txt", "DIRECTX-LICENSE.txt")
+           "OPENBIOS-MIT-LICENSE.txt", "BUNGEE-OFL-LICENSE.txt", "RETROARCH-NOTICE.txt", "MEDNAFEN-NOTICE.txt", "DIRECTX-LICENSE.txt")
 
 
 def emulator_complete(dest, zp):
@@ -138,7 +138,7 @@ def emulator_complete(dest, zp):
         return all(os.path.isfile(os.path.join(dest, *i.filename.split("/"))) for i in z.infolist() if not i.is_dir())
 
 
-EMU_NAMES = {"fbneo": "FBNeo (arcade, Mega Drive, NES)", "snes9x": "Snes9x (SNES)", "ggpofba": "FB Alpha", "flycast": "Flycast", "retroarch": "RetroArch (PS1, N64 y SNES de 3 a 5 jugadores)"}
+EMU_NAMES = {"fbneo": "FBNeo (arcade, Mega Drive, NES)", "snes9x": "Snes9x (SNES)", "ggpofba": "FB Alpha", "flycast": "Flycast", "retroarch": "RetroArch (PS1, N64 y SNES de 3 a 5 jugadores)", "mednafen": "Mednafen (Bust a Groove)"}
 
 
 def missing_emulators(data):

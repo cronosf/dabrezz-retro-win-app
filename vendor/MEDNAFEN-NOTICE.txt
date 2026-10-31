@@ -1,0 +1,8 @@
+Mednafen 0.9.37.1 para Windows (GPL v2): emulador usado para Bust a Groove 1 y 2 en Dabrezz Play.
+
+  * Mednafen: https://mednafen.github.io/ - codigo fuente de la version 0.9.37.1 en https://mednafen.github.io/releases/ (tambien el de Mednafen-Server 0.5.2,
+    el servidor de partidas en red). Se reparte tal cual, sin cambios.
+  * DLL incluidas: SDL 1.2 (LGPL), libcdio (GPL), libsndfile (LGPL), libiconv y libcharset (LGPL) y el runtime de MinGW-w64 (GPL con excepcion de runtime).
+  * OpenBIOS (BIOS libre de PlayStation, MIT): https://github.com/pcsx-redux/nugget - con la pantalla de arranque de Dabrezz Play.
+
+No se distribuyen BIOS de Sony.

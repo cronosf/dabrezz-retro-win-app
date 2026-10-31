@@ -14,6 +14,7 @@ import re
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 import client.attest as attest  # noqa: E402
+import client.med as med  # noqa: E402
 import client.retro as retro  # noqa: E402
 import client.winbrand as winbrand  # noqa: E402
 import client.romman as romman  # noqa: E402
@@ -303,7 +304,9 @@ class App(Views, LoginPages, LobbyPages, FriendsUI, DmUI, RoomsUI, AdminUI, Help
         if not os.path.exists(self.emulator_for("snes_x")):
             falta.append("Snes9x (SNES)")
         if os.path.isdir(retro.folder(self.data)) and not retro.installed(self.data):          # la carpeta existe: lo borro el antivirus
-            falta.append("RetroArch (3 a 5 jugadores y N64)")
+            falta.append("RetroArch (PS1, N64 y SNES de 3 a 5 jugadores)")
+        if os.path.isdir(med.folder(self.data)) and not med.installed(self.data):
+            falta.append("Mednafen (Bust a Groove)")
         if falta:
             self.log("Falta el emulador de " + " y de ".join(falta) + ". Casi seguro tu antivirus lo borró: en Seguridad de Windows → "
                      "Protección contra virus y amenazas → Historial de protección, restaura el archivo y permite el elemento; añade "
@@ -340,7 +343,7 @@ class App(Views, LoginPages, LobbyPages, FriendsUI, DmUI, RoomsUI, AdminUI, Help
     def system_of(channel):
         """Emulador de un canal: snes_* -> Snes9x (RetroArch en salas de 3 o mas); ps1_* y n64_* -> RetroArch; el resto, FBNeo."""
         return ("snes9x" if channel.startswith("snes_") else "ps1" if channel.startswith("ps1_") else
-                "n64" if channel.startswith("n64_") else "fbneo")
+                "n64" if channel.startswith("n64_") else "mednafen" if channel.startswith("psxm_") else "fbneo")
 
     def emulator_for(self, channel):
         if self.system_of(channel) == "snes9x":
@@ -364,10 +367,15 @@ class App(Views, LoginPages, LobbyPages, FriendsUI, DmUI, RoomsUI, AdminUI, Help
         system = self.system_of(channel)
         if system == "ps1":
             return ps1.image_path(self.roms_dest("ps1"), channel)
+        if system == "mednafen":                                  # Bust a Groove 1 y 2: .cue + .bin
+            p = os.path.join(self.roms_dest("mednafen"), channel + ".cue")
+            return p if os.path.exists(p) else None
         p = os.path.join(self.roms_dest(system), channel + ".zip")
         return p if os.path.exists(p) else None
 
     def rom_exists(self, channel):
+        if self.system_of(channel) == "mednafen":
+            return self.rom_file(channel) is not None
         if self.system_of(channel) == "n64":
             return os.path.exists(os.path.join(self.roms_dest("n64"), channel + ".zip"))
         if self.system_of(channel) == "ps1":
@@ -421,6 +429,8 @@ class App(Views, LoginPages, LobbyPages, FriendsUI, DmUI, RoomsUI, AdminUI, Help
             return self.cfg["roms_dir"] or os.path.join(self.data, "roms")
         if system in ("ps1", "duckstation"):                      # discos de PS1 (el catalogo antiguo los llama "duckstation")
             return os.path.join(self.data, "roms", "ps1")
+        if system == "mednafen":
+            return os.path.join(self.data, "roms", "psxm")
         return os.path.join(self.data, "emulators", system, "ROMs")
 
     def download_roms(self, game=None):
@@ -478,6 +488,14 @@ class App(Views, LoginPages, LobbyPages, FriendsUI, DmUI, RoomsUI, AdminUI, Help
                 return messagebox.showinfo(APP_NAME, "Falta la ROM: pulsa DESCARGAR ROM en la tarjeta del juego.")
             # Snes9x busca <emulador>\ROMs\<juego>.zip: se le pasa solo el nombre (con ruta o con .zip da "Invalid Zip archive")
             return self.spawn([exe, sel[0]], os.path.dirname(exe), sel[0])      # offline: aqui se configuran los controles (menu Input)
+        if sel and self.system_of(sel[0]) == "mednafen":          # Bust a Groove 1 y 2: Mednafen
+            if not med.installed(self.data):
+                return messagebox.showinfo(APP_NAME, "No se encontró Mednafen. Si tu antivirus lo borró, restáuralo desde Seguridad de Windows y "
+                                           "vuelve a ejecutar el instalador.")
+            cue = self.rom_file(sel[0])
+            if not cue:
+                return messagebox.showinfo(APP_NAME, "Falta el juego: pulsa DESCARGAR ROM en la tarjeta del juego.")
+            return self.spawn(med.command(self.data, cue), med.folder(self.data), sel[0])
         if sel and self.system_of(sel[0]) in ("ps1", "n64"):      # PS1 y N64: RetroArch
             if not retro.installed(self.data):
                 self.ensure_retro()
@@ -765,8 +783,13 @@ class App(Views, LoginPages, LobbyPages, FriendsUI, DmUI, RoomsUI, AdminUI, Help
             self.retro_session().on_status(m)
         elif t == "ra_conn":
             self.retro_session().on_conn(m)
+        elif t == "med_session":
+            self.med_session().on_session(m)
+            self.rm_say("Partida de Bust a Groove con Mednafen: se abre su ventana en unos segundos.")
         elif t == "ra_end":
             self.retro_session().handle_end(m)
+            if getattr(self, "_med", None) is not None:
+                self._med.handle_end(m)
         elif t == "_raend":
             self.rm_say("La partida con RetroArch terminó.", True)
         elif t == "_romsdone":
@@ -859,9 +882,20 @@ class App(Views, LoginPages, LobbyPages, FriendsUI, DmUI, RoomsUI, AdminUI, Help
             self.table("Partidas en vivo", (("g", 100, "JUEGO"), ("a", 150, "JUGADORES"), ("r", 70, "RANKED")),
                        [(x["channel"], " vs ".join(x["players"]), "sí" if x["ranked"] else "no") for x in m["matches"]])
 
+    def med_session(self):
+        if getattr(self, "_med", None) is None:
+            put = self.net.events.put
+            self._med = med.MedSession(self.data, self.net.send, (self.me or {}).get("user_name", "Jugador"), self.rom_file,
+                                       log=lambda text: put({"t": "_log", "text": text}), on_end=lambda: put({"t": "_raend"}),
+                                       title_for=self.window_title)
+        self._med.nick = (self.me or {}).get("user_name", "Jugador")
+        return self._med
+
     def retro_stop(self):
         if getattr(self, "_retro", None) is not None:
             self._retro.stop()
+        if getattr(self, "_med", None) is not None:
+            self._med.stop()
 
     def on_close(self):
         self.retro_stop()

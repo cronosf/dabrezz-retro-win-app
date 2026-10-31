@@ -21,7 +21,7 @@ SEARCH_HINT = "Buscar juegos, títulos..."
 
 def platform_of(ch):
     return ("Mega Drive" if ch.startswith("md_") else "NES" if ch.startswith("nes_") else "SNES" if ch.startswith("snes_") else
-            "PS1" if ch.startswith("ps1_") else "Arcade")
+            "PS1" if ch.startswith(("ps1_", "psxm_")) else "Arcade")
 
 
 def initials(ch):

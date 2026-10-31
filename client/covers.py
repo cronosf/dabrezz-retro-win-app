@@ -17,7 +17,7 @@ from PIL import Image
 
 BASE = "https://thumbnails.libretro.com"
 SYSTEM_DIRS = {"arcade": "FBNeo - Arcade Games", "md": "Sega - Mega Drive - Genesis", "nes": "Nintendo - Nintendo Entertainment System",
-               "snes": "Nintendo - Super Nintendo Entertainment System", "ps1": "Sony - PlayStation", "n64": "Nintendo - Nintendo 64"}
+               "snes": "Nintendo - Super Nintendo Entertainment System", "ps1": "Sony - PlayStation", "psxm": "Sony - PlayStation", "n64": "Nintendo - Nintendo 64"}
 SIZES = {"": (196, 120), "_s": (130, 62)}          # tarjeta de Juegos / ficha de Inicio
 MAX_INDEX = 8 * 1024 * 1024
 MAX_IMAGE = 3 * 1024 * 1024
@@ -28,7 +28,7 @@ PNG = b"\x89PNG\r\n\x1a\n"
 
 
 def system_key(channel):
-    for k in ("md", "nes", "snes", "ps1", "n64"):
+    for k in ("md", "nes", "snes", "ps1", "psxm", "n64"):
         if channel.startswith(k + "_"):
             return k
     return "arcade"

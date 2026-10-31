@@ -13,7 +13,7 @@ from client.views import PLATFORMS, initials, platform_of
 from shared.capabilities import retro_system, system_of
 from shared.protocol import CHANNEL_LABELS
 
-EMU_NAMES = {"fbneo": "FBNeo", "snes9x": "Snes9x", "ps1": "RetroArch", "n64": "RetroArch"}
+EMU_NAMES = {"fbneo": "FBNeo", "snes9x": "Snes9x", "ps1": "RetroArch", "n64": "RetroArch", "mednafen": "Mednafen"}
 INVITE_TTL = 180
 TABS = (("public", "Salas Públicas"), ("mine", "Mis Salas"), ("friends", "Amigos"))
 
