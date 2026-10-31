@@ -118,6 +118,17 @@ class Net:
     def local_udp_port(self):
         return self.udp.getsockname()[1] if self.udp else 0
 
+    def lan_ip(self):
+        """IP de esta maquina en la red local (no envia nada: solo consulta que interfaz usaria para llegar al servidor)."""
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        try:
+            s.connect((self.host, self.udp_port))
+            return s.getsockname()[0]
+        except OSError:
+            return ""
+        finally:
+            s.close()
+
     def probe(self, host, port, timeout=3.0):
         """Abre el NAT hacia el rival y mide la latencia P2P (ms). None = no hay camino directo (usar relay)."""
         s = self.udp

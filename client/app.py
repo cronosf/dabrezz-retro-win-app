@@ -728,7 +728,7 @@ class App(Views, LoginPages, LobbyPages, FriendsUI, HelpUI, UpdateUI, tk.Tk):
             if not self.net.udp:
                 self.net.udp_open(self.net.token)
             self.log(f"Partida {'ranked a ' + str(m['first_to']) + ' ' if m['ranked'] else ''}contra {m['rival_user_name']}", "sys")
-            self.net.send(t="udp_ready")
+            self.net.send(t="udp_ready", lan_ip=self.net.lan_ip(), lan_port=self.net.local_udp_port())
         elif t == "peer":
             self.on_peer(m)
         elif t == "_emu":
