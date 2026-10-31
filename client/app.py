@@ -328,6 +328,8 @@ class App(Views, LoginPages, LobbyPages, FriendsUI, HelpUI, UpdateUI, tk.Tk):
 
     def challenge(self, ranked):
         u = self.selected_user()
+        if not u:
+            return self.log("Selecciona un jugador de la lista para retarlo.", "sys")
         if u and ranked and self.channel not in self.auto_channels:
             return messagebox.showinfo(APP_NAME, "Este juego no tiene resultado automático: solo se puede jugar amistoso.")
         if u:

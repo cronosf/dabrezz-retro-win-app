@@ -514,21 +514,22 @@ class Views:
         right = ttk.Frame(body, style="Panel.TFrame", padding=12)
         right.grid(row=0, column=1, sticky="ns", padx=(14, 0))
         ttk.Label(right, text="Jugadores en línea", style="H.TLabel").pack(anchor="w", pady=(0, 6))
-        self.tv_users = ttk.Treeview(right, columns=("elo", "wl", "ping"), show="tree headings", height=12, selectmode="browse")
+        self.tv_users = ttk.Treeview(right, columns=("elo", "wl", "ping"), show="tree headings", height=6, selectmode="browse")
         self.tv_users.heading("#0", text="NOMBRE")
         self.tv_users.column("#0", width=150)
         for c, w, t in (("elo", 52, "ELO"), ("wl", 58, "W-L"), ("ping", 54, "PING")):
             self.tv_users.heading(c, text=t)
             self.tv_users.column(c, width=w, anchor="center")
-        self.tv_users.pack(fill="y", expand=True)
+        # los botones se empaquetan primero (abajo): en una ventana baja la lista se encoge y los botones siguen visibles
+        ttk.Button(right, text="NORMAL PLAY (amistoso)", command=lambda: self.challenge(False)).pack(side="bottom", fill="x")
+        ttk.Button(right, text="RETAR (ranked)", style="Accent.TButton",
+                   command=lambda: self.challenge(True)).pack(side="bottom", fill="x", pady=(10, 4))
         r = ttk.Frame(right, style="Panel.TFrame")
-        r.pack(fill="x", pady=(10, 0))
+        r.pack(side="bottom", fill="x", pady=(10, 0))
         ttk.Label(r, text="Ranked a primero en", style="PanelMuted.TLabel").pack(side="left")
         self.v_ft = tk.StringVar(value="2")
         ttk.Combobox(r, textvariable=self.v_ft, values=self.first_to, width=3, state="readonly").pack(side="left", padx=6)
-        ttk.Button(right, text="RETAR (ranked)", style="Accent.TButton",
-                   command=lambda: self.challenge(True)).pack(fill="x", pady=(10, 4))
-        ttk.Button(right, text="RETAR (amistoso)", command=lambda: self.challenge(False)).pack(fill="x")
+        self.tv_users.pack(fill="both", expand=True)
 
     def refresh_me(self, **st):
         if self.me and hasattr(self, "lbl_me"):

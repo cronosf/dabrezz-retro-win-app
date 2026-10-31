@@ -16,3 +16,10 @@ client/_build_secret.py
 *.pem
 .env
 server.env
+
+# juegos: nunca al repositorio (pesan cientos de MB y no se distribuyen)
+roms/
+*.bin
+*.cue
+*.chd
+*.iso
