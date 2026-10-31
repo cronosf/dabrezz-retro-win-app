@@ -1,6 +1,6 @@
 """Genera en ./dist: DabrezzRetro.exe, DabrezzRetro-Setup.exe y dabrezz-retro-server.tar.gz (Ubuntu).
 
-Requiere vendor/ (emulador, DirectX y licencias). Requiere en el Python que lo ejecute: pyinstaller, pywebview (ventana de registro) y fonttools+brotli solo si
+Requiere vendor/ (emulador, DirectX y licencias). Requiere en el Python que lo ejecute: pyinstaller, pillow, cryptography y fonttools+brotli solo si
 se regenera la fuente. Los temporales de PyInstaller van a una carpeta temporal que se borra al terminar.
 """
 import os
@@ -39,8 +39,7 @@ if __name__ == "__main__":
     assets = os.path.join(ROOT, "client", "assets")
     with tempfile.TemporaryDirectory() as tmp:
         icon = os.path.join(assets, "icon.ico")      # icono de los .exe: tambien el de los accesos directos y el de Inicio
-        pyi(tmp, "--name", "DabrezzRetro", "--icon", icon, "--add-data", f"{assets};assets", "--collect-all", "webview",
-            "--hidden-import", "client.webform", os.path.join(ROOT, "client", "app.py"))
+        pyi(tmp, "--name", "DabrezzRetro", "--icon", icon, "--add-data", f"{assets};assets", os.path.join(ROOT, "client", "app.py"))
         vendor = os.path.join(ROOT, "vendor")       # emulador, runtime de DirectX y sus licencias (ver vendor/SOURCE.txt)
         names = ("emulator-fbneo.zip", "emulator-snes9x.zip", "emulator-ggpofba.zip", "emulator-flycast.zip", "emulator-duckstation.zip", "directx-redist.zip",
                  "EMULATOR-NOTICE.txt", "FBNEO-LICENSE.txt", "SNES9X-LICENSE.txt", "FLYCAST-GPL2-LICENSE.txt", "DUCKSTATION-GPL3-LICENSE.txt", "OPENBIOS-MIT-LICENSE.txt", "BUNGEE-OFL-LICENSE.txt",

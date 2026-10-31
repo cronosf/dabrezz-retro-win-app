@@ -8,19 +8,11 @@ import subprocess
 import sys
 import threading
 import tkinter as tk
-import webbrowser
 from tkinter import filedialog, messagebox, ttk
 import ipaddress
 import re
-from urllib.parse import urlparse
-
-if len(sys.argv) > 1 and sys.argv[1] == "--webform":      # el mismo exe hace de ventana modal del formulario web
-    from client.webform import main as _webform
-    _webform(*sys.argv[2:7])
-    sys.exit(0)
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
-import client.account as account  # noqa: E402
 import client.attest as attest  # noqa: E402
 import client.romman as romman  # noqa: E402
 import client.theme as th  # noqa: E402
@@ -41,7 +33,7 @@ from shared.protocol import APP_NAME, CHANNEL_LABELS, VERSION  # noqa: E402
 # Emulador: quark:direct,<rom>,<puerto local>,<ip rival>,<puerto rival>,<jugador 0/1>,<delay>,<ranked>
 # (en modo direct el emulador ignora «ranked»). Variables: {rom} {host} {port} {local_port} {player} {player0} {delay} {channel} {rival}
 FIXED = {
-    "site": "https://dabrezzstore.com", "server_host": "retro.dabrezzstore.com", "server_tcp": 7600, "server_udp": 7601, "tls": True,
+    "server_host": "retro.dabrezzstore.com", "server_tcp": 7600, "server_udp": 7601, "tls": True,
     "emu_args": "quark:direct,{rom},{local_port},{host},{port},{player0},{delay},0",
 }
 DEFAULTS = {
@@ -174,7 +166,7 @@ class App(Views, LoginPages, LobbyPages, FriendsUI, HelpUI, UpdateUI, tk.Tk):
         self.minsize(980, 600)
         th.apply(self)
         self.data = data_dir()
-        for sub in ("", "roms", "emulators", "replays", "webview"):
+        for sub in ("", "roms", "emulators", "replays"):
             os.makedirs(os.path.join(self.data, sub), exist_ok=True)
         self.cfg_path = os.path.join(self.data, "config.json")
         self.cfg = {**DEFAULTS, **self._load_cfg(), **FIXED}
@@ -185,7 +177,6 @@ class App(Views, LoginPages, LobbyPages, FriendsUI, HelpUI, UpdateUI, tk.Tk):
         self.net = Net()
         self.me = None
         self.rosters = {}
-        self.jwt = None
         self.channel = None
         self.match = None
         self.emu = None
@@ -233,48 +224,47 @@ class App(Views, LoginPages, LobbyPages, FriendsUI, HelpUI, UpdateUI, tk.Tk):
         self.auto_session = False
         self.lbl_status.config(text="Conectando…", foreground=th.MUTED)
         self.btn_login.config(state="disabled")
-        threading.Thread(target=self._login_thread, args=(self.cfg["site"], self.cfg["email"], self.v_pass.get(), remember),
-                         daemon=True).start()
+        self.open_session(t="login", email=self.cfg["email"], password=self.v_pass.get(), remember=remember)
 
-    def _login_thread(self, site, email, pw, remember=False):
-        try:
-            self.jwt, _ = account.login(site, email, pw, remember)
-            if remember:                              # solo el token de sesion, cifrado con tu cuenta de Windows (nunca la clave)
-                try:
-                    self.cfg["session"] = secure.protect(self.jwt)
-                except OSError:
-                    self.cfg.pop("session", None)
-            self._connect_game(self.jwt)
-            self.jwt = None      # ya no hace falta: no se conserva en memoria
-        except (account.ApiError, OSError) as e:
-            self.net.events.put({"t": "auth", "ok": False, "msg": str(e), "local": True})
+    def register(self, nick, email, password):
+        """Crea la cuenta en el servidor de Dabrezz Play; si sale bien, entra directamente (ver handle("auth"))."""
+        self.cfg["email"] = email
+        self.auto_session = False
+        self.open_session(t="register", nick=nick, email=email, password=password)
 
-    def _connect_game(self, token):
-        host = self.cfg["server_host"] or urlparse(self.cfg["site"]).hostname
-        self.net.connect(host, int(self.cfg["server_tcp"]), int(self.cfg["server_udp"]), self.cfg["tls"])
-        if not self.net.hello.wait(6):
-            raise OSError("El servidor no respondio al saludo")
-        self.net.send(t="login", token=token, ver=VERSION, proof=attest.proof(self.net.nonce, VERSION))
+    def open_session(self, **first):
+        """Conecta con el servidor (siempre por TLS) y envia el primer mensaje (login o register) con la prueba de cliente oficial.
+        La contrasena solo viaja por esa conexion cifrada y no se guarda."""
+        def work():
+            try:
+                self.net.connect(self.cfg["server_host"], int(self.cfg["server_tcp"]), int(self.cfg["server_udp"]), self.cfg["tls"])
+                if not self.net.hello.wait(6):
+                    raise OSError("El servidor no respondio al saludo")
+                self.net.send(ver=VERSION, proof=attest.proof(self.net.nonce, VERSION), **first)
+            except OSError as e:
+                self.net.events.put({"t": "auth", "ok": False, "msg": f"No se pudo conectar con el servidor: {e}", "local": True})
+        threading.Thread(target=work, daemon=True).start()
+
+    def saved_session(self):
+        """Token de "Recordar sesion" (guardado cifrado con tu cuenta de Windows) o None."""
+        blob = self.cfg.get("session") if self.cfg.get("remember") else None
+        return (secure.unprotect(blob) if blob else None) or None
 
     def try_saved_session(self):
         """"Recordar sesion": al abrir la app entra solo con el token guardado (si sigue vigente); si no, muestra el formulario."""
-        blob = self.cfg.get("session") if self.cfg.get("remember") else None
-        token = secure.unprotect(blob) if blob else None
+        token = self.saved_session()
         if not token or not hasattr(self, "btn_login"):
             return
         self.auto_session = True
         self.lbl_status.config(text="Entrando con tu sesión guardada…", foreground=th.MUTED)
         self.btn_login.config(state="disabled")
-
-        def work():
-            try:
-                self._connect_game(token)
-            except OSError as e:
-                self.net.events.put({"t": "auth", "ok": False, "msg": str(e), "local": True})
-        threading.Thread(target=work, daemon=True).start()
+        self.open_session(t="login", session=token)
 
     def logout(self):
         """Cierra la sesion y olvida la guardada (hay que volver a escribir la contraseña)."""
+        token = self.saved_session()
+        if token:
+            self.net.send(t="forget", session=token)          # el servidor invalida ese token
         self.cfg.pop("session", None)
         self.cfg["remember"] = False
         self.save_cfg()
@@ -666,7 +656,6 @@ class App(Views, LoginPages, LobbyPages, FriendsUI, HelpUI, UpdateUI, tk.Tk):
         if t == "auth":
             if not m["ok"]:
                 self.net.close()
-                self.close_nick()
                 if m.get("update_required"):          # el servidor ya no acepta esta version: busca la nueva en GitHub
                     self.start_update_check()
                 msg = m["msg"]
@@ -675,14 +664,18 @@ class App(Views, LoginPages, LobbyPages, FriendsUI, HelpUI, UpdateUI, tk.Tk):
                     self.save_cfg()
                     msg = "Tu sesión guardada venció. Inicia sesión de nuevo."
                 self.auto_session = False
-                if hasattr(self, "lbl_status"):
+                if hasattr(self, "btn_reg"):             # la pagina de crear cuenta esta abierta
+                    self.lbl_reg.config(text=msg, fg=th.ERR)
+                    self.btn_reg.config(state="normal")
+                elif hasattr(self, "lbl_status"):
                     self.lbl_status.config(text=msg, foreground=th.ERR)
                     self.btn_login.config(state="normal")
                 return
-            if m.get("need_nick"):                  # primera vez: antes de entrar debe elegir su nombre de usuario
-                self.ask_nick()
-                return
-            self.close_nick()
+            if m.get("session"):                    # "Recordar sesion": solo el token, cifrado con tu cuenta de Windows (nunca la clave)
+                try:
+                    self.cfg["session"] = secure.protect(m["session"])
+                except OSError:
+                    self.cfg.pop("session", None)
             self.me = {k: m.get(k) for k in ("id", "user_name", "role")}
             self.me.update(elo=1500, wins=0, losses=0)
             self.first_to = m.get("first_to") or self.first_to
@@ -702,10 +695,9 @@ class App(Views, LoginPages, LobbyPages, FriendsUI, HelpUI, UpdateUI, tk.Tk):
             self.launch_update(m["path"])
         elif t == "_upderr":
             self.update_failed(m["msg"])
-        elif t == "nick_status":
-            self.nick_status(m)
+        elif t == "pw_result":
+            self.on_pw_result(m)
         elif t == "disconnected":
-            self.close_nick()
             if self.me:
                 messagebox.showwarning(APP_NAME, "Conexión perdida con el servidor.")
             self.me = self.channel = self.match = None
@@ -809,7 +801,6 @@ class App(Views, LoginPages, LobbyPages, FriendsUI, HelpUI, UpdateUI, tk.Tk):
                        [(x["channel"], " vs ".join(x["players"]), "sí" if x["ranked"] else "no") for x in m["matches"]])
 
     def on_close(self):
-        self.stop_register()
         if self.emu and self.emu.poll() is None:
             self.emu.terminate()
         self.net.close()

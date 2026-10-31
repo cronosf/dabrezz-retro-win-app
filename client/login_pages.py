@@ -1,23 +1,20 @@
 """Pantalla de acceso con paginas integradas: Ayuda, Ajustes y Registro se muestran en el mismo panel del login (con boton VOLVER),
 sin abrir ventanas nuevas (mixin de App)."""
-import os
+import re
 import tkinter as tk
-import webbrowser
 from tkinter import ttk
 
-import client.account as account
+import shared.passrules as passwords
 import client.theme as th
+
+NICK_RE = re.compile(r"^[A-Za-z0-9_]{5,12}$")
+EMAIL_RE = re.compile(r"^[^@\s]{1,64}@[^@\s]{1,255}\.[^@\s.]{2,}$")
 
 
 class LoginPages:
-    reg_proc = None
-
     def login_page(self, title, build, back=None):
         """Reemplaza el formulario de acceso por una pagina: cabecera con VOLVER + titulo, y el contenido que arma `build(body)`."""
-        self.stop_register()
         self.unbind("<Return>")
-        for stale in ("lbl_status", "btn_login"):          # los controles del formulario de acceso dejan de existir en la pagina
-            self.__dict__.pop(stale, None)
         right = self.login_shell()
         head = tk.Frame(right, bg=th.SIDEBAR)
         head.pack(fill="x", padx=24, pady=(22, 8))
@@ -53,45 +50,70 @@ class LoginPages:
         canvas.bind("<Leave>", lambda e: canvas.unbind_all("<MouseWheel>"))
         self.settings_form(pad, on_done, btn_parent=foot)
 
-    # ---------- Registro (formulario web de la tienda, incrustado) ----------
+    # ---------- Registro (cuenta propia de Dabrezz Play) ----------
     def show_register_page(self):
-        def build(body):
-            holder = tk.Frame(body, bg="#2a0b3c")
-            holder.pack(fill="both", expand=True)
-            self.lbl_reg = tk.Label(holder, text="Cargando formulario de registro…", fg=th.MUTED, bg="#2a0b3c", font=(th.BODY, 10))
-            self.lbl_reg.place(relx=.5, rely=.5, anchor="center")
-            holder.update_idletasks()
-            self.reg_proc = account.open_form_embedded(self.cfg["site"], "/register/?app=1", "registered=1", "Crear cuenta",
-                                                       os.path.join(self.data, "webview"), holder.winfo_id())
-            if self.reg_proc is None:
-                return self._register_fallback()
-            self.after(500, self._register_poll, self.reg_proc)
-        self.login_page("Crear cuenta", build, back=self._register_back)
+        self.login_page("Crear cuenta", self.build_register)
 
-    def _register_poll(self, proc):
-        if proc is not self.reg_proc:                         # ya se salio de esta pagina
+    def build_register(self, body):
+        box = tk.Frame(body, bg=th.BG)
+        box.pack(fill="x", anchor="n")
+        v = {k: tk.StringVar() for k in ("nick", "email", "pw", "pw2")}
+        self.reg_vars = v
+        hint = {}
+        fields = (("Nombre de usuario", "nick", "", "De 5 a 12 caracteres: letras, números y _. Es lo único que verán los demás jugadores."),
+                  ("Correo", "email", "", "Solo sirve para iniciar sesión; nunca se muestra a otros jugadores."),
+                  ("Contraseña", "pw", "•", f"De {passwords.MIN_LEN} a {passwords.MAX_LEN} caracteres."),
+                  ("Repite la contraseña", "pw2", "•", ""))
+        first = None
+        for label, key, show, tip in fields:
+            ttk.Label(box, text=label, style="Muted.TLabel").pack(anchor="w", pady=(10, 2))
+            e = ttk.Entry(box, textvariable=v[key], show=show, width=36)
+            e.pack(fill="x")
+            first = first or e
+            hint[key] = tk.Label(box, text=tip, fg=th.MUTED, bg=th.BG, font=(th.BODY, 8), anchor="w", justify="left", wraplength=360)
+            hint[key].pack(anchor="w", pady=(2, 0))
+        v["nick"].trace_add("write", lambda *a: self._reg_nick_hint(hint["nick"], v["nick"].get()))
+        v["pw2"].trace_add("write", lambda *a: self._reg_pw_hint(hint["pw2"], v["pw"].get(), v["pw2"].get()))
+        v["pw"].trace_add("write", lambda *a: self._reg_pw_hint(hint["pw2"], v["pw"].get(), v["pw2"].get()))
+        self.lbl_reg = tk.Label(box, text="", fg=th.ERR, bg=th.BG, wraplength=360, justify="left", font=(th.BODY, 9))
+        self.lbl_reg.pack(anchor="w", pady=(10, 4))
+        self.btn_reg = ttk.Button(box, text="CREAR CUENTA", style="Cta.TButton", command=self.submit_register)
+        self.btn_reg.pack(fill="x")
+        self.bind("<Return>", lambda e: self.submit_register())
+        first.focus_set()
+
+    @staticmethod
+    def nick_problem(nick):
+        if len(nick) < 5:
+            return "El nombre de usuario debe tener al menos 5 caracteres"
+        if len(nick) > 12:
+            return "El nombre de usuario admite como máximo 12 caracteres"
+        if not NICK_RE.match(nick):
+            return "El nombre de usuario solo admite letras, números y guion bajo (_), sin espacios"
+        return None
+
+    def _reg_nick_hint(self, label, nick):
+        base = "De 5 a 12 caracteres: letras, números y _. Es lo único que verán los demás jugadores."
+        if not nick:
+            return label.config(text=base, fg=th.MUTED)
+        bad = self.nick_problem(nick)
+        label.config(text=("✘  " + bad) if bad else "✔  Formato válido (si está libre se confirma al crear la cuenta)",
+                     fg=th.ERR if bad else th.OK)
+
+    def _reg_pw_hint(self, label, pw, pw2):
+        if not pw2:
+            return label.config(text="", fg=th.MUTED)
+        label.config(text="✔  Las contraseñas coinciden" if pw == pw2 else "✘  Las contraseñas no coinciden", fg=th.OK if pw == pw2 else th.ERR)
+
+    def submit_register(self):
+        if not hasattr(self, "btn_reg") or str(self.btn_reg.cget("state")) == "disabled":
             return
-        rc = proc.poll()
-        if rc is None:
-            return self.after(500, self._register_poll, proc)
-        self.reg_proc = None
-        if rc == 0:
-            self.show_login()
-            self.lbl_status.config(text="Cuenta creada. Ahora inicia sesión con tu correo y clave.", foreground=th.OK)
-        else:
-            self._register_fallback()
-
-    def _register_fallback(self):
-        """Sin WebView2 no se puede incrustar: se abre el registro en el navegador y se vuelve al acceso."""
-        webbrowser.open(self.cfg["site"].rstrip("/") + "/register/")
-        self.show_login()
-        self.lbl_status.config(text="Se abrió el registro en tu navegador. Cuando termines, inicia sesión aquí.", foreground=th.MUTED)
-
-    def _register_back(self):
-        self.stop_register()
-        self.show_login()
-
-    def stop_register(self):
-        proc, self.reg_proc = self.reg_proc, None
-        if proc is not None and proc.poll() is None:
-            proc.kill()
+        v = {k: x.get() for k, x in self.reg_vars.items()}
+        nick, email = v["nick"].strip(), v["email"].strip()
+        problem = (self.nick_problem(nick) or ("Escribe un correo válido" if not EMAIL_RE.match(email) or len(email) > 120 else None)
+                   or passwords.problem(v["pw"]) or (None if v["pw"] == v["pw2"] else "Las contraseñas no coinciden"))
+        if problem:
+            return self.lbl_reg.config(text=problem, fg=th.ERR)
+        self.lbl_reg.config(text="Creando tu cuenta…", fg=th.MUTED)
+        self.btn_reg.config(state="disabled")
+        self.register(nick, email, v["pw"])

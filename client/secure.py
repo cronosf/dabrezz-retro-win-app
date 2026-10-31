@@ -1,5 +1,5 @@
 """Guarda secretos cifrados con la cuenta de Windows (DPAPI): solo este usuario de este equipo puede descifrarlos.
-Se usa para "Recordar sesión": se guarda el token de sesion de la tienda (nunca la contraseña)."""
+Se usa para "Recordar sesión": se guarda el token de sesion del servidor (nunca la contraseña)."""
 import base64
 import ctypes
 from ctypes import wintypes

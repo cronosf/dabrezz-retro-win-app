@@ -26,7 +26,7 @@ class Net:
     def connect(self, host, tcp_port, udp_port, tls=True):
         self.close()
         if not tls and host not in ("localhost", "127.0.0.1", "::1"):
-            # el token de sesion de la tienda viaja por esta conexion: sin TLS cualquiera en la red podria robarlo
+            # la contrasena y el token de sesion viajan por esta conexion: sin TLS cualquiera en la red podria robarlos
             raise OSError("El servidor de juego debe usarse con TLS (conexion cifrada).")
         s = socket.create_connection((host, tcp_port), timeout=8)
         if tls:

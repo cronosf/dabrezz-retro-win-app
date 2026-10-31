@@ -40,9 +40,9 @@ HELP = (
     ("p", "4. Conducta. Está prohibido hacer trampas, usar clientes modificados o no oficiales, manipular resultados, acordar partidas "
           "para inflar el ranking, suplantar a otros, usar nombres ofensivos o atacar el servicio. El incumplimiento puede causar "
           "silenciamiento, restablecimiento del nombre, anulación de resultados o bloqueo de la cuenta."),
-    ("p", "5. Datos. El servidor guarda el identificador de tu cuenta, tu nombre de usuario, tu ranking, el historial de "
+    ("p", "5. Datos. El servidor guarda tu correo, tu nombre de usuario, tu ranking, el historial de "
           "partidas y la dirección IP necesaria para conectar y detectar abusos. Tu nombre real y correo no se muestran a otros "
-          "jugadores. La verificación de tu inicio de sesión la hace el servicio de cuentas, sin guardar tu contraseña."),
+          "jugadores. Tu contraseña se guarda cifrada de forma irreversible (scrypt) y viaja siempre por una conexión cifrada."),
     ("p", "6. Conexión entre jugadores. Para jugar en línea tu equipo se conecta con el del rival (o a través del servidor), por lo que "
           "este puede conocer tu dirección IP durante la partida."),
     ("p", f"7. Responsabilidad. {AUTHOR} no se hace responsable de daños, pérdida de datos o problemas derivados del uso de la app, "

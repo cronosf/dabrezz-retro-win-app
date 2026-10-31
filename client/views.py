@@ -1,10 +1,8 @@
 """Interfaz de Dabrezz Retro (diseno de la hoja de marca): acceso, barra lateral y las vistas Inicio, Juegos, Favoritos
 y Multijugador. Es un mixin de App: usa self.cfg, self.net, self.channels, self.auto_channels, etc."""
 import os
-import re
 import threading
 import tkinter as tk
-import webbrowser
 from tkinter import ttk
 
 import client.covers as covers
@@ -39,6 +37,8 @@ class Views:
     # ---------- acceso ----------
     def login_shell(self):
         """Marco de la pantalla de acceso: imagen a la izquierda y panel derecho (se devuelve) donde va el formulario o una pagina."""
+        for stale in ("lbl_status", "btn_login", "lbl_reg", "btn_reg"):     # los controles de la pantalla anterior ya no existen
+            self.__dict__.pop(stale, None)
         f = self.swap()
         right = tk.Frame(f, bg=th.SIDEBAR, width=440)
         right.pack(side="right", fill="y")
@@ -55,7 +55,6 @@ class Views:
         return right
 
     def show_login(self):
-        self.stop_register()
         right = self.login_shell()
         box = tk.Frame(right, bg=th.SIDEBAR)
         box.place(relx=.5, rely=.5, anchor="center")
@@ -77,9 +76,6 @@ class Views:
         ttk.Button(box, text="CREAR CUENTA", command=self.show_register_page).pack(fill="x", pady=(8, 0))
         row = tk.Frame(box, bg=th.SIDEBAR)
         row.pack(fill="x", pady=(14, 0))
-        link = tk.Label(row, text="¿Olvidaste tu contraseña?", fg=th.LINK, bg=th.SIDEBAR, cursor="hand2", font=(th.BODY, 9))
-        link.pack(side="left")
-        link.bind("<Button-1>", lambda e: webbrowser.open(self.cfg["site"].rstrip("/") + "/forgot-password"))
         for text, key, command, pad in (("Ajustes", "settings", self.show_settings_page, 0), ("Ayuda", "help", self.show_help_page, 14)):
             lnk = tk.Label(row, text=" " + text, image=th.image(f"ico_{key}_s.png"), compound="left", fg=th.MUTED, bg=th.SIDEBAR,
                            cursor="hand2", font=(th.BODY, 9))
@@ -562,90 +558,3 @@ class Views:
         self.chat_entry.insert("end", f":{code}: ")
         self.chat_entry.focus_set()
         self.chat_entry.icursor("end")
-
-    # ---------- nombre de usuario obligatorio (primera vez) ----------
-    NICK_RE = re.compile(r"^[A-Za-z0-9_]{5,12}$")
-
-    def ask_nick(self):
-        """Ventana obligatoria: el nickname es lo unico que se muestra de ti (ranking, chat, retos). Se comprueba en tiempo real."""
-        if getattr(self, "nick_win", None) and self.nick_win.winfo_exists():
-            return
-        win = self.nick_win = tk.Toplevel(self, bg=th.BG)
-        win.title("Elige tu nombre de usuario")
-        th.set_icon(win)
-        win.transient(self)
-        win.resizable(False, False)
-        win.protocol("WM_DELETE_WINDOW", self.nick_cancel)       # no se puede omitir: solo elegir uno o salir
-        pad = tk.Frame(win, bg=th.BG, padx=34, pady=26)
-        pad.pack()
-        tk.Label(pad, image=th.image("logo_side.png"), bg=th.BG).pack(anchor="w")
-        tk.Label(pad, text="Elige tu nombre de usuario", font=(th.DISPLAY, 15), fg="#ffffff", bg=th.BG).pack(anchor="w", pady=(14, 4))
-        tk.Label(pad, text="Es el nombre que verán los demás jugadores en el ranking, el chat y los retos.\n"
-                 "No se muestra tu nombre real ni tu correo, y no podrás cambiarlo después.",
-                 fg=th.MUTED, bg=th.BG, justify="left", font=(th.BODY, 9)).pack(anchor="w")
-        self.v_nick = tk.StringVar()
-        e = tk.Entry(pad, textvariable=self.v_nick, width=24, bg=th.FIELD, fg="#ffffff", insertbackground="#ffffff", relief="flat",
-                     font=(th.BODY, 14), highlightthickness=1, highlightbackground=th.BORDER, highlightcolor=th.ACCENT)
-        e.pack(fill="x", pady=(16, 4), ipady=7)
-        self.lbl_nick = tk.Label(pad, text="De 5 a 12 caracteres: letras, números y _", fg=th.MUTED, bg=th.BG, font=(th.BODY, 9),
-                                 anchor="w", justify="left", wraplength=360)
-        self.lbl_nick.pack(fill="x")
-        row = tk.Frame(pad, bg=th.BG)
-        row.pack(fill="x", pady=(18, 0))
-        self.btn_nick = ttk.Button(row, text="CONTINUAR", style="Accent.TButton", state="disabled", command=self.nick_send)
-        self.btn_nick.pack(side="left", fill="x", expand=True)
-        ttk.Button(row, text="SALIR", command=self.nick_cancel).pack(side="left", padx=(8, 0))
-        self._nick_ok, self._nick_job = None, None
-        self.v_nick.trace_add("write", lambda *a: self._nick_typed())
-        e.bind("<Return>", lambda ev: self.nick_send())
-        win.update_idletasks()
-        win.geometry(f"+{self.winfo_rootx() + (self.winfo_width() - win.winfo_width()) // 2}+{self.winfo_rooty() + 80}")
-        win.grab_set()
-        e.focus_set()
-
-    def _nick_typed(self):
-        """Al escribir: valida el formato al instante y, pasado un momento sin teclear, consulta al servidor si esta libre."""
-        nick = self.v_nick.get()
-        self._nick_ok = None
-        self.btn_nick.config(state="disabled")
-        if self._nick_job:
-            self.after_cancel(self._nick_job)
-            self._nick_job = None
-        if not nick:
-            return self.lbl_nick.config(text="De 5 a 12 caracteres: letras, números y _", fg=th.MUTED)
-        local = ("Mínimo 5 caracteres" if len(nick) < 5 else "Máximo 12 caracteres" if len(nick) > 12
-                 else None if self.NICK_RE.match(nick) else "Solo letras, números y guion bajo (_), sin espacios")
-        if local:
-            return self.lbl_nick.config(text="✘  " + local, fg=th.ERR)
-        self.lbl_nick.config(text="Comprobando disponibilidad…", fg=th.MUTED)
-        self._nick_job = self.after(350, lambda: self.net.send(t="nick_check", nick=nick))
-
-    def nick_status(self, m):
-        """Respuesta del servidor; se ignora si la persona ya siguio escribiendo."""
-        if not getattr(self, "nick_win", None) or not self.nick_win.winfo_exists() or m.get("nick") != self.v_nick.get():
-            return
-        self._nick_ok = m["ok"]
-        if m["ok"]:
-            self.lbl_nick.config(text=f"✔  «{m['nick']}» está disponible", fg=th.OK)
-        else:
-            self.lbl_nick.config(text="✘  " + (m.get("reason") or "No disponible"), fg=th.ERR)
-        self.btn_nick.config(state="normal" if m["ok"] else "disabled")
-
-    def nick_send(self):
-        if self._nick_ok:
-            self.btn_nick.config(state="disabled")
-            self.net.send(t="nick_set", nick=self.v_nick.get())
-
-    def nick_cancel(self):
-        """Sin nombre de usuario no se puede entrar: se cierra la sesion y se vuelve al acceso."""
-        self.close_nick()
-        self.net.close()
-        self.me = self.channel = self.match = None
-        self.show_login()
-
-    def close_nick(self):
-        win = getattr(self, "nick_win", None)
-        if win is not None and win.winfo_exists():
-            win.grab_release()
-            win.destroy()
-        self.nick_win = None

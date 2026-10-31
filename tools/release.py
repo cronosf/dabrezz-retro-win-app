@@ -1,6 +1,6 @@
 """Publica una version de la app de Windows: sube el numero (+0.0.1), compila, firma y la sube a GitHub (commit, etiqueta y Release).
 
-Uso (con el Python que tenga pyinstaller, pywebview, pillow y cryptography):
+Uso (con el Python que tenga pyinstaller, pillow y cryptography):
     python tools/release.py "que cambia en esta version" [--set 1.2.0] [--no-bump] [--dry-run] [--trailer "Co-Authored-By: ..."]
   --dry-run   sube el numero, compila y firma, pero NO toca git ni GitHub.
 Las apps instaladas buscan la ultima Release al abrirse (client/updater.py) y solo instalan lo firmado con ~/.dabrezz-retro/signing.key.

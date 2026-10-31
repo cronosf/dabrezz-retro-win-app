@@ -20,7 +20,7 @@ cada jugador aporta los suyos.
 publicación), `vendor/` (avisos y licencias de los componentes de terceros) y `assets/` (hoja de marca). El servidor se mantiene aparte.
 
 ## Compilar
-Necesita Python 3.13 con `pyinstaller`, `pywebview`, `pillow` y `cryptography`. Los paquetes `vendor/*.zip` (emuladores y runtime de DirectX)
+Necesita Python 3.13 con `pyinstaller`, `pillow` y `cryptography`. Los paquetes `vendor/*.zip` (emuladores y runtime de DirectX)
 no se guardan en git por su tamaño: los emuladores se regeneran con `tools/make_emulator.py` a partir del instalador original (ver
 `vendor/SOURCE.txt`) y el runtime de DirectX es la carpeta *Redist* del DirectX SDK (junio 2010) de Microsoft. Después: `python build.py`.
 Una compilación hecha desde este código **no es una versión oficial** y el servidor de Dabrezz Retro no la aceptará.
