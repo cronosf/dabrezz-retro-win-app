@@ -3,6 +3,7 @@ import json
 import os
 import queue
 import shlex
+import socket
 import subprocess
 import sys
 import threading
@@ -487,6 +488,11 @@ class App(Views, LoginPages, LobbyPages, FriendsUI, HelpUI, UpdateUI, tk.Tk):
     # ---------- partida ----------
     def launch_emulator(self, host, port, player, rtt, relay):
         m = self.match
+        if safe_ip(host) is None:          # relay: el servidor puede dar su nombre; el emulador (GGPO) solo envia a IPs
+            try:
+                host = socket.gethostbyname(host)
+            except OSError:
+                return self.log("No se pudo resolver la direccion del relay.", "sys")
         system = self.system_of(m["channel"])
         snes, duck = system == "snes9x", system == "duckstation"
         exe = self.emulator_for(m["channel"])
