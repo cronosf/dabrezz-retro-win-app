@@ -38,6 +38,7 @@ from client.views import Views  # noqa: E402
 from client.net import Net  # noqa: E402
 from shared.protocol import APP_NAME, CHANNEL_LABELS, VERSION  # noqa: E402
 from shared.capabilities import is_dance  # noqa: E402
+from shared.features import can_see  # noqa: E402
 
 # Valores internos: el usuario no los ve ni los cambia, siempre se aplican estos (aunque el config.json guardado diga otra cosa).
 # Emulador: quark:direct,<rom>,<puerto local>,<ip rival>,<puerto rival>,<jugador 0/1>,<delay>,<ranked>
@@ -927,6 +928,10 @@ class App(Views, LoginPages, LobbyPages, FriendsUI, DmUI, RoomsUI, DanceUI, Home
                 self.tray.notify("Dabrezz Play sigue abierto en segundo plano. Clic derecho en el icono para salir.")
             return
         self.quit_app()
+
+    def feature(self, name):
+        """Funciones en prueba (shared/features.py): solo las ven los Tester y el Developer mientras esten en TESTER_ONLY."""
+        return can_see(name, (self.me or {}).get("role"))
 
     def show_window(self):
         if self.booted and self.upd_win is None:

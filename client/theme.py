@@ -29,9 +29,10 @@ BODY = "Segoe UI"
 _images = {}
 _flags = {}
 DEV_RED = "#ff3b3b"
-ROLE_LABEL = {"customer": "Player", "admin": "Admin", "developer": "Developer"}
-ROLE_COLOR = {"admin": YELLOW, "developer": DEV_RED}            # color del nick (los Player usan el normal)
-ROLE_RANK = {"customer": 1, "admin": 2, "developer": 3}
+TESTER_BLUE = "#5cc8ff"                                         # azul claro: se distingue del fondo morado
+ROLE_LABEL = {"customer": "Player", "tester": "Tester", "admin": "Admin", "developer": "Developer"}
+ROLE_COLOR = {"tester": TESTER_BLUE, "admin": YELLOW, "developer": DEV_RED}            # color del nick (los Player usan el normal)
+ROLE_RANK = {"customer": 1, "tester": 1.5, "admin": 2, "developer": 3}          # solo ordena las listas: Developer, Admin, Tester, Player
 STAFF = ("admin", "developer")
 
 

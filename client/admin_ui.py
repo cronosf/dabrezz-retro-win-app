@@ -254,12 +254,12 @@ class AdminUI:
         p = self.adm_selected()
         if not p:
             return
-        names = {"Player": "customer", "Admin": "admin", "Developer": "developer"}
+        names = {"Player": "customer", "Tester": "tester", "Admin": "admin", "Developer": "developer"}
 
         def submit(v):
             self.net.send(t="admin_do", uid=p["uid"], action="role", role=names[v["role"]])
-        self.adm_form(f"Rol de {p['user_name']}", "Admin: controla jugadores (bans, expulsiones, accesos). Developer: además cambia roles y los ajustes "
-                      "del servidor. Solo puedes cambiar a quien tenga un rol inferior al tuyo.",
+        self.adm_form(f"Rol de {p['user_name']}", "Tester: igual que un Player, con el nick en azul y acceso a las funciones nuevas en prueba. Admin: controla jugadores (bans, "
+                      "expulsiones, accesos). Developer: además cambia roles y los ajustes del servidor. Solo puedes cambiar a quien tenga un rol inferior al tuyo.",
                       [("role", "Rol", th.ROLE_LABEL.get(p["role"], "Player"), list(names))], "GUARDAR", submit)
 
     def adm_rename(self):
