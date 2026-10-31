@@ -88,6 +88,7 @@ class FriendsUI:
     def on_friends(self, m):
         self.friends_data = {k: m.get(k) or [] for k in ("friends", "incoming", "outgoing")}
         self._badge()
+        self.rm_cand_refresh()
         if self.view_name == "friends":
             self._render_friends()
 

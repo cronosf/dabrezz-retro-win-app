@@ -21,7 +21,11 @@ HELP = (
     ("h", "Cómo se usa"),
     ("b", "Inicia sesión con tu correo y contraseña, o crea una cuenta desde el botón CREAR CUENTA."),
     ("b", "La primera vez elige un nombre de usuario único (5 a 12 caracteres)."),
-    ("b", "En Juegos o Multijugador elige un título, crea una sala o únete a la de otro jugador."),
+    ("b", "Multijugador: crea una sala de un juego (CREAR SALA) o únete a la de otro desde Salas Públicas, Mis Salas o Amigos. El creador invita a "
+          "amigos o a jugadores del juego y inicia la partida. Hoy el netplay de los emuladores sincroniza 2 jugadores, aunque algunos juegos (como "
+          "Super Bomberman 3, 4 y 5) admiten hasta 5."),
+    ("b", "Ranked: elige un juego en Juegos y pulsa BUSCAR PARTIDA (debajo de la lista de jugadores). El ranked solo se juega buscando partida, "
+          "no con invitaciones ni salas, y solo en los juegos donde el emulador detecta el resultado."),
     ("b", "Amigos: agrega a otros jugadores por su nombre de usuario (ellos aceptan la solicitud), mira quién está en línea, invítalos a una partida amistosa o escríbeles un mensaje privado. Haz clic derecho sobre un jugador de la lista para enviarle una invitación de amistad. Los mensajes privados solo se pueden enviar entre amigos y no se guardan: se borran al cerrar la app."),
     ("b", "La app se actualiza sola al abrirse cuando existe una versión nueva firmada."),
     ("h", "PlayStation 1 (beta)"),

@@ -32,7 +32,8 @@ def initials(ch):
 
 
 class Views:
-    NAV = (("home", "Inicio"), ("games", "Juegos"), ("fav", "Favoritos"), ("multi", "Multijugador"), ("friends", "Amigos"), ("help", "Ayuda"))
+    NAV = (("home", "Inicio"), ("games", "Juegos"), ("fav", "Favoritos"), ("ranked", "Ranked"), ("multi", "Multijugador"), ("friends", "Amigos"),
+           ("help", "Ayuda"))
     first_to = [2, 3, 5, 10]
 
     # ---------- acceso ----------
@@ -142,12 +143,13 @@ class Views:
 
         self.content = tk.Frame(main, bg=th.BG)
         self.content.pack(fill="both", expand=True, padx=24, pady=(0, 18))
-        self.views = {n: tk.Frame(self.content, bg=th.BG) for n in ("home", "games", "multi", "friends", "help", "settings", "profile", "table", "admin")}
+        self.views = {n: tk.Frame(self.content, bg=th.BG) for n in ("home", "games", "ranked", "multi", "friends", "help", "settings", "profile", "table", "admin")}
         self.build_help(self.views["help"])
         self.filter, self.view_name, self.sel_game = "Todos", "home", None
         self._build_home()
         self._build_games()
-        self._build_multi()
+        self._build_ranked()
+        self._build_rooms()
         self._build_friends()
         self.refresh_me()
         self.render_channels()
@@ -165,7 +167,7 @@ class Views:
 
     def show_view(self, name):
         view = "games" if name == "fav" else name
-        self.view_name = "multi" if name == "table" else name        # Ranking / Historial / En vivo cuelgan de Multijugador
+        self.view_name = "ranked" if name == "table" else name        # Ranking / Historial / En vivo cuelgan de Ranked
         for v in self.views.values():
             v.pack_forget()
         self.views[view].pack(fill="both", expand=True)
@@ -184,6 +186,8 @@ class Views:
             self._fill_admin()
         elif view == "friends":
             self._fill_friends()
+        elif view == "multi":
+            self.rm_enter()
 
     def search_text(self):
         t = self.v_search.get().strip().lower()
@@ -469,17 +473,15 @@ class Views:
         self.sel_game = ch
         self.net.send(t="join", channel=ch)
         self.lbl_chan.config(text=CHANNEL_LABELS.get(ch, ch))
-        self.show_view("multi")
+        self.show_view("ranked")
 
-    # ---------- multijugador ----------
-    def _build_multi(self):
-        v = self.views["multi"]
+    # ---------- ranked (chat y lista de jugadores del juego + BUSCAR PARTIDA) ----------
+    def _build_ranked(self):
+        v = self.views["ranked"]
         self.lbl_chan = tk.Label(v, text="Elige un juego en la sección Juegos", font=(th.DISPLAY, 16), fg="#ffffff", bg=th.BG)
         self.lbl_chan.pack(anchor="w")
         bar = tk.Frame(v, bg=th.BG)
         bar.pack(fill="x", pady=(10, 0))
-        self.btn_queue = ttk.Button(bar, text="BUSCAR PARTIDA", style="Cta.TButton", command=self.toggle_queue)
-        self.btn_queue.pack(side="left", padx=(0, 8))
         for text, cmd in (("PROBAR JUEGO", self.test_game), ("DESCARGAR ROMS", self.download_roms), ("RANKING", lambda: self.net.send(t="top")),
                           ("HISTORIAL", lambda: self.net.send(t="history")), ("EN VIVO", lambda: self.net.send(t="live"))):
             ttk.Button(bar, text=text, command=cmd).pack(side="left", padx=(0, 8))
@@ -521,16 +523,21 @@ class Views:
         # el rol va sin titulo; solo el nick cambia de color segun el rol
         self.tv_users = colorlist.ColorList(right, (("nick", 150, "NOMBRE"), ("role", 74, ""), ("elo", 48, "ELO"), ("wl", 54, "W-L"), ("ping", 56, "PING")))
         self.tv_users.on_context = self.roster_menu          # clic derecho: mensaje privado / invitacion de amistad (client/dm_ui.py)
-        # los botones se empaquetan primero (abajo): en una ventana baja la lista se encoge y los botones siguen visibles
-        ttk.Button(right, text="NORMAL PLAY (amistoso)", command=lambda: self.challenge(False)).pack(side="bottom", fill="x")
-        ttk.Button(right, text="RETAR (ranked)", style="Accent.TButton",
-                   command=lambda: self.challenge(True)).pack(side="bottom", fill="x", pady=(10, 4))
-        r = ttk.Frame(right, style="Panel.TFrame")
-        r.pack(side="bottom", fill="x", pady=(10, 0))
-        ttk.Label(r, text="Ranked a primero en", style="PanelMuted.TLabel").pack(side="left")
-        self.v_ft = tk.StringVar(value="2")
-        ttk.Combobox(r, textvariable=self.v_ft, values=self.first_to, width=3, state="readonly").pack(side="left", padx=6)
+        # lo de abajo se empaqueta primero: en una ventana baja la lista se encoge y el boton sigue visible
+        self.lbl_rk_note = tk.Label(right, text="", fg=th.YELLOW, bg=th.PANEL, font=(th.BODY, 8), wraplength=330, justify="left", anchor="w")
+        self.lbl_rk_note.pack(side="bottom", fill="x", pady=(6, 0))
+        self.btn_queue = ttk.Button(right, text="BUSCAR PARTIDA", style="Cta.TButton", command=self.toggle_queue)
+        self.btn_queue.pack(side="bottom", fill="x", pady=(10, 0))
         self.tv_users.pack(fill="both", expand=True)
+
+    def update_ranked_ui(self):
+        """BUSCAR PARTIDA solo se ofrece en los juegos donde el emulador detecta el resultado (ver DETECTOR_GAMES en el servidor)."""
+        if not hasattr(self, "btn_queue"):
+            return
+        ok = bool(self.channel) and self.channel in self.auto_channels
+        self.btn_queue.config(state="normal" if ok or self.queued else "disabled")
+        self.lbl_rk_note.config(text="" if ok or not self.channel else
+                                "Este juego aún no tiene ranked (no se detecta el resultado solo). Para jugar con otros usa Multijugador.")
 
     def refresh_me(self, **st):
         if self.me and hasattr(self, "lbl_me"):

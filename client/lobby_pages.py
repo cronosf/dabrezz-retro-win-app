@@ -26,7 +26,7 @@ class LobbyPages:
     def table(self, title, cols, rows, flags=None, roles=None):
         """Tabla simple. Con `flags` (codigos de pais, uno por fila) la primera columna muestra la bandera; `roles` colorea el nick de admins y developers."""
         frame = self._clear("table")
-        self.page_head(frame, title, back="multi")
+        self.page_head(frame, title, back="ranked")
         box = tk.Frame(frame, bg=th.PANEL)
         box.pack(fill="both", expand=True)
         if flags is not None:                      # ranking: bandera + nick a color (ver client/colorlist.py)
