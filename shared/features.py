@@ -6,8 +6,13 @@ Como usarlo al hacer una funcion nueva:
   * servidor: `if not can_see("zona_x", c.role): return`   (si la funcion tambien tiene mensajes del servidor, ignorarlos para los demas roles)
   * el id es libre (minusculas y guion bajo); ponlo aqui al empezar la prueba y quitalo al lanzarla para todos.
 """
-TESTER_ONLY = frozenset()          # ej.: frozenset({"zona_x"})  -> sin funciones en prueba por ahora
+TESTER_ONLY = frozenset({"baile_desbloqueo"})          # en prueba: personajes desbloqueados de Bust a Groove 2 (client/med_cheats.py)
 TESTER_ROLES = frozenset({"tester", "developer"})
+
+
+def is_public(feature):
+    """True si la funcion ya es para todos (se usa donde no hay un rol, p. ej. en partidas en red: ambos jugadores deben tener lo mismo)."""
+    return feature not in TESTER_ONLY
 
 
 def can_see(feature, role):

@@ -8,7 +8,9 @@ import re
 import subprocess
 import threading
 
+import client.med_cheats as med_cheats
 import client.winbrand as winbrand
+from shared.features import is_public
 
 BIOS_FILE = "openbios.bin"
 
@@ -64,6 +66,7 @@ class MedSession:
         port = m.get("port")
         if not isinstance(port, int) or not 1 <= port <= 65535:
             return self.send(t="ra_leave")
+        med_cheats.apply(folder(self.data), m.get("channel"), is_public(med_cheats.FEATURE))     # en red: los dos jugadores con lo mismo
         cmd = command(self.data, cue, self.nick, m.get("host"), port, m.get("key"))
         self.proc = subprocess.Popen(cmd, cwd=folder(self.data))
         if self.title_for:

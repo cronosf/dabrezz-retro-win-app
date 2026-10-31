@@ -15,6 +15,7 @@ import re
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 import client.attest as attest  # noqa: E402
 import client.med as med  # noqa: E402
+import client.med_cheats as med_cheats  # noqa: E402
 import client.retro as retro  # noqa: E402
 import client.winbrand as winbrand  # noqa: E402
 import client.romman as romman  # noqa: E402
@@ -500,6 +501,9 @@ class App(Views, LoginPages, LobbyPages, FriendsUI, DmUI, RoomsUI, DanceUI, Home
             cue = self.rom_file(sel[0])
             if not cue:
                 return messagebox.showinfo(APP_NAME, "Falta el juego: pulsa DESCARGAR ROM en la tarjeta del juego.")
+            # sin conexion se puede probar la funcion en prueba (solo Tester y Developer); en red solo cuando es publica (ver client/med_cheats.py)
+            if med_cheats.apply(med.folder(self.data), sel[0], self.feature(med_cheats.FEATURE)):
+                self.dance_say("Prueba con personajes desbloqueados (función en prueba).")
             return self.spawn(med.command(self.data, cue), med.folder(self.data), sel[0])
         if sel and self.system_of(sel[0]) in ("ps1", "n64"):      # PS1 y N64: RetroArch
             if not retro.installed(self.data):
