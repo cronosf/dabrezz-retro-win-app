@@ -5,8 +5,35 @@ from tkinter import ttk
 
 import client.colorlist as colorlist
 import client.theme as th
+from client.emotes import split_text
 from shared.capabilities import is_dance
 from shared.protocol import CHANNEL_LABELS
+
+
+# Texto de la ventana CONFIGURAR (lo entre `comillas` sale resaltado). Basado en la documentacion oficial de Mednafen (mednafen.github.io/documentation);
+# esa documentacion es de la rama 1.x: el emulador que viene con la app es el 0.9.37.1, donde estos atajos tambien existen.
+CONFIG_HELP = (
+    ("h", "Antes de empezar"),
+    ("p", "Mednafen configura los botones DENTRO del juego, sin menús. Hazlo una vez con `ABRIR EL JUEGO PARA CONFIGURAR` (sin conexión) y se guarda "
+          "para todas las partidas. Los cambios se escriben al CERRAR Mednafen: cierra con `F12` o con la X de la ventana (no lo mates desde el administrador de tareas)."),
+    ("p", "En Windows, `Alt+Shift` cambia el idioma del teclado y puede estorbar. Si no responde, desactiva ese atajo en Windows: Configuración > Hora e idioma > "
+          "Escritura > Configuración avanzada del teclado > Teclas de acceso rápido de los métodos de entrada."),
+    ("h", "Configurar el control del jugador 1"),
+    ("p", "1. Con el juego abierto, pulsa `Alt+Shift+1`. Abajo de la pantalla aparece el primer botón, por ejemplo `GamePad #1: A (1)`."),
+    ("p", "2. Pulsa en tu control (o en el teclado) el botón que quieras para ese botón del juego. El número entre paréntesis sube: puedes asignar más de un botón físico."),
+    ("p", "3. Para pasar al siguiente botón, vuelve a pulsar ese mismo botón físico que acabas de usar. Repite con cada botón que te pida."),
+    ("p", "Si tu control es un mando de Xbox/genérico con gatillos analógicos, pulsa `F3` antes (con los gatillos en reposo) para que los detecte, y para asignarlos "
+          "llévalos al máximo y suéltalos. Para el jugador 2 usa `Alt+Shift+2`."),
+    ("h", "Teclas por defecto (jugador 1, teclado)"),
+    ("p", "Arriba/Abajo/Izquierda/Derecha: `W` `S` `A` `D`  ·  SELECT: `Tab`  ·  START: `Enter`."),
+    ("p", "Botones del teclado numérico: Triángulo `8`, X `2`, Cuadrado `4`, Círculo `6`, L1 `1`, L2 `7`, R1 `3`, R2 `9`."),
+    ("h", "Otros atajos útiles"),
+    ("p", "`F2`: cambiar una tecla de comando (por ejemplo, la de salir).  ·  `Alt+Enter`: pantalla completa.  ·  `F1`: ayuda dentro del juego.  ·  `F12`: salir."),
+    ("p", "`Ctrl+Shift+1`: cambia el tipo de control del puerto 1 (digital, DualShock...). Algunos juegos piden reiniciar después, y en partida en red conviene que los "
+          "dos jugadores usen el mismo tipo (lo normal es el control digital que viene por defecto)."),
+    ("h", "En partida en red"),
+    ("p", "Configura los botones ANTES de buscar partida. Las tarjetas de memoria están desactivadas en línea, así que no se guarda el avance del juego."),
+)
 
 
 class DanceUI:
@@ -22,6 +49,7 @@ class DanceUI:
         head.pack(fill="x")
         tk.Label(head, image=th.image("ico_dance.png"), bg=th.BG).pack(side="left")
         tk.Label(head, text="Zona Baile", font=(th.DISPLAY, 16), fg="#ffffff", bg=th.BG).pack(side="left", padx=10)
+        ttk.Button(head, text=" CONFIGURAR", image=th.image("ico_pad.png"), compound="left", command=self.dance_config_help).pack(side="left", padx=(8, 0))
         ttk.Button(head, text="CREAR SALA  ＋", style="Accent.TButton", command=self.dance_create).pack(side="right")
         tk.Label(v, text="Juegos de baile con Mednafen. Elige un juego, busca partida o crea una sala (2 jugadores, amistoso).", fg=th.MUTED, bg=th.BG,
                  font=(th.BODY, 9), anchor="w", justify="left", wraplength=640).pack(fill="x", pady=(4, 0))
@@ -43,10 +71,13 @@ class DanceUI:
         # izquierda: salas abiertas de baile (con scroll)
         left = tk.Frame(body, bg=th.BG)
         left.grid(row=0, column=0, sticky="nsew")
-        tk.Label(left, text="Salas abiertas", font=(th.BODY, 11, "bold"), fg="#ffffff", bg=th.BG).pack(anchor="w", pady=(0, 4))
+        left.columnconfigure(0, weight=1)
+        left.rowconfigure(1, weight=1, minsize=56)
+        left.rowconfigure(3, weight=4, minsize=120)
+        tk.Label(left, text="Salas abiertas", font=(th.BODY, 11, "bold"), fg="#ffffff", bg=th.BG).grid(row=0, column=0, sticky="w", pady=(0, 4))
         wrap = tk.Frame(left, bg=th.BG)
-        wrap.pack(fill="both", expand=True)
-        canvas = tk.Canvas(wrap, bg=th.BG, highlightthickness=0)
+        wrap.grid(row=1, column=0, sticky="nsew")
+        canvas = tk.Canvas(wrap, bg=th.BG, highlightthickness=0, height=40)
         sb = ttk.Scrollbar(wrap, orient="vertical", command=canvas.yview)
         canvas.configure(yscrollcommand=sb.set)
         sb.pack(side="right", fill="y")
@@ -57,6 +88,24 @@ class DanceUI:
         canvas.bind("<Configure>", lambda e: canvas.itemconfigure(win, width=e.width))
         canvas.bind("<Enter>", lambda e: canvas.bind_all("<MouseWheel>", lambda ev: canvas.yview_scroll(-1 * (ev.delta // 120), "units")))
         canvas.bind("<Leave>", lambda e: canvas.unbind_all("<MouseWheel>"))
+        # chat de la Zona Baile (uno solo para todos los juegos de baile)
+        tk.Label(left, text="Chat de la Zona Baile", font=(th.BODY, 11, "bold"), fg="#ffffff", bg=th.BG).grid(row=2, column=0, sticky="w", pady=(10, 4))
+        cbox = tk.Frame(left, bg=th.PANEL, padx=8, pady=8)
+        cbox.grid(row=3, column=0, sticky="nsew")
+        inp = tk.Frame(cbox, bg=th.PANEL)
+        inp.pack(side="bottom", fill="x", pady=(6, 0))
+        ttk.Button(inp, text="ENVIAR", style="Accent.TButton", command=self.dance_send_chat).pack(side="right", padx=(8, 0))
+        self.v_dance_msg = tk.StringVar()
+        e = ttk.Entry(inp, textvariable=self.v_dance_msg)
+        e.pack(side="left", fill="x", expand=True)
+        e.bind("<Return>", lambda ev: self.dance_send_chat())
+        self.dance_chat = th.textbox(cbox, state="disabled", height=3)
+        self.dance_chat.pack(fill="both", expand=True)
+        self.dance_chat.tag_config("name", foreground=th.LINK)
+        self.dance_chat.tag_config("sys", foreground=th.YELLOW)
+        for role, color in th.ROLE_COLOR.items():
+            self.dance_chat.tag_config("name_" + role, foreground=color)
+        self.dance_log("Chat compartido por todos los juegos de baile. Los mensajes no se guardan.", None)
         # derecha: jugadores del juego elegido
         right = ttk.Frame(body, style="Panel.TFrame", padding=12)
         right.grid(row=0, column=1, sticky="ns", padx=(14, 0))
@@ -148,8 +197,10 @@ class DanceUI:
         for w in self.dance_inner.winfo_children():
             w.destroy()
         if not rooms:
-            return tk.Label(self.dance_inner, text="No hay salas de baile abiertas. Crea una con CREAR SALA o usa BUSCAR PARTIDA.", fg=th.MUTED, bg=th.BG,
-                            font=(th.BODY, 10), wraplength=420, justify="left").pack(anchor="w", pady=14)
+            lbl = tk.Label(self.dance_inner, text="No hay salas de baile abiertas. Crea una con CREAR SALA o usa BUSCAR PARTIDA.", fg=th.MUTED, bg=th.BG,
+                           font=(th.BODY, 10), wraplength=240, justify="left", anchor="w")
+            lbl.pack(fill="x", pady=8)
+            return self.dance_inner.bind("<Configure>", lambda e: lbl.winfo_exists() and lbl.config(wraplength=max(e.width - 12, 120)), add="+")
         for r in rooms:
             self._rm_row(r, self.dance_inner, mine_cmd=lambda: self.show_view("multi"))
 
@@ -171,6 +222,71 @@ class DanceUI:
     def dance_create(self):
         """Crear sala: lista con solo los juegos de baile (la misma ventana que en Multijugador)."""
         self.rm_create(games=self.dance_games(), title="Crear sala de baile")
+
+    # ---------- chat ----------
+    def dance_log(self, text, name, role=None, country=None):
+        c = self.dance_chat
+        c.config(state="normal")
+        if name:
+            flag = th.flag(country)
+            if flag:
+                c.image_create("end", image=flag, padx=3)
+            c.insert("end", name + ": ", "name_" + role if role in th.ROLE_COLOR else "name")
+        for chunk, code in split_text(text):
+            if code:
+                c.image_create("end", image=th.image(f"emo_{code}.png"), padx=1)
+            else:
+                c.insert("end", chunk, None if name else "sys")
+        c.insert("end", "\n")
+        c.config(state="disabled")
+        c.see("end")
+
+    def dance_send_chat(self):
+        text = self.v_dance_msg.get().strip()
+        if not text:
+            return
+        if not is_dance(self.channel or ""):
+            return self.dance_say("Elige un juego de baile para chatear.", False)
+        self.net.send(t="chat", text=text)
+        self.v_dance_msg.set("")
+
+    # ---------- como configurar el control en Mednafen ----------
+    def dance_config_help(self):
+        win = tk.Toplevel(self, bg=th.BG)
+        win.title("Configurar el control (Mednafen)")
+        th.set_icon(win)
+        win.transient(self)
+        w, h = min(620, self.winfo_width() - 40), min(640, self.winfo_height() - 20)
+        win.geometry(f"{max(w, 420)}x{max(h, 380)}+{self.winfo_rootx() + 30}+{self.winfo_rooty() + 10}")
+        pad = tk.Frame(win, bg=th.BG, padx=18, pady=14)
+        pad.pack(fill="both", expand=True)
+        head = tk.Frame(pad, bg=th.BG)
+        head.pack(fill="x")
+        tk.Label(head, image=th.image("ico_pad.png"), bg=th.BG).pack(side="left")
+        tk.Label(head, text="Configurar el control en Mednafen", font=(th.DISPLAY, 14), fg="#ffffff", bg=th.BG).pack(side="left", padx=10)
+        row = tk.Frame(pad, bg=th.BG)
+        row.pack(side="bottom", fill="x", pady=(10, 0))
+        ttk.Button(row, text="ABRIR EL JUEGO PARA CONFIGURAR", style="Cta.TButton",
+                   command=lambda: (win.destroy(), self.test_game())).pack(side="left", fill="x", expand=True)
+        ttk.Button(row, text="CERRAR", command=win.destroy).pack(side="left", padx=(8, 0))
+        holder = tk.Frame(pad, bg=th.BG)
+        holder.pack(fill="both", expand=True, pady=(10, 0))
+        sb = ttk.Scrollbar(holder, orient="vertical")
+        sb.pack(side="right", fill="y")
+        box = th.textbox(holder, state="normal", height=10, yscrollcommand=sb.set)
+        box.pack(side="left", fill="both", expand=True)
+        sb.config(command=box.yview)
+        box.tag_config("h", foreground="#ffffff", font=(th.BODY, 11, "bold"), spacing1=8, spacing3=2)
+        box.tag_config("k", foreground=th.YELLOW, font=(th.BODY, 10, "bold"))
+        for kind, text in CONFIG_HELP:
+            if kind == "h":
+                box.insert("end", text + "\n", "h")
+            else:
+                for i, part in enumerate(text.split("`")):
+                    box.insert("end", part, "k" if i % 2 else None)
+                box.insert("end", "\n")
+        box.config(state="disabled")
+        win.grab_set()
 
     def dance_on_queued(self):
         self.dance_refresh()

@@ -151,6 +151,8 @@ def main():
         # zona baile
         app.handle({"t": "roster", "channel": "psxm_bust_a_groove", "users": USERS})
         app.show_view("dance"); pump(); check("zona baile")
+        app.dance_log("Hola desde la Zona Baile", "Jugador1", "customer", "MX")
+        app.dance_config_help(); pump(); check("zona baile: configurar control"); close_dialogs()
         app.dance_create(); check("crear sala de baile"); close_dialogs()
         # administracion
         app.show_view("admin")

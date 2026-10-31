@@ -825,6 +825,8 @@ class App(Views, LoginPages, LobbyPages, FriendsUI, DmUI, RoomsUI, DanceUI, Admi
             self.dance_users_refresh()
         elif t == "chat":
             self.log(m["text"], name=m["user_name"], role=m.get("role"), country=m.get("country"))
+            if is_dance(str(m.get("channel", ""))):
+                self.dance_log(str(m["text"])[:300], str(m["user_name"])[:12], m.get("role"), m.get("country"))
         elif t == "challenge":
             ok = messagebox.askyesno(APP_NAME, f"{m['from_user_name']} te reta ({'ranked a ' + str(m['first_to']) if m['ranked'] else 'amistoso'}) en {m['channel']}.\n¿Aceptas?")
             self.net.send(t="accept" if ok else "decline", to=m["from"])

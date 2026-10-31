@@ -143,6 +143,12 @@ def draw_icon(name, rgb, px, width=1.9):
         d.arc(box(2.5, 13, 15.5, 27), 180, 360, fill=col, width=w)
         d.ellipse(box(14.5, 6, 19.5, 11), outline=col, width=w)
         d.arc(box(15, 13.5, 23, 24), 200, 340, fill=col, width=w)
+    elif name == "pad":                                     # control de PS1: cruceta, cuatro botones y dos agarres
+        poly([(8, 6.5), (16, 6.5)])
+        poly([(7, 6.5), (3.5, 8), (2, 15), (3, 19), (5.5, 19.5), (8.5, 15.5), (15.5, 15.5), (18.5, 19.5), (21, 19), (22, 15), (20.5, 8), (17, 6.5)])
+        poly([(7, 9), (7, 13)]); poly([(5, 11), (9, 11)])
+        for cx, cy in ((16.5, 9), (16.5, 13), (14.5, 11), (18.5, 11)):
+            d.ellipse(box(cx - 0.9, cy - 0.9, cx + 0.9, cy + 0.9), fill=col)
     elif name == "dance":                                   # nota musical
         d.ellipse(box(3.5, 15.5, 9.5, 21), outline=col, width=w)
         d.ellipse(box(14.5, 13.5, 20.5, 19), outline=col, width=w)
@@ -168,7 +174,7 @@ def draw_icon(name, rgb, px, width=1.9):
     return im.resize((px, px), Image.LANCZOS)
 
 
-ICON_NAMES = ("home", "games", "fav", "multi", "dance", "store", "help", "settings", "user", "logout")
+ICON_NAMES = ("home", "games", "fav", "multi", "dance", "pad", "store", "help", "settings", "user", "logout")
 
 
 def make_icons():
