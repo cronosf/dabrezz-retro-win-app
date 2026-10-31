@@ -626,16 +626,16 @@ class App(Views, LoginPages, LobbyPages, FriendsUI, AdminUI, HelpUI, UpdateUI, t
 
     # ---------- eventos ----------
     def show_roster(self, users):
-        self.tv_users.delete(*self.tv_users.get_children())
+        rows = []
         # Developer primero, luego Admin y luego Player; dentro de cada grupo, por ELO
         for u in sorted(users, key=lambda u: (-th.ROLE_RANK.get(u.get("role"), 1), -u["elo"], u["user_name"].lower())):
             if self.me and u["id"] == self.me["id"]:
                 self.refresh_me(elo=u["elo"], wins=u["wins"], losses=u["losses"])
             role = u.get("role") if u.get("role") in th.ROLE_LABEL else "customer"
-            flag = th.flag(u.get("country"))
-            self.tv_users.insert("", "end", iid=str(u["id"]), tags=(role,), **({"image": flag} if flag else {}),
-                                 values=(th.ROLE_LABEL[role], u["elo"], f"{u['wins']}-{u['losses']}", f"{u['ping']}ms"),
-                                 text=("⚔ " if u["busy"] else "") + u["user_name"])
+            rows.append({"iid": str(u["id"]), "flag": th.flag(u.get("country")), "color": th.ROLE_COLOR.get(role),
+                         "text": ("⚔ " if u["busy"] else "") + u["user_name"],
+                         "cells": (th.ROLE_LABEL[role], u["elo"], f"{u['wins']}-{u['losses']}", f"{u['ping']}ms")})
+        self.tv_users.set_rows(rows)
 
     def ping_loop(self):
         if self.net.alive and self.me:

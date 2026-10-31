@@ -5,6 +5,7 @@ import threading
 import tkinter as tk
 from tkinter import ttk
 
+import client.colorlist as colorlist
 import client.covers as covers
 import client.romman as romman
 import client.theme as th
@@ -517,14 +518,8 @@ class Views:
         right = ttk.Frame(body, style="Panel.TFrame", padding=12)
         right.grid(row=0, column=1, sticky="ns", padx=(14, 0))
         ttk.Label(right, text="Jugadores en línea", style="H.TLabel").pack(anchor="w", pady=(0, 6))
-        self.tv_users = ttk.Treeview(right, columns=("role", "elo", "wl", "ping"), show="tree headings", height=6, selectmode="browse")
-        self.tv_users.heading("#0", text="NOMBRE")
-        self.tv_users.column("#0", width=150)
-        for c, w, t in (("role", 72, ""), ("elo", 48, "ELO"), ("wl", 54, "W-L"), ("ping", 54, "PING")):      # el rol va sin titulo
-            self.tv_users.heading(c, text=t)
-            self.tv_users.column(c, width=w, anchor="center")
-        for role, color in th.ROLE_COLOR.items():
-            self.tv_users.tag_configure(role, foreground=color)
+        # el rol va sin titulo; solo el nick cambia de color segun el rol
+        self.tv_users = colorlist.ColorList(right, (("nick", 150, "NOMBRE"), ("role", 74, ""), ("elo", 48, "ELO"), ("wl", 54, "W-L"), ("ping", 56, "PING")))
         # los botones se empaquetan primero (abajo): en una ventana baja la lista se encoge y los botones siguen visibles
         ttk.Button(right, text="NORMAL PLAY (amistoso)", command=lambda: self.challenge(False)).pack(side="bottom", fill="x")
         ttk.Button(right, text="RETAR (ranked)", style="Accent.TButton",

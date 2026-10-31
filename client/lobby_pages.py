@@ -4,6 +4,7 @@ import tkinter as tk
 from tkinter import ttk
 
 import shared.passrules as passwords
+import client.colorlist as colorlist
 import client.theme as th
 
 
@@ -28,12 +29,15 @@ class LobbyPages:
         self.page_head(frame, title, back="multi")
         box = tk.Frame(frame, bg=th.PANEL)
         box.pack(fill="both", expand=True)
-        tv = ttk.Treeview(box, columns=[c[0] for c in cols], show="tree headings" if flags is not None else "headings")
-        if flags is not None:
-            tv.heading("#0", text="")
-            tv.column("#0", width=44, stretch=False, anchor="center")
-        for role, color in th.ROLE_COLOR.items():
-            tv.tag_configure(role, foreground=color)
+        if flags is not None:                      # ranking: bandera + nick a color (ver client/colorlist.py)
+            lst = colorlist.ColorList(box, [(c[0], c[1], c[2]) for c in cols], height=12)
+            lst.pack(fill="both", expand=True)
+            lst.set_rows([{"iid": str(i), "flag": th.flag(flags[i]), "text": str(r[0]), "cells": r[1:],
+                           "color": th.ROLE_COLOR.get(roles[i]) if roles is not None else None} for i, r in enumerate(rows)])
+            if not rows:
+                tk.Label(box, text="Todavía no hay datos.", fg=th.MUTED, bg=th.PANEL, font=(th.BODY, 10)).place(relx=.5, rely=.4, anchor="center")
+            return self.show_view("table")
+        tv = ttk.Treeview(box, columns=[c[0] for c in cols], show="headings")
         for key, width, text in cols:
             tv.heading(key, text=text)
             tv.column(key, width=width, anchor="center", stretch=True)
@@ -41,10 +45,8 @@ class LobbyPages:
         tv.configure(yscrollcommand=sb.set)
         sb.pack(side="right", fill="y")
         tv.pack(side="left", fill="both", expand=True)
-        for i, r in enumerate(rows):
-            flag = th.flag(flags[i]) if flags is not None else None
-            role = roles[i] if roles is not None and roles[i] in th.ROLE_COLOR else ""
-            tv.insert("", "end", values=r, tags=(role,) if role else (), **({"image": flag} if flag else {}))
+        for r in rows:
+            tv.insert("", "end", values=r)
         if not rows:
             tk.Label(box, text="Todavía no hay datos.", fg=th.MUTED, bg=th.PANEL, font=(th.BODY, 10)).place(relx=.5, rely=.4, anchor="center")
         self.show_view("table")
