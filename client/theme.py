@@ -76,12 +76,37 @@ def fit_wrap(label, margin=0, minimum=120):
     label.master.bind("<Configure>", lambda e: label.config(wraplength=max(e.width - margin, minimum)), add="+")
 
 
+def titlebar(win):
+    """Barra de titulo del color de la ventana, con letras y botones (minimizar, maximizar, cerrar) blancos. Windows 11 permite elegir el color;
+    en Windows 10 solo existe el modo oscuro (barra negra con botones blancos), que se aplica como alternativa."""
+    if sys.platform != "win32":
+        return
+    try:
+        import ctypes
+        win.update_idletasks()
+        hwnd = ctypes.windll.user32.GetParent(win.winfo_id()) or win.winfo_id()
+        dwm = ctypes.windll.dwmapi
+
+        def put(attr, value):
+            v = ctypes.c_int(value)
+            return dwm.DwmSetWindowAttribute(ctypes.c_void_p(hwnd), attr, ctypes.byref(v), 4)
+        if put(20, 1) != 0:                                                       # modo oscuro: botones blancos
+            put(19, 1)                                                            # nombre del atributo en Windows 10 antiguos
+        bgr = lambda hexc: int(hexc[5:7] + hexc[3:5] + hexc[1:3], 16)  # noqa: E731 - COLORREF es 0x00BBGGRR
+        put(35, bgr(BG))                                                          # color de la barra (Windows 11)
+        put(36, 0xFFFFFF)                                                         # color del texto
+        put(34, bgr(BG))                                                          # borde de la ventana
+    except Exception:  # noqa: BLE001 - es solo estetica
+        pass
+
+
 def set_icon(win):
-    """Icono de la ventana y de la barra de tareas."""
+    """Icono de la ventana y de la barra de tareas (y barra de titulo con los colores de la app)."""
     try:
         win.iconbitmap(resource_path(os.path.join("assets", "icon.ico")))
     except tk.TclError:
         pass
+    titlebar(win)
 
 
 def apply(root: tk.Tk):

@@ -201,6 +201,7 @@ class App(Views, LoginPages, LobbyPages, FriendsUI, DmUI, RoomsUI, DanceUI, Admi
         self.channels = {}
         self.last_ping = 0
         self.rtt = 0
+        self.tray, self.tray_told = None, False
         self.protocol("WM_DELETE_WINDOW", self.on_close)
         self.after(100, self.pump)
         self.boot()                                    # oculta hasta saber si hay una version nueva en GitHub
@@ -210,7 +211,7 @@ class App(Views, LoginPages, LobbyPages, FriendsUI, DmUI, RoomsUI, DanceUI, Admi
         """Tamaño inicial y minimo segun la pantalla (laptops de 1366x768 o 1280x720, tambien con escalado de Windows): la ventana nunca
         es mas grande que la pantalla, y se centra."""
         sw, sh = self.winfo_screenwidth(), self.winfo_screenheight()
-        w, h = min(1180, sw - 60), min(700, sh - 110)           # deja sitio a la barra de tareas y al titulo de la ventana
+        w, h = min(max(1280, int(sw * 0.8)), sw - 60), min(max(860, int(sh * 0.82)), sh - 110)    # deja sitio a la barra de tareas y al titulo
         self.minsize(min(980, w), min(600, h))
         self.geometry(f"{w}x{h}+{max((sw - w) // 2, 0)}+{max((sh - h) // 2 - 20, 0)}")
 
@@ -785,6 +786,16 @@ class App(Views, LoginPages, LobbyPages, FriendsUI, DmUI, RoomsUI, DanceUI, Admi
             self.retro_session().on_status(m)
         elif t == "ra_conn":
             self.retro_session().on_conn(m)
+        elif t == "_tray":
+            act = m.get("act")
+            if act == "show":
+                self.show_window()
+            elif act == "logout":
+                self.show_window()
+                if self.me:
+                    self.logout()
+            elif act == "quit":
+                self.quit_app()
         elif t == "med_session":
             self.queued = False
             self.dance_on_queued()
@@ -907,6 +918,28 @@ class App(Views, LoginPages, LobbyPages, FriendsUI, DmUI, RoomsUI, DanceUI, Admi
             self._med.stop()
 
     def on_close(self):
+        """La X de la ventana: la app sigue en segundo plano (icono junto al reloj), como Discord o Steam. Sin bandeja, cierra."""
+        if self.tray is not None and self.tray.active and self.booted:
+            self.withdraw()
+            if not self.tray_told:
+                self.tray_told = True
+                self.tray.notify("Dabrezz Play sigue abierto en segundo plano. Clic derecho en el icono para salir.")
+            return
+        self.quit_app()
+
+    def show_window(self):
+        if self.booted and self.upd_win is None:
+            self.deiconify()
+            self.state("normal")
+            self.lift()
+            self.attributes("-topmost", True)
+            self.after(200, lambda: self.attributes("-topmost", False))
+            self.focus_force()
+
+    def quit_app(self):
+        """Cierre real: termina emuladores, la conexion y el icono de la bandeja."""
+        if self.tray is not None:
+            self.tray.stop()
         self.retro_stop()
         if self.emu and self.emu.poll() is None:
             self.emu.terminate()
@@ -915,7 +948,15 @@ class App(Views, LoginPages, LobbyPages, FriendsUI, DmUI, RoomsUI, DanceUI, Admi
 
 
 def main():
-    App().mainloop()
+    import client.tray as tray
+    if not tray.single_instance():                 # ya esta corriendo (quiza en la bandeja): se le pide que muestre su ventana
+        return
+    app = App()
+    put = app.net.events.put
+    tray.listen_for_show(lambda: put({"t": "_tray", "act": "show"}))
+    app.tray = tray.Tray(lambda act: put({"t": "_tray", "act": act}))
+    app.tray.start()
+    app.mainloop()
 
 
 if __name__ == "__main__":

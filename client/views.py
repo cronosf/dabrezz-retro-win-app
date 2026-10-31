@@ -95,6 +95,7 @@ class Views:
         side = tk.Frame(f, bg=th.SIDEBAR, width=232)
         side.pack(side="left", fill="y")
         side.pack_propagate(False)
+        self._logo_mode = "full"
         self.side_logo = tk.Label(side, image=th.image("logo_side.png"), bg=th.SIDEBAR)
         self.side_logo.pack(pady=(20, 24))
         self.nav = {}
@@ -161,11 +162,22 @@ class Views:
 
     def _side_fit(self, height):
         """En ventanas bajas el logo se oculta para que el menu y el usuario (abajo) quepan siempre."""
-        show = height >= 780
-        if show and not self.side_logo.winfo_manager():
-            self.side_logo.pack(before=next(iter(self.nav.values())), pady=(20, 24))
-        elif not show and self.side_logo.winfo_manager():
+        side = self.side_logo.master
+        base = sum(c.winfo_reqheight() + 8 for c in side.winfo_children() if c is not self.side_logo) + 16     # menu + usuario (abajo)
+        mode = "full" if height >= base + 174 else "small" if height >= base + 87 else None
+        if mode and getattr(self, "_logo_mode", None) != mode:
+            self._logo_mode = mode
+            big = th.image("logo_side.png")
+            if mode == "small" and not hasattr(self, "_logo_small"):
+                self._logo_small = big.subsample(2)
+            self.side_logo.config(image=big if mode == "full" else self._logo_small)
+            if self.side_logo.winfo_manager():
+                self.side_logo.pack_configure(pady=(20, 24) if mode == "full" else (10, 12))
+        if mode and not self.side_logo.winfo_manager():
+            self.side_logo.pack(before=next(iter(self.nav.values())), pady=(20, 24) if mode == "full" else (10, 12))
+        elif not mode and self.side_logo.winfo_manager():
             self.side_logo.pack_forget()
+            self._logo_mode = None
 
     def _nav_item(self, parent, key, text, command):
         lbl = tk.Label(parent, text="  " + text, image=th.image(f"ico_{key}.png"), compound="left", anchor="w", padx=22, pady=11,

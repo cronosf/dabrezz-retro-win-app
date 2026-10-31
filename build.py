@@ -39,7 +39,7 @@ if __name__ == "__main__":
     assets = os.path.join(ROOT, "client", "assets")
     with tempfile.TemporaryDirectory() as tmp:
         icon = os.path.join(assets, "icon.ico")      # icono de los .exe: tambien el de los accesos directos y el de Inicio
-        pyi(tmp, "--name", "DabrezzRetro", "--icon", icon, "--add-data", f"{assets};assets", os.path.join(ROOT, "client", "app.py"))
+        pyi(tmp, "--name", "DabrezzRetro", "--icon", icon, "--hidden-import", "pystray._win32", "--add-data", f"{assets};assets", os.path.join(ROOT, "client", "app.py"))
         vendor = os.path.join(ROOT, "vendor")       # emulador, runtime de DirectX y sus licencias (ver vendor/SOURCE.txt)
         names = ("emulator-fbneo.zip", "emulator-snes9x.zip", "emulator-ggpofba.zip", "emulator-flycast.zip", "emulator-retroarch.zip", "emulator-mednafen.zip", "directx-redist.zip",
                  "EMULATOR-NOTICE.txt", "FBNEO-LICENSE.txt", "SNES9X-LICENSE.txt", "FLYCAST-GPL2-LICENSE.txt", "OPENBIOS-MIT-LICENSE.txt", "BUNGEE-OFL-LICENSE.txt",
