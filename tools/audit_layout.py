@@ -84,7 +84,7 @@ def main():
     app = A.App()
     A.messagebox.showinfo = A.messagebox.showwarning = lambda *a, **k: None
     app.cover_kick = lambda: None                          # sin descargar portadas: la auditoria no usa la red
-    app.channels = {c: 0 for c in ("sfiii3nr1", "kof98", "snes_contra3", "snes_sbomberman5g", "ps1_crash_team_racing", "md_mk3u")}
+    app.channels = {c: 0 for c in ("sfiii3nr1", "kof98", "snes_contra3", "snes_sbomberman5g", "ps1_crash_team_racing", "md_mk3u", "psxm_bust_a_groove", "psxm_bust_a_groove_2")}
     app.auto_channels = {"sfiii3nr1", "kof98", "md_mk3u"}
     all_issues = []
 
@@ -148,6 +148,10 @@ def main():
         app.handle({"t": "room_invite", "room": 9, "channel": "kof98", "from": 3, "from_user_name": "Jugador1"}); check("invitacion de sala")
         app.rm_invites.clear(); app.rm_bar.place_forget()
         app.handle({"t": "room", "room": None})
+        # zona baile
+        app.handle({"t": "roster", "channel": "psxm_bust_a_groove", "users": USERS})
+        app.show_view("dance"); pump(); check("zona baile")
+        app.dance_create(); check("crear sala de baile"); close_dialogs()
         # administracion
         app.show_view("admin")
         app.handle({"t": "admin_players", "online": 2, "players": [

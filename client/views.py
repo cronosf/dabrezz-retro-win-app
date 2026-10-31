@@ -32,7 +32,7 @@ def initials(ch):
 
 
 class Views:
-    NAV = (("home", "Inicio"), ("games", "Juegos"), ("fav", "Favoritos"), ("ranked", "Ranked"), ("multi", "Multijugador"), ("friends", "Amigos"),
+    NAV = (("home", "Inicio"), ("games", "Juegos"), ("fav", "Favoritos"), ("ranked", "Ranked"), ("multi", "Multijugador"), ("dance", "Zona Baile"), ("friends", "Amigos"),
            ("help", "Ayuda"))
     first_to = [2, 3, 5, 10]
 
@@ -145,13 +145,14 @@ class Views:
 
         self.content = tk.Frame(main, bg=th.BG)
         self.content.pack(fill="both", expand=True, padx=24, pady=(0, 18))
-        self.views = {n: tk.Frame(self.content, bg=th.BG) for n in ("home", "games", "ranked", "multi", "friends", "help", "settings", "profile", "table", "admin")}
+        self.views = {n: tk.Frame(self.content, bg=th.BG) for n in ("home", "games", "ranked", "multi", "dance", "friends", "help", "settings", "profile", "table", "admin")}
         self.build_help(self.views["help"])
         self.filter, self.view_name, self.sel_game = "Todos", "home", None
         self._build_home()
         self._build_games()
         self._build_ranked()
         self._build_rooms()
+        self._build_dance()
         self._build_friends()
         self.refresh_me()
         self.render_channels()
@@ -160,7 +161,7 @@ class Views:
 
     def _side_fit(self, height):
         """En ventanas bajas el logo se oculta para que el menu y el usuario (abajo) quepan siempre."""
-        show = height >= 720
+        show = height >= 780
         if show and not self.side_logo.winfo_manager():
             self.side_logo.pack(before=next(iter(self.nav.values())), pady=(20, 24))
         elif not show and self.side_logo.winfo_manager():
@@ -198,6 +199,8 @@ class Views:
             self._fill_friends()
         elif view == "multi":
             self.rm_enter()
+        elif view == "dance":
+            self.dance_enter()
 
     def search_text(self):
         t = self.v_search.get().strip().lower()

@@ -7,10 +7,11 @@ import tkinter as tk
 from tkinter import messagebox, ttk
 
 import client.colorlist as colorlist
+import client.med as med
 import client.retro as retro
 import client.theme as th
 from client.views import PLATFORMS, initials, platform_of
-from shared.capabilities import retro_system, system_of
+from shared.capabilities import is_dance, retro_system, system_of
 from shared.protocol import CHANNEL_LABELS
 
 EMU_NAMES = {"fbneo": "FBNeo", "snes9x": "Snes9x", "ps1": "RetroArch", "n64": "RetroArch", "mednafen": "Mednafen"}
@@ -160,9 +161,10 @@ class RoomsUI:
     def on_rooms(self, m):
         self.rooms_data = m.get("rooms") or []
         self._rm_render_list()
+        self.dance_render_rooms()
 
     def _rm_visible_rooms(self):
-        rooms = self.rooms_data
+        rooms = [r for r in self.rooms_data if r["mine"] or not is_dance(r["channel"])]       # las salas de baile se ven en la Zona Baile
         if self.rm_tab == "mine":
             return [r for r in rooms if r["mine"]]
         if self.rm_tab == "friends":
@@ -186,10 +188,10 @@ class RoomsUI:
         for r in rooms:
             self._rm_row(r)
 
-    def _rm_row(self, r):
+    def _rm_row(self, r, parent=None, mine_cmd=None):
         ch = r["channel"]
         top, bottom = PLATFORMS[platform_of(ch)]
-        row = tk.Frame(self.rm_inner, bg=th.PANEL, highlightthickness=1, highlightbackground=th.BORDER, padx=10, pady=8)
+        row = tk.Frame(parent or self.rm_inner, bg=th.PANEL, highlightthickness=1, highlightbackground=th.BORDER, padx=10, pady=8)
         row.pack(fill="x", pady=4)
         art = tk.Canvas(row, width=130, height=62, bg=bottom, highlightthickness=0)
         art.pack(side="left")
@@ -208,7 +210,7 @@ class RoomsUI:
         tk.Label(cnt, text=f" {r['count']}/{r['max']}", fg=th.ERR if full else th.TEXT, bg=th.PANEL, font=(th.BODY, 11, "bold")).pack(side="left")
         tk.Label(row, text=f"{r['ping']} ms", fg=ping_color(r["ping"]), bg=th.PANEL, font=(th.BODY, 10, "bold"), width=8).pack(side="left", padx=8)
         if r["mine"]:
-            ttk.Button(row, text="TU SALA", style="Accent.TButton", command=lambda: self.rm_show_tab("mine")).pack(side="left", padx=(6, 0))
+            ttk.Button(row, text="TU SALA", style="Accent.TButton", command=mine_cmd or (lambda: self.rm_show_tab("mine"))).pack(side="left", padx=(6, 0))
         else:
             ttk.Button(row, text="LLENA" if full else "UNIRSE", style="Cta.TButton", state="disabled" if full else "normal",
                        command=lambda i=r["id"], c=ch: self.rm_join(i, c)).pack(side="left", padx=(6, 0))
@@ -232,18 +234,18 @@ class RoomsUI:
         if self.rm_need_game(ch, "unirte a esta sala"):
             self.net.send(t="room_join", id=rid)
 
-    def rm_create(self):
-        """Elegir el juego de la sala (lista con buscador) y crearla."""
+    def rm_create(self, games=None, title="Crear sala"):
+        """Elegir el juego de la sala (lista con buscador) y crearla. Multijugador ofrece los juegos que no son de baile; la Zona Baile, solo los de baile."""
         if self.match:
             return self.rm_say("Ya estás en una partida.", False)
         win = tk.Toplevel(self, bg=th.BG)
-        win.title("Crear sala")
+        win.title(title)
         th.set_icon(win)
         win.transient(self)
         win.geometry("380x520")
         pad = tk.Frame(win, bg=th.BG, padx=22, pady=18)
         pad.pack(fill="both", expand=True)
-        tk.Label(pad, text="Crear sala", font=(th.DISPLAY, 14), fg="#ffffff", bg=th.BG).pack(anchor="w")
+        tk.Label(pad, text=title, font=(th.DISPLAY, 14), fg="#ffffff", bg=th.BG).pack(anchor="w")
         tk.Label(pad, text="Elige el juego. Otros jugadores podrán unirse desde la lista o con tu invitación.", fg=th.MUTED, bg=th.BG,
                  font=(th.BODY, 9), wraplength=330, justify="left").pack(anchor="w", pady=(4, 8))
         q = tk.StringVar()
@@ -255,7 +257,7 @@ class RoomsUI:
         lbl.pack(side="bottom", fill="x")
         lst = colorlist.ColorList(pad, (("nick", 200, "JUEGO"), ("plat", 100, "")), height=8)
         lst.pack(fill="both", expand=True)
-        games = sorted(self.game_list(), key=lambda g: CHANNEL_LABELS.get(g, g).lower())
+        games = sorted(games if games is not None else [g for g in self.game_list() if not is_dance(g)], key=lambda g: CHANNEL_LABELS.get(g, g).lower())
 
         def fill(*_):
             t = q.get().strip().lower()
@@ -349,7 +351,9 @@ class RoomsUI:
         self.btn_rp_kick.config(state="normal" if owner else "disabled")
         self.btn_rp_invite.config(state="normal" if owner and len(r["members"]) < r["max"] else "disabled")
         missing = self.rm_needs_retro(r) and not retro.installed(self.data)
-        self.rp_note.config(text="Falta RetroArch: vuelve a ejecutar el instalador (revisa que tu antivirus no lo haya borrado)." if missing else "")
+        no_med = is_dance(ch) and not med.installed(self.data)
+        self.rp_note.config(text="Falta RetroArch: vuelve a ejecutar el instalador (revisa que tu antivirus no lo haya borrado)." if missing else
+                            "Falta Mednafen: vuelve a ejecutar el instalador (revisa que tu antivirus no lo haya borrado)." if no_med else "")
         self.rm_cand_tab_set(self.rm_cand_tab)
 
     # candidatos a invitar

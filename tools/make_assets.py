@@ -143,6 +143,11 @@ def draw_icon(name, rgb, px, width=1.9):
         d.arc(box(2.5, 13, 15.5, 27), 180, 360, fill=col, width=w)
         d.ellipse(box(14.5, 6, 19.5, 11), outline=col, width=w)
         d.arc(box(15, 13.5, 23, 24), 200, 340, fill=col, width=w)
+    elif name == "dance":                                   # nota musical
+        d.ellipse(box(3.5, 15.5, 9.5, 21), outline=col, width=w)
+        d.ellipse(box(14.5, 13.5, 20.5, 19), outline=col, width=w)
+        poly([(9.3, 18), (9.3, 5.5), (20.3, 3.5), (20.3, 16)])
+        poly([(9.3, 9.5), (20.3, 7.5)])
     elif name == "help":
         d.ellipse(box(3, 3, 21, 21), outline=col, width=w)
         d.ellipse(box(10.8, 6.6, 13.2, 9), fill=col)
@@ -163,7 +168,7 @@ def draw_icon(name, rgb, px, width=1.9):
     return im.resize((px, px), Image.LANCZOS)
 
 
-ICON_NAMES = ("home", "games", "fav", "multi", "store", "help", "settings", "user", "logout")
+ICON_NAMES = ("home", "games", "fav", "multi", "dance", "store", "help", "settings", "user", "logout")
 
 
 def make_icons():

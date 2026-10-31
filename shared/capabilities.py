@@ -49,6 +49,11 @@ def uses_mednafen(channel):
     return channel.startswith("psxm_")
 
 
+def is_dance(channel):
+    """Zona Baile: los juegos de baile (hoy Bust a Groove 1 y 2, con Mednafen). Tienen su propia pantalla y su busqueda de partida amistosa."""
+    return uses_mednafen(channel)
+
+
 def uses_session(channel, players):
     """Juegos cuya partida se lanza con una sesion propia (RetroArch o Mednafen) en vez del emulador GGPO de 1 contra 1."""
     return uses_mednafen(channel) or uses_retro(channel, players)

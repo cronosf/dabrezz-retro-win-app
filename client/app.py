@@ -26,6 +26,7 @@ import client.secure as secure  # noqa: E402
 from client.admin_ui import AdminUI  # noqa: E402
 from client.dm_ui import DmUI  # noqa: E402
 from client.retro_session import RetroSession  # noqa: E402
+from client.dance_ui import DanceUI  # noqa: E402
 from client.rooms_ui import RoomsUI  # noqa: E402
 from client.friends_ui import FriendsUI  # noqa: E402
 from client.help_ui import HelpUI  # noqa: E402
@@ -35,6 +36,7 @@ from client.update_ui import UpdateUI  # noqa: E402
 from client.views import Views  # noqa: E402
 from client.net import Net  # noqa: E402
 from shared.protocol import APP_NAME, CHANNEL_LABELS, VERSION  # noqa: E402
+from shared.capabilities import is_dance  # noqa: E402
 
 # Valores internos: el usuario no los ve ni los cambia, siempre se aplican estos (aunque el config.json guardado diga otra cosa).
 # Emulador: quark:direct,<rom>,<puerto local>,<ip rival>,<puerto rival>,<jugador 0/1>,<delay>,<ranked>
@@ -161,7 +163,7 @@ def detect_emulator(data):
     return p if os.path.exists(p) else ""
 
 
-class App(Views, LoginPages, LobbyPages, FriendsUI, DmUI, RoomsUI, AdminUI, HelpUI, UpdateUI, tk.Tk):
+class App(Views, LoginPages, LobbyPages, FriendsUI, DmUI, RoomsUI, DanceUI, AdminUI, HelpUI, UpdateUI, tk.Tk):
     auto_session = False
     kick_msg = ""           # motivo con el que el servidor expulso al jugador (se muestra al cerrarse la conexion)
     rom_busy = False
@@ -398,7 +400,7 @@ class App(Views, LoginPages, LobbyPages, FriendsUI, DmUI, RoomsUI, AdminUI, Help
     def toggle_queue(self):
         if not self.channel:
             return messagebox.showinfo(APP_NAME, "Entra primero a un juego (doble clic).")
-        if not self.queued and self.channel not in self.auto_channels:
+        if not self.queued and self.channel not in self.auto_channels and not is_dance(self.channel):
             return messagebox.showinfo(APP_NAME, "Este juego aún no tiene ranked: no se detecta el resultado solo.\nPara jugar con otros usa Multijugador (salas).")
         self.net.send(t="queue", on=not self.queued)
 
@@ -784,6 +786,8 @@ class App(Views, LoginPages, LobbyPages, FriendsUI, DmUI, RoomsUI, AdminUI, Help
         elif t == "ra_conn":
             self.retro_session().on_conn(m)
         elif t == "med_session":
+            self.queued = False
+            self.dance_on_queued()
             self.med_session().on_session(m)
             self.rm_say("Partida de Bust a Groove con Mednafen: se abre su ventana en unos segundos.")
         elif t == "ra_end":
@@ -812,11 +816,13 @@ class App(Views, LoginPages, LobbyPages, FriendsUI, DmUI, RoomsUI, AdminUI, Help
             self.log(f"Entraste a {self.channel}", "sys")
             self.show_roster(self.rosters.get(self.channel, []))    # el servidor manda la lista ANTES de "joined"
             self.update_ranked_ui()
+            self.dance_refresh()
         elif t == "roster":
             self.rosters[m["channel"]] = m["users"]
             if m["channel"] == self.channel:
                 self.show_roster(m["users"])
             self.rm_cand_refresh()
+            self.dance_users_refresh()
         elif t == "chat":
             self.log(m["text"], name=m["user_name"], role=m.get("role"), country=m.get("country"))
         elif t == "challenge":
@@ -834,6 +840,7 @@ class App(Views, LoginPages, LobbyPages, FriendsUI, DmUI, RoomsUI, AdminUI, Help
             self.queued = m["on"]
             self.btn_queue.config(text="CANCELAR BÚSQUEDA" if self.queued else "BUSCAR PARTIDA")
             self.update_ranked_ui()
+            self.dance_on_queued()
         elif t == "match":
             if not ROM_RE.fullmatch(str(m.get("channel", ""))) or m["channel"] not in self.channels:
                 return self.log("Partida con un juego desconocido; se ignora.", "sys")
