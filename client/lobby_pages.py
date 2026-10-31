@@ -64,7 +64,8 @@ class LobbyPages:
         tk.Label(names, text=me.get("user_name") or "—", font=(th.DISPLAY, 20), fg="#ffffff", bg=th.PANEL).pack(anchor="w")
         tk.Label(names, text="Nombre de usuario (el único que ven los demás jugadores)", fg=th.MUTED, bg=th.PANEL,
                  font=(th.BODY, 9)).pack(anchor="w")
-        rows = [("Correo", self.cfg.get("email") or "—"), ("Cuenta", "Dabrezz Play" + (" · administrador" if me.get("role") == "admin" else ""))]
+        rows = [("Correo", self.cfg.get("email") or "—"), ("Cuenta", "Dabrezz Play" + (" · administrador" if me.get("role") == "admin" else "")),
+                ("Acceso", f"Hasta el {me['expires']}" if me.get("expires") else "Sin límite")]
         if self.channel:
             rows.append(("Ranking", f"ELO {me.get('elo', 1500)} · {me.get('wins', 0)}G {me.get('losses', 0)}P en {self.channel}"))
         grid = tk.Frame(card, bg=th.PANEL)
@@ -76,6 +77,8 @@ class LobbyPages:
         btns.pack(fill="x", pady=(24, 0))
         ttk.Button(btns, text="CAMBIAR CONTRASEÑA", style="Accent.TButton", command=self.ask_password).pack(side="left")
         ttk.Button(btns, text="CERRAR SESIÓN", command=self.logout).pack(side="left", padx=8)
+        if me.get("role") == "admin":
+            ttk.Button(btns, text="PANEL DE ADMINISTRACIÓN", style="Cta.TButton", command=lambda: self.show_view("admin")).pack(side="left", padx=8)
 
     # ---------- cambiar contraseña ----------
     def ask_password(self):

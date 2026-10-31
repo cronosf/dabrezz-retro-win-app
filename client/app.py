@@ -20,6 +20,7 @@ from client.bridge import OverlayBridge  # noqa: E402
 import client.defender as defender  # noqa: E402
 import client.ps1 as ps1  # noqa: E402
 import client.secure as secure  # noqa: E402
+from client.admin_ui import AdminUI  # noqa: E402
 from client.friends_ui import FriendsUI  # noqa: E402
 from client.help_ui import HelpUI  # noqa: E402
 from client.lobby_pages import LobbyPages  # noqa: E402
@@ -154,8 +155,9 @@ def detect_emulator(data):
     return p if os.path.exists(p) else ""
 
 
-class App(Views, LoginPages, LobbyPages, FriendsUI, HelpUI, UpdateUI, tk.Tk):
+class App(Views, LoginPages, LobbyPages, FriendsUI, AdminUI, HelpUI, UpdateUI, tk.Tk):
     auto_session = False
+    kick_msg = ""           # motivo con el que el servidor expulso al jugador (se muestra al cerrarse la conexion)
     rom_busy = False
     av_asked = False
     def __init__(self):
@@ -676,7 +678,7 @@ class App(Views, LoginPages, LobbyPages, FriendsUI, HelpUI, UpdateUI, tk.Tk):
                     self.cfg["session"] = secure.protect(m["session"])
                 except OSError:
                     self.cfg.pop("session", None)
-            self.me = {k: m.get(k) for k in ("id", "user_name", "role")}
+            self.me = {k: m.get(k) for k in ("id", "user_name", "role", "expires")}
             self.me.update(elo=1500, wins=0, losses=0)
             self.first_to = m.get("first_to") or self.first_to
             self.server_rom_manifest = m.get("rom_manifest") or ""
@@ -697,9 +699,16 @@ class App(Views, LoginPages, LobbyPages, FriendsUI, HelpUI, UpdateUI, tk.Tk):
             self.update_failed(m["msg"])
         elif t == "pw_result":
             self.on_pw_result(m)
+        elif t in ("admin_players", "admin_bans", "admin_flags", "admin_settings", "admin_result"):
+            getattr(self, "on_" + t)(m)
+        elif t == "notice":
+            messagebox.showinfo("Aviso de un administrador", m.get("text", ""))
+        elif t == "kicked":
+            self.kick_msg = str(m.get("msg", ""))[:300]
         elif t == "disconnected":
             if self.me:
-                messagebox.showwarning(APP_NAME, "Conexión perdida con el servidor.")
+                messagebox.showwarning(APP_NAME, self.kick_msg or "Conexión perdida con el servidor.")
+            self.kick_msg = ""
             self.me = self.channel = self.match = None
             self.show_login()
             self.lbl_status.config(text="Desconectado", foreground=th.ERR)

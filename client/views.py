@@ -138,7 +138,7 @@ class Views:
 
         self.content = tk.Frame(main, bg=th.BG)
         self.content.pack(fill="both", expand=True, padx=24, pady=(0, 18))
-        self.views = {n: tk.Frame(self.content, bg=th.BG) for n in ("home", "games", "multi", "friends", "help", "settings", "profile", "table")}
+        self.views = {n: tk.Frame(self.content, bg=th.BG) for n in ("home", "games", "multi", "friends", "help", "settings", "profile", "table", "admin")}
         self.build_help(self.views["help"])
         self.filter, self.view_name, self.sel_game = "Todos", "home", None
         self._build_home()
@@ -176,6 +176,8 @@ class Views:
             self._fill_settings()
         elif view == "profile":
             self._fill_profile()
+        elif view == "admin":
+            self._fill_admin()
         elif view == "friends":
             self._fill_friends()
 
