@@ -14,14 +14,14 @@ from shared.protocol import CHANNEL_LABELS, DEFAULT_CHANNELS, VERSION
 
 CARD_W = 196
 PLATFORMS = {"Arcade": ("#8b00fd", "#3a0a8a"), "Mega Drive": ("#1f6fe0", "#0c2a70"), "NES": ("#e0402a", "#6e1410"),
-             "SNES": ("#c9941a", "#5e4208"), "PS1": ("#2aa6a6", "#0c4a4a")}
-FILTERS = ("Todos", "Arcade", "Mega Drive", "NES", "SNES (beta)", "PS1 (beta)", "⚡ Ranked")
+             "SNES": ("#c9941a", "#5e4208"), "PS1": ("#2aa6a6", "#0c4a4a"), "N64": ("#2f9e44", "#0f4a1c")}
+FILTERS = ("Todos", "Arcade", "Mega Drive", "NES", "SNES", "PS1", "N64", "⚡ Ranked")
 SEARCH_HINT = "Buscar juegos, títulos..."
 
 
 def platform_of(ch):
     return ("Mega Drive" if ch.startswith("md_") else "NES" if ch.startswith("nes_") else "SNES" if ch.startswith("snes_") else
-            "PS1" if ch.startswith(("ps1_", "psxm_")) else "Arcade")
+            "PS1" if ch.startswith(("ps1_", "psxm_")) else "N64" if ch.startswith("n64_") else "Arcade")
 
 
 def initials(ch):
@@ -345,8 +345,8 @@ class Views:
         tk.Label(self.home_body, text="🎮  Consolas", font=(th.BODY, 12, "bold"), fg="#ffffff", bg=th.BG).pack(anchor="w", pady=(16, 8))
         cats = tk.Frame(self.home_body, bg=th.BG)
         cats.pack(anchor="w")
-        for img, flt in (("tile_all.png", "Todos"), ("tile_arcade.png", "Arcade"), ("tile_snes.png", "SNES (beta)"),
-                         ("tile_md.png", "Mega Drive"), ("tile_ps1.png", "PS1 (beta)")):
+        for img, flt in (("tile_all.png", "Todos"), ("tile_arcade.png", "Arcade"), ("tile_snes.png", "SNES"),
+                         ("tile_md.png", "Mega Drive"), ("tile_ps1.png", "PS1")):
             t = tk.Label(cats, image=th.image(img), bg=th.BG, cursor="hand2", bd=0)
             t.pack(side="left", padx=(0, 10))
             t.bind("<Button-1>", lambda e, n=flt: (self.set_filter(n), self.show_view("games")))
@@ -359,13 +359,14 @@ class Views:
         v = self.views["games"]
         self.games_title = tk.Label(v, text="Juegos", font=(th.DISPLAY, 16), fg="#ffffff", bg=th.BG)
         self.games_title.pack(anchor="w")
-        chips = tk.Frame(v, bg=th.BG)
+        chips = self.chips_box = tk.Frame(v, bg=th.BG)
         chips.pack(fill="x", pady=(10, 12))
-        self.chips = {}
+        self.chips, self._chips_sig = {}, None
         for name in FILTERS:
             b = ttk.Button(chips, text=name, style="Chip.TButton", command=lambda n=name: self.set_filter(n))
-            b.pack(side="left", padx=(0, 4))
             self.chips[name] = b
+        chips.bind("<Configure>", lambda e: self._layout_chips())
+        self._layout_chips()
         wrap = tk.Frame(v, bg=th.BG)
         wrap.pack(fill="both", expand=True)
         self.gcanvas = tk.Canvas(wrap, bg=th.BG, highlightthickness=0)
@@ -382,6 +383,23 @@ class Views:
         self.cards = {ch: self._make_card(self.ginner, ch) for ch in self.game_list()}
         self._cols = 0
         self.set_filter("Todos", relayout=False)
+
+    def _layout_chips(self):
+        """Los filtros pasan a una segunda fila si no caben en el ancho (ventanas estrechas)."""
+        width = self.chips_box.winfo_width()
+        row = col = x = 0
+        pos = {}
+        for name, b in self.chips.items():
+            bw = b.winfo_reqwidth() + 4
+            if x + bw > width and col:
+                row, col, x = row + 1, 0, 0
+            pos[name] = (row, col)
+            col, x = col + 1, x + bw
+        if pos == self._chips_sig:
+            return
+        self._chips_sig = pos
+        for name, b in self.chips.items():
+            b.grid(row=pos[name][0], column=pos[name][1], padx=(0, 4), pady=(0, 4 if pos[name][0] else 0), sticky="w")
 
     def set_filter(self, name, relayout=True):
         self.filter = name
@@ -401,9 +419,7 @@ class Views:
                 continue
             if self.filter == "⚡ Ranked" and ch not in self.auto_channels:
                 continue
-            if self.filter in ("Arcade", "Mega Drive", "NES") and platform_of(ch) != self.filter:
-                continue
-            if self.filter in ("SNES (beta)", "PS1 (beta)") and platform_of(ch) != self.filter.split(" ")[0]:
+            if self.filter not in ("Todos", "⚡ Ranked") and platform_of(ch) != self.filter:
                 continue
             if q and q not in CHANNEL_LABELS.get(ch, ch).lower() and q not in ch.lower():
                 continue

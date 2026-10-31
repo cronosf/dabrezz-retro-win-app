@@ -84,7 +84,7 @@ def main():
     app = A.App()
     A.messagebox.showinfo = A.messagebox.showwarning = lambda *a, **k: None
     app.cover_kick = lambda: None                          # sin descargar portadas: la auditoria no usa la red
-    app.channels = {c: 0 for c in ("sfiii3nr1", "kof98", "snes_contra3", "snes_sbomberman5g", "ps1_crash_team_racing", "md_mk3u", "psxm_bust_a_groove", "psxm_bust_a_groove_2")}
+    app.channels = {c: 0 for c in ("sfiii3nr1", "kof98", "snes_contra3", "snes_sbomberman5g", "ps1_crash_team_racing", "md_mk3u", "psxm_bust_a_groove", "psxm_bust_a_groove_2", "n64_mario_kart_64")}
     app.auto_channels = {"sfiii3nr1", "kof98", "md_mk3u"}
     all_issues = []
 
