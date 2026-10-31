@@ -16,6 +16,7 @@ class ColorList(tk.Frame):
         super().__init__(parent, bg=th.PANEL, highlightthickness=1, highlightbackground=th.BORDER)
         self.cols, self.on_select = cols, on_select
         self.rows, self.selected = [], None
+        self.on_context = None            # clic derecho en una fila: on_context(iid, evento)
         self.head = tk.Canvas(self, height=HEAD_H, bg=th.PANEL_2, highlightthickness=0)
         self.head.pack(side="top", fill="x")
         body = tk.Frame(self, bg=th.PANEL)
@@ -27,6 +28,7 @@ class ColorList(tk.Frame):
         self.canvas.pack(side="left", fill="both", expand=True)
         self.canvas.bind("<Configure>", lambda e: self.redraw())
         self.canvas.bind("<Button-1>", self._click)
+        self.canvas.bind("<Button-3>", self._context)
         self.canvas.bind("<Enter>", lambda e: self.canvas.bind_all("<MouseWheel>", self._wheel))
         self.canvas.bind("<Leave>", lambda e: self.canvas.unbind_all("<MouseWheel>"))
 
@@ -73,6 +75,12 @@ class ColorList(tk.Frame):
                 c.create_text(x + w / 2, y + ROW_H / 2, text=str(cell), fill=th.TEXT, font=(th.BODY, 10))
                 x += w
         c.configure(scrollregion=(0, 0, 1, max(len(self.rows) * ROW_H, 1)))
+        need = len(self.rows) * ROW_H > c.winfo_height() > 1        # la barra solo aparece si la lista no cabe
+        if need and not self.sb.winfo_ismapped():
+            self.sb.pack(side="right", fill="y", before=self.canvas)
+        elif not need and self.sb.winfo_ismapped():
+            self.sb.pack_forget()
+            c.yview_moveto(0)
 
     def _click(self, e):
         i = int(self.canvas.canvasy(e.y) // ROW_H)
@@ -81,6 +89,14 @@ class ColorList(tk.Frame):
             self.redraw()
             if self.on_select:
                 self.on_select(self.selected)
+
+    def _context(self, e):
+        i = int(self.canvas.canvasy(e.y) // ROW_H)
+        if 0 <= i < len(self.rows):
+            self.selected = self.rows[i]["iid"]
+            self.redraw()
+            if self.on_context:
+                self.on_context(self.selected, e)
 
     def _yview(self, *a):
         self.canvas.yview(*a)

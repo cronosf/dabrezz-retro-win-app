@@ -22,7 +22,7 @@ HELP = (
     ("b", "Inicia sesión con tu correo y contraseña, o crea una cuenta desde el botón CREAR CUENTA."),
     ("b", "La primera vez elige un nombre de usuario único (5 a 12 caracteres)."),
     ("b", "En Juegos o Multijugador elige un título, crea una sala o únete a la de otro jugador."),
-    ("b", "Amigos: agrega a otros jugadores por su nombre de usuario (ellos aceptan la solicitud), mira quién está en línea e invítalos a una partida amistosa."),
+    ("b", "Amigos: agrega a otros jugadores por su nombre de usuario (ellos aceptan la solicitud), mira quién está en línea, invítalos a una partida amistosa o escríbeles un mensaje privado. Haz clic derecho sobre un jugador de la lista para enviarle una invitación de amistad. Los mensajes privados solo se pueden enviar entre amigos y no se guardan: se borran al cerrar la app."),
     ("b", "La app se actualiza sola al abrirse cuando existe una versión nueva firmada."),
     ("h", "PlayStation 1 (beta)"),
     ("b", "No necesitas la BIOS de Sony: se instala OpenBIOS, una BIOS libre, y todos los jugadores usan la misma. Pocos juegos no "

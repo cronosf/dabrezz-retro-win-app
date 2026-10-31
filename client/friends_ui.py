@@ -205,6 +205,8 @@ class FriendsUI:
             rm.bind("<Button-1>", lambda e, i=f["id"]: self.friend_remove(i))
             if f["online"] and not f["busy"]:
                 ttk.Button(r, text="INVITAR A JUGAR", style="Cta.TButton", command=lambda i=f["id"]: self.friend_invite(i)).pack(side="right", padx=8)
+            if f["online"]:
+                ttk.Button(r, text="MENSAJE", command=lambda i=f["id"], n=f["user_name"]: self.open_dm(i, n)).pack(side="right")
         if d["outgoing"]:
             self._section("Solicitudes enviadas")
             for p in d["outgoing"]:

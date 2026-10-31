@@ -21,6 +21,7 @@ import client.defender as defender  # noqa: E402
 import client.ps1 as ps1  # noqa: E402
 import client.secure as secure  # noqa: E402
 from client.admin_ui import AdminUI  # noqa: E402
+from client.dm_ui import DmUI  # noqa: E402
 from client.friends_ui import FriendsUI  # noqa: E402
 from client.help_ui import HelpUI  # noqa: E402
 from client.lobby_pages import LobbyPages  # noqa: E402
@@ -155,7 +156,7 @@ def detect_emulator(data):
     return p if os.path.exists(p) else ""
 
 
-class App(Views, LoginPages, LobbyPages, FriendsUI, AdminUI, HelpUI, UpdateUI, tk.Tk):
+class App(Views, LoginPages, LobbyPages, FriendsUI, DmUI, AdminUI, HelpUI, UpdateUI, tk.Tk):
     auto_session = False
     kick_msg = ""           # motivo con el que el servidor expulso al jugador (se muestra al cerrarse la conexion)
     rom_busy = False
@@ -178,6 +179,8 @@ class App(Views, LoginPages, LobbyPages, FriendsUI, AdminUI, HelpUI, UpdateUI, t
             self.cfg["emulator"] = detect_emulator(self.data)
         self.net = Net()
         self.me = None
+        self.roster_names = {}
+        self._dm_init()
         self.rosters = {}
         self.channel = None
         self.match = None
@@ -271,6 +274,7 @@ class App(Views, LoginPages, LobbyPages, FriendsUI, AdminUI, HelpUI, UpdateUI, t
         self.cfg["remember"] = False
         self.save_cfg()
         self.net.close()
+        self.dm_reset()
         self.me = self.channel = self.match = None
         self.queued = False
         self.show_login()
@@ -635,6 +639,7 @@ class App(Views, LoginPages, LobbyPages, FriendsUI, AdminUI, HelpUI, UpdateUI, t
             rows.append({"iid": str(u["id"]), "flag": th.flag(u.get("country")), "color": th.ROLE_COLOR.get(role),
                          "text": ("⚔ " if u["busy"] else "") + u["user_name"],
                          "cells": (th.ROLE_LABEL[role], u["elo"], f"{u['wins']}-{u['losses']}", f"{u['ping']}ms")})
+        self.roster_names = {u["id"]: u["user_name"] for u in users}
         self.tv_users.set_rows(rows)
 
     def ping_loop(self):
@@ -705,6 +710,10 @@ class App(Views, LoginPages, LobbyPages, FriendsUI, AdminUI, HelpUI, UpdateUI, t
             self.on_pw_result(m)
         elif t in ("admin_players", "admin_bans", "admin_flags", "admin_settings", "admin_result"):
             getattr(self, "on_" + t)(m)
+        elif t == "dm":
+            self.on_dm(m)
+        elif t == "dm_error":
+            self.on_dm_error(m)
         elif t == "notice":
             messagebox.showinfo("Aviso de un administrador", m.get("text", ""))
         elif t == "kicked":
@@ -713,6 +722,7 @@ class App(Views, LoginPages, LobbyPages, FriendsUI, AdminUI, HelpUI, UpdateUI, t
             if self.me:
                 messagebox.showwarning(APP_NAME, self.kick_msg or "Conexión perdida con el servidor.")
             self.kick_msg = ""
+            self.dm_reset()
             self.me = self.channel = self.match = None
             self.show_login()
             self.lbl_status.config(text="Desconectado", foreground=th.ERR)

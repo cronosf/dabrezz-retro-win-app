@@ -520,6 +520,7 @@ class Views:
         ttk.Label(right, text="Jugadores en línea", style="H.TLabel").pack(anchor="w", pady=(0, 6))
         # el rol va sin titulo; solo el nick cambia de color segun el rol
         self.tv_users = colorlist.ColorList(right, (("nick", 150, "NOMBRE"), ("role", 74, ""), ("elo", 48, "ELO"), ("wl", 54, "W-L"), ("ping", 56, "PING")))
+        self.tv_users.on_context = self.roster_menu          # clic derecho: mensaje privado / invitacion de amistad (client/dm_ui.py)
         # los botones se empaquetan primero (abajo): en una ventana baja la lista se encoge y los botones siguen visibles
         ttk.Button(right, text="NORMAL PLAY (amistoso)", command=lambda: self.challenge(False)).pack(side="bottom", fill="x")
         ttk.Button(right, text="RETAR (ranked)", style="Accent.TButton",
