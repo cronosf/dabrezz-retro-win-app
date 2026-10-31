@@ -103,6 +103,28 @@ class _State(ctypes.Structure):
     _fields_ = [("dwPacketNumber", ctypes.c_uint), ("Gamepad", _Gamepad)]
 
 
+def legacy_joystick_present():
+    """True si Windows ve algun mando (DirectInput / generico) aunque XInput no lo reconozca: asi se distingue "mando dormido o sin conectar" de "mando
+    que no es Xbox"."""
+    if sys.platform != "win32":
+        return False
+    try:
+        from ctypes import wintypes
+        winmm = ctypes.WinDLL("winmm")
+
+        class JoyInfoEx(ctypes.Structure):
+            _fields_ = [(n, wintypes.DWORD) for n in ("dwSize", "dwFlags", "dwXpos", "dwYpos", "dwZpos", "dwRpos", "dwUpos", "dwVpos", "dwButtons",
+                                                      "dwButtonNumber", "dwPOV", "dwReserved1", "dwReserved2")]
+        for i in range(winmm.joyGetNumDevs()):
+            info = JoyInfoEx()
+            info.dwSize, info.dwFlags = ctypes.sizeof(JoyInfoEx), 0xFF
+            if winmm.joyGetPosEx(i, ctypes.byref(info)) == 0:
+                return True
+    except (OSError, AttributeError):
+        pass
+    return False
+
+
 class XInputPad:
     """Lee los mandos XInput (hasta 4) con la DLL de Windows, para captar que boton pulsa el jugador al configurar."""
 

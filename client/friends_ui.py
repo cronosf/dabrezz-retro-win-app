@@ -183,7 +183,7 @@ class FriendsUI:
             self._section(f"Solicitudes recibidas ({len(d['incoming'])})")
             for p in d["incoming"]:
                 r = self._row()
-                tk.Label(r, text=p["user_name"], fg="#ffffff", bg=th.PANEL, font=(th.BODY, 10, "bold")).pack(side="left")
+                tk.Label(r, text=p["user_name"], fg=th.ROLE_COLOR.get(p.get("role"), "#ffffff"), bg=th.PANEL, font=(th.BODY, 10, "bold")).pack(side="left")
                 tk.Label(r, text="quiere ser tu amigo", fg=th.MUTED, bg=th.PANEL, font=(th.BODY, 9)).pack(side="left", padx=10)
                 ttk.Button(r, text="RECHAZAR", command=lambda i=p["id"]: self.net.send(t="friend_remove", id=i)).pack(side="right")
                 ttk.Button(r, text="ACEPTAR", style="Accent.TButton",
@@ -197,7 +197,7 @@ class FriendsUI:
             r = self._row()
             color, state = (th.MUTED, "desconectado") if not f["online"] else (th.YELLOW, "jugando") if f["busy"] else (th.OK, "en línea")
             tk.Label(r, text="●", fg=color, bg=th.PANEL, font=(th.BODY, 11)).pack(side="left")
-            tk.Label(r, text=f["user_name"], fg="#ffffff", bg=th.PANEL, font=(th.BODY, 10, "bold")).pack(side="left", padx=(8, 10))
+            tk.Label(r, text=f["user_name"], fg=th.ROLE_COLOR.get(f.get("role"), "#ffffff"), bg=th.PANEL, font=(th.BODY, 10, "bold")).pack(side="left", padx=(8, 10))
             where = f" · {CHANNEL_LABELS.get(f['channel'], f['channel'])}" if f["online"] and f["channel"] else ""
             tk.Label(r, text=state + where, fg=th.MUTED, bg=th.PANEL, font=(th.BODY, 9)).pack(side="left")
             rm = tk.Label(r, text="¿QUITAR?" if self._confirm_rm == f["id"] else "✕", fg=th.ERR if self._confirm_rm == f["id"] else th.MUTED,
@@ -212,6 +212,6 @@ class FriendsUI:
             self._section("Solicitudes enviadas")
             for p in d["outgoing"]:
                 r = self._row()
-                tk.Label(r, text=p["user_name"], fg="#ffffff", bg=th.PANEL, font=(th.BODY, 10, "bold")).pack(side="left")
+                tk.Label(r, text=p["user_name"], fg=th.ROLE_COLOR.get(p.get("role"), "#ffffff"), bg=th.PANEL, font=(th.BODY, 10, "bold")).pack(side="left")
                 tk.Label(r, text="pendiente de respuesta", fg=th.MUTED, bg=th.PANEL, font=(th.BODY, 9)).pack(side="left", padx=10)
                 ttk.Button(r, text="CANCELAR", command=lambda i=p["id"]: self.net.send(t="friend_remove", id=i)).pack(side="right")

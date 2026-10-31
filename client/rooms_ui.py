@@ -375,7 +375,9 @@ class RoomsUI:
         if self.rm_cand_tab == "friends":
             for f in (self.friends_data or {}).get("friends", []):
                 if f["online"] and f["id"] not in inside:
-                    rows.append({"iid": str(f["id"]), "flag": None, "text": f["user_name"], "cells": ("Amigo", "jugando" if f["busy"] else "en línea")})
+                    role = f.get("role") if f.get("role") in th.ROLE_LABEL else "customer"
+                    rows.append({"iid": str(f["id"]), "flag": None, "color": th.ROLE_COLOR.get(role), "text": f["user_name"],
+                                 "cells": (th.ROLE_LABEL[role], "jugando" if f["busy"] else "en línea")})
             self.lbl_rp_inv.config(text="" if rows else "Ningún amigo en línea disponible.", fg=th.MUTED)
         else:
             for u in sorted(self.rosters.get(self.room["channel"], []), key=lambda u: (-th.ROLE_RANK.get(u.get("role"), 1), -u["elo"])):

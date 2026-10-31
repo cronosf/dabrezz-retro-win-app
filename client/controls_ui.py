@@ -1,9 +1,11 @@
 """Ventana "Controles": cada jugador elige sus teclas y los botones de su mando para RetroArch (SNES, PS1 y N64) antes de entrar a una partida. Se guarda en la
 configuracion de la app (cfg["retro_controls"]) y client/retro.py lo escribe en cada partida. Mixin de App. Ver client/controls.py."""
+import subprocess
 import tkinter as tk
-from tkinter import ttk
+from tkinter import messagebox, ttk
 
 import client.controls as controls
+import client.retro as retro
 import client.theme as th
 
 PAD_WAIT_MS = 8000
@@ -35,6 +37,8 @@ class ControlsUI:
         th.fit_wrap(info, margin=44)
         row = tk.Frame(pad, bg=th.BG)
         row.pack(side="bottom", fill="x", pady=(10, 0))
+        other = ttk.Button(pad, text="MANDO DE PS1 / GENÉRICO: CONFIGURAR EN RETROARCH", command=self._ctl_retroarch_menu)
+        other.pack(side="bottom", fill="x", pady=(8, 0))
         ttk.Button(row, text="GUARDAR", style="Cta.TButton", command=self._ctl_save).pack(side="left", fill="x", expand=True)
         ttk.Button(row, text="RESTABLECER", command=self._ctl_reset).pack(side="left", padx=(8, 0))
         ttk.Button(row, text="CANCELAR", command=self._ctl_close).pack(side="left", padx=(8, 0))
@@ -101,12 +105,10 @@ class ControlsUI:
             self._ctl_say("Pulsa la tecla que quieras para este botón. Escape cancela.", True)
             c["win"].focus_set()
         else:
-            if not c["xi"].connected():
-                c["cap"] = None
-                self._ctl_refresh()
-                return self._ctl_say("No se detecta un mando Xbox (XInput). Conéctalo y vuelve a intentarlo.")
-            self._ctl_say("Pulsa el botón de tu mando para este botón (LT/RT también valen). Escape cancela.", True)
             c["base"], c["left"] = c["xi"].snapshot(), PAD_WAIT_MS
+            self._ctl_say("Pulsa el botón de tu mando para este botón (LT/RT también valen). Si es inalámbrico y estaba dormido, pulsa el botón Xbox para "
+                          "despertarlo. Escape cancela." if c["base"] else
+                          "No se ve el mando todavía: pulsa el botón Xbox para despertarlo y luego el botón que quieras. Escape cancela.", True)
             c["job"] = self.after(POLL_MS, self._ctl_poll)
 
     def _ctl_stop_poll(self):
@@ -121,7 +123,7 @@ class ControlsUI:
         if not c["win"].winfo_exists() or not c["cap"] or c["cap"][0] != "pad":
             return
         now = c["xi"].snapshot()
-        tok = controls.XInputPad.new_press(c["base"], now)
+        tok = controls.XInputPad.new_press(c["base"] or {i: (0, 0, 0) for i in now}, now)     # un mando que acaba de aparecer parte de "nada pulsado"
         c["base"] = now
         if tok:
             c["pad"][c["cap"][1]] = tok
@@ -131,7 +133,13 @@ class ControlsUI:
         c["left"] -= POLL_MS
         if c["left"] <= 0:
             c["cap"] = None
-            self._ctl_say("No se pulsó ningún botón.")
+            if now:
+                self._ctl_say("No se pulsó ningún botón.")
+            elif controls.legacy_joystick_present():
+                self._ctl_say("Windows ve tu mando, pero no es de tipo Xbox (XInput): por ejemplo un DualShock o un genérico. Con él RetroArch usa su "
+                              "configuración automática. Para elegir sus botones usa «CONFIGURAR EN RETROARCH» (abajo); también puedes jugar con el teclado.")
+            else:
+                self._ctl_say("No se detecta ningún mando. Conéctalo (si es inalámbrico, enciéndelo con el botón Xbox) y vuelve a intentarlo.")
             return self._ctl_refresh()
         c["job"] = self.after(POLL_MS, self._ctl_poll)
 
@@ -163,6 +171,17 @@ class ControlsUI:
         self._ctl_refresh()
 
     # ---------- acciones ----------
+    def _ctl_retroarch_menu(self):
+        """Mandos que no son Xbox: se asignan en el menu de RetroArch, que los entiende todos."""
+        if not retro.installed(self.data):
+            return messagebox.showinfo("Controles", "No se encontró RetroArch. Vuelve a ejecutar el instalador (revisa que tu antivirus no lo haya borrado).")
+        try:
+            subprocess.Popen(retro.menu_command(self.data), cwd=retro.folder(self.data))
+        except OSError as e:
+            return self._ctl_say(f"No se pudo abrir RetroArch: {e}")
+        self._ctl_say("Se abrió RetroArch. Con el teclado: Ajustes › Entrada › Controles del puerto 1 › «Asignar todos los controles» y pulsa los botones "
+                      "de tu mando uno por uno. Cierra RetroArch (Esc y Salir) para guardar. Esos botones valen para todas las partidas.", True)
+
     def _ctl_reset(self):
         self._ctl_stop_poll()
         self._ctl["kb"].clear()

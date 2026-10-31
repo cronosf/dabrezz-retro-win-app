@@ -83,6 +83,19 @@ def prepare(data, system, nick, delay=2, ranked=False, players=2, bios_src=None,
     return cfg
 
 
+def menu_command(data):
+    """Abre solo el menu de RetroArch (sin juego) para que el jugador asigne los botones de CUALQUIER mando (p. ej. un control de PS1 con adaptador USB):
+    Ajustes > Entrada > Controles del puerto 1 > Asignar todos los controles. Al cerrar RetroArch se guarda en su retroarch.cfg y vale para las partidas."""
+    base = os.path.join(folder(data), "dz")
+    os.makedirs(os.path.join(base, "config"), exist_ok=True)
+    cfg = os.path.join(base, "menu.cfg")
+    with open(cfg, "w", encoding="utf-8") as f:
+        for k, v in {"menu_driver": "rgui", "config_save_on_exit": "true", "video_fullscreen": "false", "quit_press_twice": "false",
+                     "pause_nonactive": "false", "menu_show_start_screen": "false"}.items():
+            f.write('%s = "%s"\n' % (k, v))
+    return [exe_path(data), "--menu", "--appendconfig", cfg]
+
+
 def _base(data, system, cfg, nick, players):
     cmd = [exe_path(data), "-L", core_path(data, system), "--appendconfig", cfg, "--nick", nick_arg(nick)]
     if system == "snes" and players > 2:                         # Super Multitap en el puerto 2: jugadores 2 a 5
