@@ -1,19 +1,19 @@
-"""Tema Dabrezz Play, tomado de la hoja de marca (assets/theme_dabrez_play.png): fondo violeta casi negro, morado electrico para la
+"""Tema Dabrezz Play, tomado de la hoja de marca (assets/theme_dabrez_play.png): fondo morado azulado oscuro, morado electrico para la
 seleccion y las acciones, amarillo para la accion principal (JUGAR / UNIRSE) y magenta como brillo. Titulos en Bungee."""
 import os
 import sys
 import tkinter as tk
 from tkinter import ttk
 
-BG = "#0b0722"            # ventana
-SIDEBAR = "#070419"       # barra lateral
-PANEL = "#140d36"         # paneles y tarjetas
-PANEL_2 = "#1f1450"       # tarjetas elevadas / hover
-FIELD = "#1d1348"         # campos de texto y buscador
-BORDER = "#3b2394"
-ACCENT = "#8a2cf6"        # boton principal
-ACCENT_D = "#6a14d0"
-NAV_SEL = "#7b24ee"       # elemento seleccionado del menu
+BG = "#0a0a24"            # ventana (el morado azulado de siempre)
+SIDEBAR = "#06071a"       # barra lateral
+PANEL = "#10103a"         # paneles y tarjetas
+PANEL_2 = "#1b1b4a"       # tarjetas elevadas / hover
+FIELD = "#1e1e48"         # campos de texto y buscador
+BORDER = "#2c2a6a"
+ACCENT = "#8b00fd"        # boton principal
+ACCENT_D = "#6a00c8"
+NAV_SEL = "#5001b0"       # elemento seleccionado del menu
 PINK = "#f038f8"          # brillo del icono
 YELLOW = "#ffc41a"        # accion principal (JUGAR / UNIRSE)
 YELLOW_D = "#e0a800"

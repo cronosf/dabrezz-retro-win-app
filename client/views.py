@@ -36,14 +36,18 @@ class Views:
     def login_shell(self):
         """Marco de la pantalla de acceso: imagen a la izquierda y panel derecho (se devuelve) donde va el formulario o una pagina."""
         f = self.swap()
-        right = tk.Frame(f, bg=th.SIDEBAR, width=470)
+        right = tk.Frame(f, bg=th.SIDEBAR, width=440)
         right.pack(side="right", fill="y")
         right.pack_propagate(False)
         left = tk.Frame(f, bg=th.BG)
         left.pack(side="left", fill="both", expand=True)
-        tk.Label(left, image=th.image("hero.png"), bg=th.BG).place(relx=.5, rely=.43, anchor="center")
-        tk.Label(left, text="LOS CLÁSICOS\nNUNCA PASAN DE MODA", font=(th.DISPLAY, 15), fg="#ffffff", bg=th.BG,
-                 justify="center").place(relx=.5, rely=.88, anchor="center")
+        show = tk.Frame(left, bg=th.BG)
+        show.place(relx=.5, rely=.5, anchor="center")
+        tk.Label(show, image=th.image("login_banner.png"), bg=th.BG, bd=0).pack()
+        tiles = tk.Frame(show, bg=th.BG)
+        tiles.pack(pady=(22, 0))
+        for img in ("tile_arcade.png", "tile_snes.png", "tile_md.png", "tile_ps1.png"):
+            tk.Label(tiles, image=th.image(img), bg=th.BG, bd=0).pack(side="left", padx=6)
         return right
 
     def show_login(self):
@@ -51,8 +55,8 @@ class Views:
         right = self.login_shell()
         box = tk.Frame(right, bg=th.SIDEBAR)
         box.place(relx=.5, rely=.5, anchor="center")
-        tk.Label(box, image=th.image("logo.png"), bg=th.SIDEBAR).pack(pady=(0, 4))
-        ttk.Label(box, text="Inicia sesión con tu cuenta", style="Side.TLabel", foreground=th.MUTED).pack(pady=(0, 20))
+        tk.Label(box, image=th.image("login_side.png"), bg=th.SIDEBAR, bd=0).pack()
+        ttk.Label(box, text="Inicia sesión con tu cuenta", style="Side.TLabel", foreground=th.MUTED).pack(pady=(6, 10))
         self.v_email = tk.StringVar(value=self.cfg["email"])
         self.v_pass = tk.StringVar()
         for lbl, var, show in (("Correo", self.v_email, ""), ("Contraseña", self.v_pass, "•")):
@@ -63,7 +67,7 @@ class Views:
                        activebackground=th.SIDEBAR, activeforeground=th.TEXT, bd=0, highlightthickness=0, cursor="hand2",
                        font=(th.BODY, 9)).pack(anchor="w", pady=(10, 0))
         self.lbl_status = tk.Label(box, text="", fg=th.ERR, bg=th.SIDEBAR, wraplength=330, justify="left", font=(th.BODY, 9))
-        self.lbl_status.pack(pady=10, anchor="w")
+        self.lbl_status.pack(pady=6, anchor="w")
         self.btn_login = ttk.Button(box, text="ENTRAR", style="Cta.TButton", command=self.auth)
         self.btn_login.pack(fill="x")
         ttk.Button(box, text="CREAR CUENTA", command=self.show_register_page).pack(fill="x", pady=(8, 0))
@@ -79,7 +83,7 @@ class Views:
             lnk.bind("<Button-1>", lambda e, c=command: c())
             lnk.bind("<Enter>", lambda e, w=lnk: w.config(fg=th.TEXT))
             lnk.bind("<Leave>", lambda e, w=lnk: w.config(fg=th.MUTED))
-        tk.Label(box, text=f"Versión {VERSION}", fg=th.MUTED, bg=th.SIDEBAR, font=(th.BODY, 9)).pack(pady=(18, 0))
+        tk.Label(box, text=f"Versión {VERSION}", fg=th.MUTED, bg=th.SIDEBAR, font=(th.BODY, 9)).pack(pady=(10, 0))
         self.bind("<Return>", lambda e: self.auth())
 
     # ---------- estructura: barra lateral + contenido ----------
