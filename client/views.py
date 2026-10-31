@@ -1,10 +1,14 @@
 """Interfaz de Dabrezz Retro (diseno de la hoja de marca): acceso, barra lateral y las vistas Inicio, Juegos, Favoritos
 y Multijugador. Es un mixin de App: usa self.cfg, self.net, self.channels, self.auto_channels, etc."""
+import os
 import re
+import threading
 import tkinter as tk
 import webbrowser
 from tkinter import ttk
 
+import client.covers as covers
+import client.romman as romman
 import client.theme as th
 from client.emotes import EMOTES, split_text
 from shared.protocol import CHANNEL_LABELS, DEFAULT_CHANNELS, VERSION
@@ -214,13 +218,14 @@ class Views:
         card = tk.Frame(parent, bg=th.PANEL, width=132, highlightthickness=1, highlightbackground=th.BORDER, cursor="hand2")
         art = tk.Canvas(card, width=130, height=62, bg=bottom, highlightthickness=0)
         art.pack()
-        art.create_rectangle(0, 0, 130, 31, fill=top, outline="")
-        art.create_text(65, 31, text=initials(ch), fill="#ffffff", font=(th.DISPLAY, 18))
+        art.create_rectangle(0, 0, 130, 31, fill=top, outline="", tags="fallback")
+        art.create_text(65, 31, text=initials(ch), fill="#ffffff", font=(th.DISPLAY, 18), tags="fallback")
         title = tk.Label(card, text=CHANNEL_LABELS.get(ch, ch), wraplength=118, justify="left", anchor="nw", fg="#ffffff", bg=th.PANEL,
                          font=(th.BODY, 8, "bold"), height=2)
         title.pack(fill="x", padx=6, pady=(6, 2))
         badge = tk.Label(card, text=" " + platform_of(ch) + " ", fg="#ffffff", bg=top, font=(th.BODY, 7, "bold"))
         badge.pack(anchor="w", padx=6, pady=(0, 8))
+        self._apply_cover(art, ch, "_s")
         for w in (card, art, title, badge):
             w.bind("<Button-1>", lambda e, c=ch: self.open_game(c))
         return card
@@ -322,11 +327,11 @@ class Views:
     def _make_card(self, parent, ch):
         top, bottom = PLATFORMS[platform_of(ch)]
         card = tk.Frame(parent, bg=th.PANEL, width=CARD_W, highlightthickness=1, highlightbackground=th.BORDER, cursor="hand2")
-        art = tk.Canvas(card, width=CARD_W - 2, height=92, bg=bottom, highlightthickness=0)
+        art = tk.Canvas(card, width=CARD_W - 2, height=covers.SIZES[""][1], bg=bottom, highlightthickness=0)
         art.pack()
-        art.create_rectangle(0, 0, CARD_W, 46, fill=top, outline="")
-        art.create_text(CARD_W // 2, 44, text=initials(ch), fill="#ffffff", font=(th.DISPLAY, 26))
-        art.create_text(8, 82, anchor="w", text=platform_of(ch).upper(), fill="#e8e0ff", font=(th.BODY, 8, "bold"))
+        art.create_rectangle(0, 0, CARD_W, 60, fill=top, outline="", tags="fallback")
+        art.create_text(CARD_W // 2, 58, text=initials(ch), fill="#ffffff", font=(th.DISPLAY, 26), tags="fallback")
+        art.create_text(8, 108, anchor="w", text=platform_of(ch).upper(), fill="#e8e0ff", font=(th.BODY, 8, "bold"), tags="fallback")
         title = tk.Label(card, text=CHANNEL_LABELS.get(ch, ch), wraplength=CARD_W - 20, justify="left", anchor="w", fg="#ffffff",
                          bg=th.PANEL, font=(th.BODY, 9, "bold"), height=2)
         title.pack(fill="x", padx=10, pady=(8, 0))
@@ -341,9 +346,10 @@ class Views:
         card.dl.bind("<Leave>", lambda e, w=card.dl: w.config(bg=th.ACCENT))
         for w in (card, art, title, meta):
             w.bind("<Button-1>", lambda e, c=ch: self.open_game(c))
-        card.meta, card.star = meta, star
+        card.meta, card.star, card.art = meta, star, art
         card.pack_propagate(True)
         self._update_card(card, ch)
+        self._apply_cover(art, ch, "")
         return card
 
     def _update_card(self, card, ch):
@@ -384,10 +390,70 @@ class Views:
         if self.view_name == "fav":
             self.layout_games()
 
+    # ---------- portadas (ver client/covers.py) ----------
+    def cover_dir(self):
+        return os.path.join(self.data, "covers")
+
+    def _apply_cover(self, art, ch, suffix):
+        """Pone la portada (si ya esta en cache) sobre la ilustracion de la tarjeta; si no, queda la ilustracion de plataforma."""
+        if (ch, suffix) not in self.cover_imgs:
+            path = covers.cover_path(self.cover_dir(), ch, suffix)
+            if not os.path.exists(path):
+                return
+            try:
+                self.cover_imgs[(ch, suffix)] = tk.PhotoImage(file=path)
+            except tk.TclError:
+                return
+        img = self.cover_imgs[(ch, suffix)]
+        art.delete("fallback")
+        art.delete("cover")
+        art.create_image(int(art.cget("width")) // 2, int(art.cget("height")) // 2, image=img, tags="cover")
+        art.tag_lower("cover")
+
+    def cover_kick(self):
+        """Busca en segundo plano las portadas que falten (una pasada a la vez; cada juego se intenta una vez por sesion)."""
+        if self.cover_busy or not self.me:
+            return
+        todo = [ch for ch in self.game_list() if ch not in self.cover_tried
+                and not all(os.path.exists(covers.cover_path(self.cover_dir(), ch, sfx)) for sfx in covers.SIZES)]
+        if not todo:
+            return
+        self.cover_busy = True
+        self.cover_tried.update(todo)
+        url = self.cfg.get("rom_manifest") or self.server_rom_manifest
+        titles = {ch: CHANNEL_LABELS.get(ch, ch) for ch in todo}
+        put = self.net.events.put
+
+        def work():
+            try:
+                games = romman.fetch_manifest(url)["games"] if url else {}
+            except (romman.RomError, OSError, ValueError):
+                games = {}
+            for ch, title in titles.items():
+                try:
+                    entry = games.get(ch)
+                    if covers.fetch_cover(self.cover_dir(), ch, title, entry.get("cover") if isinstance(entry, dict) else None):
+                        put({"t": "_cover", "ch": ch})
+                except (OSError, ValueError):
+                    continue
+            put({"t": "_coverdone"})
+        threading.Thread(target=work, daemon=True).start()
+
+    def on_cover(self, m):
+        ch = m["ch"]
+        for suffix in covers.SIZES:
+            self.cover_imgs.pop((ch, suffix), None)
+        card = self.cards.get(ch) if hasattr(self, "cards") else None
+        if card is not None:
+            self._apply_cover(card.art, ch, "")
+        if self.view_name == "home":
+            self._fill_home()
+
     def render_channels(self):
         """Refresca contadores y estado de todas las tarjetas (llega cada vez que alguien entra o sale)."""
         if not hasattr(self, "cards"):
             return
+        self.cover_kick()
         for ch in self.game_list():
             if ch not in self.cards:
                 self.cards[ch] = self._make_card(self.ginner, ch)

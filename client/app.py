@@ -157,6 +157,7 @@ class App(Views, LoginPages, LobbyPages, FriendsUI, HelpUI, UpdateUI, tk.Tk):
         self.bridge = None
         self.server_rom_manifest = ""
         self.auto_channels = set()
+        self.cover_imgs, self.cover_tried, self.cover_busy = {}, set(), False
         self.auto = None
         self.queued = False
         self.frame = None
@@ -672,6 +673,11 @@ class App(Views, LoginPages, LobbyPages, FriendsUI, HelpUI, UpdateUI, tk.Tk):
             self.show_download(m["text"], m["pct"])
         elif t == "_romresult":
             self.show_download_result(m["ok"], m["text"])
+        elif t == "_cover":
+            self.on_cover(m)
+        elif t == "_coverdone":
+            self.cover_busy = False
+            self.cover_kick()          # por si llegaron juegos nuevos mientras tanto
         elif t == "_romsdone":
             self.rom_busy = False
             self.render_channels()
