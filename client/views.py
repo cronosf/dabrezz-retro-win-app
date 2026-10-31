@@ -201,6 +201,9 @@ class Views:
             self.layout_games()
         elif view == "home":
             self._fill_home()
+            self.home_rooms_render(force=True)
+            if self.me and self.net.alive:
+                self.net.send(t="rooms")
         elif view == "settings":
             self._fill_settings()
         elif view == "profile":
@@ -247,11 +250,19 @@ class Views:
         canvas.bind("<Configure>", self._home_resized)
         canvas.bind("<Enter>", lambda e: canvas.bind_all("<MouseWheel>", lambda ev: canvas.yview_scroll(-1 * (ev.delta // 120), "units")))
         canvas.bind("<Leave>", lambda e: canvas.unbind_all("<MouseWheel>"))
+        self.home_inner, self._home_sig = inner, None
+        inner.columnconfigure(0, weight=1)
         banner = tk.Label(inner, image=th.image("banner_home.png"), bg=th.BG, cursor="hand2", bd=0)     # JUGAR ONLINE va dibujado en la imagen
-        banner.pack(anchor="w")
+        banner.grid(row=0, column=0, sticky="nw")
         banner.bind("<Button-1>", lambda e: self.show_view("games"))
+        # "Los clasicos nunca pasan de moda" (hoja de marca) al lado del banner: solo si la ventana es ancha
+        self.home_strip = tk.Frame(inner, bg=th.PANEL, height=271, highlightthickness=1, highlightbackground=th.BORDER)
+        self.home_strip.pack_propagate(False)
+        self.home_strip_img = tk.Label(self.home_strip, bg=th.PANEL, bd=0)
+        self.home_strip_img.place(relx=.5, rely=.5, anchor="center")
         self.home_body = tk.Frame(inner, bg=th.BG)
-        self.home_body.pack(fill="both", expand=True)
+        self.home_body.grid(row=1, column=0, sticky="nw")
+        self._build_home_rooms(inner)                  # panel Salas Publicas (a la derecha si cabe, si no debajo)
         self._home_cards = 0
 
     def _home_scrolled(self, lo, hi):
@@ -262,13 +273,39 @@ class Views:
         elif not self.home_sb.winfo_manager():
             self.home_sb.pack(side="right", fill="y", before=self.home_canvas)
 
+    def _home_metrics(self):
+        """(dos columnas, ancho de la columna derecha, ancho de la izquierda). Con ancho para el banner (720) y 400 px mas, la columna derecha lleva el
+        recorte de la hoja de marca y las salas; si no, las salas van debajo y el recorte no se muestra."""
+        avail = self.home_canvas.winfo_width()
+        two = avail >= 720 + 12 + 400 + 16
+        w1 = min(560, avail - 720 - 12 - 16) if two else 0
+        return two, w1, avail - (w1 + 12 if two else 0)
+
+    def _home_layout(self):
+        two, w1, _ = self._home_metrics()
+        if (two, w1) == self._home_sig:
+            return
+        self._home_sig = (two, w1)
+        inner = self.home_inner
+        if two:
+            inner.columnconfigure(1, minsize=w1 + 12)
+            self.home_strip.config(width=w1)
+            self.home_strip.grid(row=0, column=1, sticky="nw", padx=(12, 0))
+            self.home_strip_img.config(image=th.image("home_theme.png" if w1 >= 500 else "home_theme_s.png"))
+            self.hr_panel.grid(row=1, column=1, sticky="new", padx=(12, 0), pady=(16, 0))
+        else:
+            inner.columnconfigure(1, minsize=0)
+            self.home_strip.grid_forget()
+            self.hr_panel.grid(row=2, column=0, sticky="nw", pady=(16, 0))
+
     def _home_resized(self, e):
         self.home_canvas.itemconfigure(self._home_win, width=e.width)
+        self._home_layout()
         if self._home_card_count() != self._home_cards and self.view_name == "home":        # cambia el ancho: caben mas o menos fichas
             self.after_idle(self._fill_home)
 
     def _home_card_count(self):
-        return max(2, min(6, (self.home_canvas.winfo_width() + 10) // 142))
+        return max(2, min(6, (self._home_metrics()[2] + 10) // 142))
 
     def _mini_card(self, parent, ch):
         """Ficha compacta de Juegos Destacados: ilustracion de la plataforma, titulo e insignia."""

@@ -141,6 +141,10 @@ def main():
         app.handle({"t": "rooms", "rooms": [{"id": i, "channel": ch, "owner_name": "Dueño" + str(i), "count": 1, "max": 2, "game_max": 2, "ping": 60,
                                               "playing": False, "mine": False, "friend": False}
                                              for i, ch in enumerate(("sfiii3nr1", "kof98", "snes_contra3", "md_mk3u"), 1)]})
+        app.handle({"t": "rooms", "rooms": app.rooms_data + [
+            {"id": 11, "channel": "psxm_bust_a_groove_2", "owner_name": "Bailarin01", "count": 1, "max": 2, "game_max": 2, "ping": 150, "playing": False, "mine": False, "friend": False},
+            {"id": 12, "channel": "snes_sbomberman5g", "owner_name": "Bomber", "count": 5, "max": 5, "game_max": 5, "ping": 210, "playing": True, "mine": False, "friend": False}]})
+        app.show_view("home"); pump(); check("inicio: salas publicas")
         app.show_view("multi"); app.rm_show_tab("public"); check("multijugador: salas")
         app.rm_create(); check("crear sala"); close_dialogs()
         app.handle({"t": "room", "room": ROOM}); check("multijugador: mi sala")

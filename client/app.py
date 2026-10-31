@@ -27,6 +27,7 @@ from client.admin_ui import AdminUI  # noqa: E402
 from client.dm_ui import DmUI  # noqa: E402
 from client.retro_session import RetroSession  # noqa: E402
 from client.dance_ui import DanceUI  # noqa: E402
+from client.home_rooms import HomeRooms  # noqa: E402
 from client.rooms_ui import RoomsUI  # noqa: E402
 from client.friends_ui import FriendsUI  # noqa: E402
 from client.help_ui import HelpUI  # noqa: E402
@@ -163,7 +164,7 @@ def detect_emulator(data):
     return p if os.path.exists(p) else ""
 
 
-class App(Views, LoginPages, LobbyPages, FriendsUI, DmUI, RoomsUI, DanceUI, AdminUI, HelpUI, UpdateUI, tk.Tk):
+class App(Views, LoginPages, LobbyPages, FriendsUI, DmUI, RoomsUI, DanceUI, HomeRooms, AdminUI, HelpUI, UpdateUI, tk.Tk):
     auto_session = False
     kick_msg = ""           # motivo con el que el servidor expulso al jugador (se muestra al cerrarse la conexion)
     rom_busy = False

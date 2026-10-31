@@ -137,7 +137,7 @@ class RoomsUI:
         self.rm_show_tab(self.rm_tab)
 
     def _rm_tick(self):
-        if self.me and self.net.alive and self.view_name == "multi" and not self.room_panel_visible():
+        if self.me and self.net.alive and ((self.view_name == "multi" and not self.room_panel_visible()) or self.view_name in ("home", "dance")):
             self.net.send(t="rooms")
         self._rm_invite_tick()
         self.after(5000, self._rm_tick)
@@ -162,6 +162,7 @@ class RoomsUI:
         self.rooms_data = m.get("rooms") or []
         self._rm_render_list()
         self.dance_render_rooms()
+        self.home_rooms_render()
 
     def _rm_visible_rooms(self):
         rooms = [r for r in self.rooms_data if r["mine"] or not is_dance(r["channel"])]       # las salas de baile se ven en la Zona Baile
