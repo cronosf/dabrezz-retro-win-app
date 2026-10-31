@@ -43,6 +43,10 @@ def main():
             if not os.path.isfile(p):
                 sys.exit("Falta el nucleo " + p)
             z.write(p, "cores/" + c)
+        auto = os.path.join(ra_dir, "autoconfig")                  # perfiles de mandos (0,5 MB): con ellos un mando funciona sin configurarlo
+        for dp, _d, fs in sorted(os.walk(auto)):
+            for f in sorted(fs):
+                z.write(os.path.join(dp, f), "autoconfig/" + os.path.relpath(os.path.join(dp, f), auto).replace(os.sep, "/"))
         z.write(os.path.join(root, "vendor", "openbios.bin"), "bios/openbios.bin")      # OpenBIOS (la BIOS libre de PS1 que usa SwanStation)
         z.writestr("NOTICE-RETROARCH.txt", NOTICE)
     with open(os.path.join(root, "vendor", "RETROARCH-NOTICE.txt"), "w", encoding="utf-8") as f:

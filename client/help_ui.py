@@ -24,6 +24,9 @@ HELP = (
     ("b", "Multijugador: crea una sala de un juego (CREAR SALA) o únete a la de otro desde Salas Públicas, Mis Salas o Amigos. El creador invita a "
           "amigos o a jugadores del juego y inicia la partida. Las partidas de 2 jugadores usan el emulador de siempre; las de 3 a 5 "
           "(Super Bomberman 3, 4 y 5 con Super Multitap, Crash Team Racing con multitap) y las de Nintendo 64 usan RetroArch, que viene con el instalador."),
+    ("b", "Controles: el botón CONTROLES (en Multijugador y dentro de la sala) te deja elegir tus teclas y los botones de tu mando Xbox para SNES, PS1 y N64 "
+          "(RetroArch). Se guardan y se aplican solos al empezar cada partida; cada jugador usa los suyos. El que crea la sala es el jugador 1 y los demás ocupan "
+          "los siguientes puertos al conectarse."),
     ("b", "Zona Baile: los juegos de baile (Bust a Groove 1 y 2) se juegan aquí, con Mednafen. Elige el juego, pulsa BUSCAR PARTIDA (amistosa, 2 jugadores) "
           "o crea una sala con CREAR SALA; las salas abiertas aparecen en la lista con UNIRSE."),
     ("b", "Ranked: elige un juego en Juegos y pulsa BUSCAR PARTIDA (debajo de la lista de jugadores). El ranked solo se juega buscando partida, "

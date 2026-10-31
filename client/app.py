@@ -27,6 +27,7 @@ import client.secure as secure  # noqa: E402
 from client.admin_ui import AdminUI  # noqa: E402
 from client.dm_ui import DmUI  # noqa: E402
 from client.retro_session import RetroSession  # noqa: E402
+from client.controls_ui import ControlsUI  # noqa: E402
 from client.dance_ui import DanceUI  # noqa: E402
 from client.home_rooms import HomeRooms  # noqa: E402
 from client.rooms_ui import RoomsUI  # noqa: E402
@@ -166,7 +167,7 @@ def detect_emulator(data):
     return p if os.path.exists(p) else ""
 
 
-class App(Views, LoginPages, LobbyPages, FriendsUI, DmUI, RoomsUI, DanceUI, HomeRooms, AdminUI, HelpUI, UpdateUI, tk.Tk):
+class App(Views, LoginPages, LobbyPages, FriendsUI, DmUI, RoomsUI, DanceUI, HomeRooms, ControlsUI, AdminUI, HelpUI, UpdateUI, tk.Tk):
     auto_session = False
     kick_msg = ""           # motivo con el que el servidor expulso al jugador (se muestra al cerrarse la conexion)
     rom_busy = False
@@ -423,7 +424,7 @@ class App(Views, LoginPages, LobbyPages, FriendsUI, DmUI, RoomsUI, DanceUI, Home
         if getattr(self, "_retro", None) is None:
             put = self.net.events.put
             self._retro = RetroSession(self.data, self.net.send, self.cfg["server_host"], (self.me or {}).get("user_name", "Jugador"), self.rom_file,
-                                       title_for=self.window_title,
+                                       title_for=self.window_title, controls=self.retro_controls,
                                        bios_src=retro.bios_path(self.data),
                                        log=lambda text: put({"t": "_log", "text": text}), on_end=lambda: put({"t": "_raend"}))
         self._retro.nick = (self.me or {}).get("user_name", "Jugador")
@@ -514,7 +515,7 @@ class App(Views, LoginPages, LobbyPages, FriendsUI, DmUI, RoomsUI, DanceUI, Home
             if not rom:
                 return messagebox.showinfo(APP_NAME, "Falta el juego: pulsa DESCARGAR ROM en la tarjeta del juego.")
             rs = retro.system_of(sel[0])
-            cfg = retro.prepare(self.data, rs, (self.me or {}).get("user_name", "Jugador"))
+            cfg = retro.prepare(self.data, rs, (self.me or {}).get("user_name", "Jugador"), controls=self.retro_controls())
             return self.spawn([retro.exe_path(self.data), "-L", retro.core_path(self.data, rs), "--appendconfig", cfg, rom],
                               retro.folder(self.data), sel[0])      # solo: aqui se configuran los controles (F1 > Entrada)
         exe = self.cfg["emulator"]

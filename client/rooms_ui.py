@@ -35,6 +35,7 @@ class RoomsUI:
         tk.Label(head, image=th.image("ico_multi.png"), bg=th.BG).pack(side="left")
         tk.Label(head, text="Multijugador Online", font=(th.DISPLAY, 16), fg="#ffffff", bg=th.BG).pack(side="left", padx=10)
         ttk.Button(head, text="CREAR SALA  ＋", style="Accent.TButton", command=self.rm_create).pack(side="right")
+        ttk.Button(head, text=" CONTROLES", image=th.image("ico_pad.png"), compound="left", command=self.controls_dialog).pack(side="right", padx=(0, 8))
         tabs = tk.Frame(v, bg=th.BG)
         tabs.pack(fill="x", pady=(12, 8))
         self.rm_tab_btns = {}
@@ -82,8 +83,9 @@ class RoomsUI:
         top.grid(row=0, column=0, columnspan=2, sticky="ew", pady=(0, 10))
         self.rp_title = tk.Label(top, text="", font=(th.DISPLAY, 14), fg="#ffffff", bg=th.PANEL)
         self.rp_title.pack(side="left")
-        ttk.Button(top, text="SALIR DE LA SALA", command=lambda: self.net.send(t="room_leave")).pack(side="right")
-        self.btn_rp_start = ttk.Button(top, text="INICIAR PARTIDA", style="Cta.TButton", command=lambda: self.net.send(t="room_start"))
+        ttk.Button(top, text="SALIR", command=lambda: self.net.send(t="room_leave")).pack(side="right")
+        ttk.Button(top, text=" CONTROLES", image=th.image("ico_pad.png"), compound="left", command=self.controls_dialog).pack(side="right", padx=(0, 8))
+        self.btn_rp_start = ttk.Button(top, text="INICIAR", style="Cta.TButton", command=lambda: self.net.send(t="room_start"))
         self.btn_rp_start.pack(side="right", padx=8)
         self.rp_note = tk.Label(p, text="", fg=th.YELLOW, bg=th.BG, font=(th.BODY, 9), anchor="w", justify="left", wraplength=600)
         self.rp_note.grid(row=2, column=0, columnspan=2, sticky="ew", pady=(8, 0))
@@ -348,7 +350,7 @@ class RoomsUI:
         self.rp_members.set_rows(rows)
         can_start = owner and len(r["members"]) >= 2 and not r["playing"] and len(r["members"]) <= r["max"]
         self.btn_rp_start.config(state="normal" if can_start else "disabled",
-                                 text="EN PARTIDA…" if r["playing"] else "INICIAR PARTIDA")
+                                 text="EN PARTIDA…" if r["playing"] else "INICIAR")
         self.btn_rp_kick.config(state="normal" if owner else "disabled")
         self.btn_rp_invite.config(state="normal" if owner and len(r["members"]) < r["max"] else "disabled")
         missing = self.rm_needs_retro(r) and not retro.installed(self.data)

@@ -18,12 +18,13 @@ import client.winbrand as winbrand
 
 
 class RetroSession:
-    def __init__(self, data, send, server_host, nick, rom_for, bios_src=None, log=print, extra_cfg=None, on_end=None, extra_args=(), title_for=None):
+    def __init__(self, data, send, server_host, nick, rom_for, bios_src=None, log=print, extra_cfg=None, on_end=None, extra_args=(), title_for=None, controls=None):
         """send(**msg): envia al servidor. rom_for(channel) -> ruta del juego o None. extra_cfg: ruta de un .cfg extra (solo pruebas)."""
         self.data, self.send, self.server_host, self.nick = data, send, server_host, nick
         self.rom_for, self.bios_src, self.log, self.extra_cfg, self.on_end = rom_for, bios_src, log, extra_cfg, on_end
         self.extra_args = list(extra_args)         # solo pruebas (p. ej. --log-file)
         self.title_for = title_for                  # canal -> titulo de la ventana ("Dabrezz Play · juego")
+        self.controls = controls                    # () -> lineas de configuracion con los controles personales del jugador (client/controls.py)
         self.sess = None            # datos de ra_session
         self.proc = None
         self.bridge = None
@@ -78,7 +79,8 @@ class RetroSession:
     # ---------- RetroArch ----------
     def _launch(self, builder, **kw):
         s = self.sess
-        cfg = retro.prepare(self.data, s["system"], self.nick, delay=2, ranked=False, players=int(s["players"]), bios_src=self.bios_src)
+        cfg = retro.prepare(self.data, s["system"], self.nick, delay=2, ranked=False, players=int(s["players"]), bios_src=self.bios_src,
+                            controls=self.controls() if self.controls else None)
         cmd = builder(self.data, s["system"], cfg, self.nick, int(s["players"]), s["rom"], **kw)
         if self.extra_cfg:
             cmd[cmd.index("--appendconfig") + 1] = cfg + "|" + self.extra_cfg

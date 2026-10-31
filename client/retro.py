@@ -50,9 +50,10 @@ def nick_arg(name):
     return re.sub(r"[^A-Za-z0-9_]", "", str(name))[:20] or "Jugador"
 
 
-def prepare(data, system, nick, delay=2, ranked=False, players=2, bios_src=None):
+def prepare(data, system, nick, delay=2, ranked=False, players=2, bios_src=None, controls=None):
     """Escribe la configuracion de esta partida en <retroarch>\\dz y devuelve la ruta del .cfg (se pasa con --appendconfig).
-    Todos los jugadores de una sala usan exactamente las mismas opciones de juego (RetroArch no las sincroniza)."""
+    Todos los jugadores de una sala usan exactamente las mismas opciones de juego (RetroArch no las sincroniza). `controls` son las lineas de los
+    controles personales de este jugador (client/controls.py): solo afectan a su PC (jugador 1 local), no a las opciones de juego."""
     base = os.path.join(folder(data), "dz")
     for sub in ("saves", "states", "system", "config"):
         os.makedirs(os.path.join(base, sub), exist_ok=True)
@@ -75,6 +76,7 @@ def prepare(data, system, nick, delay=2, ranked=False, players=2, bios_src=None)
         "savefile_directory": os.path.join(base, "saves"), "savestate_directory": os.path.join(base, "states"),
         "system_directory": os.path.join(base, "system"), "core_options_path": opts,
     }
+    lines.update(controls or {})
     with open(cfg, "w", encoding="utf-8") as f:
         for k, v in lines.items():
             f.write('%s = "%s"\n' % (k, v))

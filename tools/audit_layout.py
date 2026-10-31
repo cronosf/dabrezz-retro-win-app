@@ -158,6 +158,7 @@ def main():
         app.dance_log("Hola desde la Zona Baile", "Jugador1", "customer", "MX")
         app.dance_config_help(); pump(); check("zona baile: configurar control"); close_dialogs()
         app.dance_create(); check("crear sala de baile"); close_dialogs()
+        app.controls_dialog(); pump(); check("controles"); app._ctl_capture("kb", "up"); check("controles: capturando"); app._ctl_close(); close_dialogs()
         # administracion
         app.show_view("admin")
         app.handle({"t": "admin_players", "online": 2, "players": [
