@@ -237,7 +237,7 @@ class RoomsUI:
         win.title("Crear sala")
         th.set_icon(win)
         win.transient(self)
-        win.geometry("380x460")
+        win.geometry("380x520")
         pad = tk.Frame(win, bg=th.BG, padx=22, pady=18)
         pad.pack(fill="both", expand=True)
         tk.Label(pad, text="Crear sala", font=(th.DISPLAY, 14), fg="#ffffff", bg=th.BG).pack(anchor="w")
@@ -245,7 +245,12 @@ class RoomsUI:
                  font=(th.BODY, 9), wraplength=330, justify="left").pack(anchor="w", pady=(4, 8))
         q = tk.StringVar()
         ttk.Entry(pad, textvariable=q).pack(fill="x", pady=(0, 8))
-        lst = colorlist.ColorList(pad, (("nick", 200, "JUEGO"), ("plat", 100, "")), height=10)
+        # el boton y el aviso se empaquetan primero (abajo): en una ventana baja la lista se encoge y el boton siempre se ve
+        row = tk.Frame(pad, bg=th.BG)
+        row.pack(side="bottom", fill="x", pady=(10, 0))
+        lbl = tk.Label(pad, text="", fg=th.ERR, bg=th.BG, font=(th.BODY, 9), anchor="w")
+        lbl.pack(side="bottom", fill="x")
+        lst = colorlist.ColorList(pad, (("nick", 200, "JUEGO"), ("plat", 100, "")), height=8)
         lst.pack(fill="both", expand=True)
         games = sorted(self.game_list(), key=lambda g: CHANNEL_LABELS.get(g, g).lower())
 
@@ -259,14 +264,13 @@ class RoomsUI:
         def go(_=None):
             sel = lst.selection()
             if not sel:
-                return
+                return lbl.config(text="Selecciona un juego de la lista.")
             win.destroy()
             if self.rm_need_game(sel[0], "crear la sala"):
                 self.net.send(t="room_create", channel=sel[0])
-        row = tk.Frame(pad, bg=th.BG)
-        row.pack(fill="x", pady=(10, 0))
         ttk.Button(row, text="CREAR", style="Cta.TButton", command=go).pack(side="left", fill="x", expand=True)
         ttk.Button(row, text="CANCELAR", command=win.destroy).pack(side="left", padx=(8, 0))
+        lst.canvas.bind("<Double-Button-1>", go)             # doble clic sobre un juego: crea la sala
         win.bind("<Return>", go)
         win.update_idletasks()
         win.geometry(f"+{self.winfo_rootx() + (self.winfo_width() - win.winfo_width()) // 2}+{self.winfo_rooty() + 60}")
