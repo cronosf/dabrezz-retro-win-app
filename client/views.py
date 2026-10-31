@@ -198,35 +198,53 @@ class Views:
     # ---------- inicio ----------
     def _build_home(self):
         v = self.views["home"]
-        hero = tk.Frame(v, bg=th.BG, highlightthickness=1, highlightbackground=th.BORDER)
-        hero.pack(fill="x")
-        txt = tk.Frame(hero, bg=th.BG)
-        txt.pack(side="left", padx=34, pady=24, anchor="w")
-        tk.Label(txt, text="JUEGA TUS\nCLÁSICOS FAVORITOS", font=(th.DISPLAY, 22), fg="#ffffff", bg=th.BG, justify="left").pack(anchor="w")
-        tk.Label(txt, text="Arcade, Mega Drive y NES con rollback.\nCompite con resultados automáticos y ranking.",
-                 fg=th.MUTED, bg=th.BG, justify="left", font=(th.BODY, 10)).pack(anchor="w", pady=(10, 18))
-        ttk.Button(txt, text="🎮  Explorar Juegos", style="Accent.TButton", command=lambda: self.show_view("games")).pack(anchor="w")
-        tk.Label(hero, image=th.image("hero_small.png"), bg=th.BG).pack(side="right")
+        banner = tk.Label(v, image=th.image("banner_home.png"), bg=th.BG, cursor="hand2", bd=0)     # JUGAR ONLINE va dibujado en la imagen
+        banner.pack(anchor="w")
+        banner.bind("<Button-1>", lambda e: self.show_view("games"))
         self.home_body = tk.Frame(v, bg=th.BG)
         self.home_body.pack(fill="both", expand=True)
+
+    def _mini_card(self, parent, ch):
+        """Ficha compacta de Juegos Destacados: ilustracion de la plataforma, titulo e insignia."""
+        top, bottom = PLATFORMS[platform_of(ch)]
+        card = tk.Frame(parent, bg=th.PANEL, width=132, highlightthickness=1, highlightbackground=th.BORDER, cursor="hand2")
+        art = tk.Canvas(card, width=130, height=62, bg=bottom, highlightthickness=0)
+        art.pack()
+        art.create_rectangle(0, 0, 130, 31, fill=top, outline="")
+        art.create_text(65, 31, text=initials(ch), fill="#ffffff", font=(th.DISPLAY, 18))
+        title = tk.Label(card, text=CHANNEL_LABELS.get(ch, ch), wraplength=118, justify="left", anchor="nw", fg="#ffffff", bg=th.PANEL,
+                         font=(th.BODY, 8, "bold"), height=2)
+        title.pack(fill="x", padx=6, pady=(6, 2))
+        badge = tk.Label(card, text=" " + platform_of(ch) + " ", fg="#ffffff", bg=top, font=(th.BODY, 7, "bold"))
+        badge.pack(anchor="w", padx=6, pady=(0, 8))
+        for w in (card, art, title, badge):
+            w.bind("<Button-1>", lambda e, c=ch: self.open_game(c))
+        return card
 
     def _fill_home(self):
         for w in self.home_body.winfo_children():
             w.destroy()
-        tk.Label(self.home_body, text="Juegos Destacados", font=(th.BODY, 13, "bold"), fg="#ffffff", bg=th.BG).pack(anchor="w", pady=(18, 8))
+        head = tk.Frame(self.home_body, bg=th.BG)
+        head.pack(fill="x", pady=(16, 8))
+        tk.Label(head, text="🔥  Juegos Destacados", font=(th.BODY, 12, "bold"), fg="#ffffff", bg=th.BG).pack(side="left")
+        more = tk.Label(head, text="Ver todos →", fg=th.LINK, bg=th.BG, cursor="hand2", font=(th.BODY, 10, "bold"))
+        more.pack(side="right")
+        more.bind("<Button-1>", lambda e: (self.set_filter("Todos"), self.show_view("games")))
         row = tk.Frame(self.home_body, bg=th.BG)
         row.pack(anchor="w")
-        feat = [c for c in self.game_list() if c in self.auto_channels][:4] or self.game_list()[:4]
+        feat = ([c for c in self.game_list() if c in self.auto_channels] + [c for c in self.game_list() if c not in self.auto_channels])[:6]
+        if not feat:
+            tk.Label(row, text="Aún no hay juegos disponibles en el servidor.", fg=th.MUTED, bg=th.BG).pack(anchor="w")
         for ch in feat:
-            self._make_card(row, ch).pack(side="left", padx=(0, 14))
-        tk.Label(self.home_body, text="Categorías", font=(th.BODY, 13, "bold"), fg="#ffffff", bg=th.BG).pack(anchor="w", pady=(20, 8))
+            self._mini_card(row, ch).pack(side="left", padx=(0, 10))
+        tk.Label(self.home_body, text="🎮  Consolas", font=(th.BODY, 12, "bold"), fg="#ffffff", bg=th.BG).pack(anchor="w", pady=(16, 8))
         cats = tk.Frame(self.home_body, bg=th.BG)
         cats.pack(anchor="w")
-        for name, icon in (("Arcade", "🕹"), ("Mega Drive", "🎮"), ("NES", "👾"), ("SNES (beta)", "🕹"), ("PS1 (beta)", "💿"), ("⚡ Ranked", "🏆")):
-            t = tk.Label(cats, text=f"{icon}\n{name}", width=14, pady=12, fg=th.TEXT, bg=th.PANEL, cursor="hand2",
-                         font=(th.BODY, 10, "bold"), highlightthickness=1, highlightbackground=th.BORDER)
-            t.pack(side="left", padx=(0, 12))
-            t.bind("<Button-1>", lambda e, n=name: (self.set_filter(n), self.show_view("games")))
+        for img, flt in (("tile_all.png", "Todos"), ("tile_arcade.png", "Arcade"), ("tile_snes.png", "SNES (beta)"),
+                         ("tile_md.png", "Mega Drive"), ("tile_ps1.png", "PS1 (beta)")):
+            t = tk.Label(cats, image=th.image(img), bg=th.BG, cursor="hand2", bd=0)
+            t.pack(side="left", padx=(0, 10))
+            t.bind("<Button-1>", lambda e, n=flt: (self.set_filter(n), self.show_view("games")))
 
     # ---------- juegos / favoritos ----------
     def game_list(self):
