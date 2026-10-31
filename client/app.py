@@ -15,6 +15,7 @@ import re
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 import client.attest as attest  # noqa: E402
 import client.retro as retro  # noqa: E402
+import client.winbrand as winbrand  # noqa: E402
 import client.romman as romman  # noqa: E402
 import client.theme as th  # noqa: E402
 from client.bridge import OverlayBridge  # noqa: E402
@@ -350,6 +351,16 @@ class App(Views, LoginPages, LobbyPages, FriendsUI, DmUI, RoomsUI, AdminUI, Help
             return ps1.exe_path(self.data)
         return self.cfg["emulator"]
 
+    def spawn(self, cmd, cwd, channel):
+        """Lanza un emulador y deja su ventana titulada "Dabrezz Play · <juego>"."""
+        proc = subprocess.Popen(cmd, cwd=cwd)
+        winbrand.watch(proc, self.window_title(channel))
+        return proc
+
+    @staticmethod
+    def window_title(channel):
+        return f"{APP_NAME} · {CHANNEL_LABELS.get(channel, channel)}"
+
     def rom_file(self, channel):
         """Ruta del juego descargado para RetroArch (SNES: zip de Snes9x; PS1: imagen de disco; N64: zip) o None."""
         system = self.system_of(channel)
@@ -400,6 +411,7 @@ class App(Views, LoginPages, LobbyPages, FriendsUI, DmUI, RoomsUI, AdminUI, Help
         if getattr(self, "_retro", None) is None:
             put = self.net.events.put
             self._retro = RetroSession(self.data, self.net.send, self.cfg["server_host"], (self.me or {}).get("user_name", "Jugador"), self.rom_file,
+                                       title_for=self.window_title,
                                        bios_src=os.path.join(ps1.bios_dir(self.data), ps1.BIOS_FILE),
                                        log=lambda text: put({"t": "_log", "text": text}), on_end=lambda: put({"t": "_raend"}))
         self._retro.nick = (self.me or {}).get("user_name", "Jugador")
@@ -465,7 +477,7 @@ class App(Views, LoginPages, LobbyPages, FriendsUI, DmUI, RoomsUI, AdminUI, Help
             if not self.rom_exists(sel[0]):
                 return messagebox.showinfo(APP_NAME, "Falta la ROM: pulsa DESCARGAR ROM en la tarjeta del juego.")
             # Snes9x busca <emulador>\ROMs\<juego>.zip: se le pasa solo el nombre (con ruta o con .zip da "Invalid Zip archive")
-            return subprocess.Popen([exe, sel[0]], cwd=os.path.dirname(exe))      # offline: aqui se configuran los controles (menu Input)
+            return self.spawn([exe, sel[0]], os.path.dirname(exe), sel[0])      # offline: aqui se configuran los controles (menu Input)
         if sel and self.system_of(sel[0]) == "duckstation":
             exe = self.emulator_for(sel[0])
             if not os.path.exists(exe):
@@ -478,7 +490,7 @@ class App(Views, LoginPages, LobbyPages, FriendsUI, DmUI, RoomsUI, AdminUI, Help
                 return self.need_bios()
             ps1.prepare(self.data, self.roms_dest("duckstation"))
             # solo: aqui se configuran los controles (Ajustes > Controladores del propio emulador); el netplay usa el mando 1
-            return subprocess.Popen([exe, image], cwd=os.path.dirname(exe))
+            return self.spawn([exe, image], os.path.dirname(exe), sel[0])
         if sel and self.system_of(sel[0]) == "n64":              # N64: solo RetroArch (se descarga la primera vez)
             if not retro.installed(self.data):
                 self.ensure_retro()
@@ -487,13 +499,13 @@ class App(Views, LoginPages, LobbyPages, FriendsUI, DmUI, RoomsUI, AdminUI, Help
             if not rom:
                 return messagebox.showinfo(APP_NAME, "Falta la ROM: pulsa DESCARGAR ROM en la tarjeta del juego.")
             cfg = retro.prepare(self.data, "n64", (self.me or {}).get("user_name", "Jugador"))
-            return subprocess.Popen([retro.exe_path(self.data), "-L", retro.core_path(self.data, "n64"), "--appendconfig", cfg, rom],
-                                    cwd=retro.folder(self.data))      # offline: aqui se configuran los controles (F1 > Entrada)
+            return self.spawn([retro.exe_path(self.data), "-L", retro.core_path(self.data, "n64"), "--appendconfig", cfg, rom],
+                              retro.folder(self.data), sel[0])      # offline: aqui se configuran los controles (F1 > Entrada)
         exe = self.cfg["emulator"]
         if not sel or not exe or not os.path.exists(exe):
             return messagebox.showinfo(APP_NAME, "Elige un juego y configura el emulador en AJUSTES.")
         prepare_emulator_config(exe, self.cfg["roms_dir"] or os.path.join(self.data, "roms"))
-        subprocess.Popen([exe, sel[0]], cwd=os.path.dirname(exe))   # offline: aqui se configuran los controles
+        self.spawn([exe, sel[0]], os.path.dirname(exe), sel[0])   # offline: aqui se configuran los controles
 
     # ---------- ajustes ----------
     def modal(self, title):
@@ -597,7 +609,7 @@ class App(Views, LoginPages, LobbyPages, FriendsUI, DmUI, RoomsUI, AdminUI, Help
             self.close_bridge()
             self.bridge = OverlayBridge(os.path.dirname(exe), m["first_to"],
                                         lambda ev: self.net.events.put({"t": "_emu", "ev": ev}))
-        self.emu = subprocess.Popen(cmd, cwd=os.path.dirname(exe))
+        self.emu = self.spawn(cmd, os.path.dirname(exe), m["channel"])
         self.log("Emulador iniciado.", "sys")
 
     def duck_command(self, m, host, port, player, delay, local):

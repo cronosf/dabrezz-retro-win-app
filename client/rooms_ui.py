@@ -348,18 +348,8 @@ class RoomsUI:
                                  text="EN PARTIDA…" if r["playing"] else "INICIAR PARTIDA")
         self.btn_rp_kick.config(state="normal" if owner else "disabled")
         self.btn_rp_invite.config(state="normal" if owner and len(r["members"]) < r["max"] else "disabled")
-        notes = []
-        if r["game_max"] > r["max"]:
-            notes.append(f"Este juego admite hasta {r['game_max']} jugadores, pero el netplay de {EMU_NAMES[system_of(ch)]} por ahora solo sincroniza "
-                         f"{r['netplay_max']}: la sala es de {r['max']}.")
-        if self.rm_needs_retro(r):
-            notes.append("Con 3 o más jugadores se usa RetroArch" + ("" if retro.installed(self.data) else " (no está instalado: vuelve a ejecutar el instalador)")
-                         + ". Los controles se cambian en su menú (F1).")
-        if not owner:
-            notes.append("Solo el creador de la sala puede iniciar la partida e invitar.")
-        elif len(r["members"]) < 2:
-            notes.append("Invita a un amigo o espera a que alguien se una desde la lista de salas.")
-        self.rp_note.config(text="  ".join(notes))
+        missing = self.rm_needs_retro(r) and not retro.installed(self.data)
+        self.rp_note.config(text="Falta RetroArch: vuelve a ejecutar el instalador (revisa que tu antivirus no lo haya borrado)." if missing else "")
         self.rm_cand_tab_set(self.rm_cand_tab)
 
     # candidatos a invitar

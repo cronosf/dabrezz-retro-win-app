@@ -14,14 +14,16 @@ import threading
 import time
 
 import client.retro as retro
+import client.winbrand as winbrand
 
 
 class RetroSession:
-    def __init__(self, data, send, server_host, nick, rom_for, bios_src=None, log=print, extra_cfg=None, on_end=None, extra_args=()):
+    def __init__(self, data, send, server_host, nick, rom_for, bios_src=None, log=print, extra_cfg=None, on_end=None, extra_args=(), title_for=None):
         """send(**msg): envia al servidor. rom_for(channel) -> ruta del juego o None. extra_cfg: ruta de un .cfg extra (solo pruebas)."""
         self.data, self.send, self.server_host, self.nick = data, send, server_host, nick
         self.rom_for, self.bios_src, self.log, self.extra_cfg, self.on_end = rom_for, bios_src, log, extra_cfg, on_end
         self.extra_args = list(extra_args)         # solo pruebas (p. ej. --log-file)
+        self.title_for = title_for                  # canal -> titulo de la ventana ("Dabrezz Play · juego")
         self.sess = None            # datos de ra_session
         self.proc = None
         self.bridge = None
@@ -81,6 +83,8 @@ class RetroSession:
         if self.extra_cfg:
             cmd[cmd.index("--appendconfig") + 1] = cfg + "|" + self.extra_cfg
         self.proc = subprocess.Popen(cmd + self.extra_args, cwd=retro.folder(self.data), creationflags=0x08000000 if self.extra_cfg else 0)
+        if self.title_for:
+            winbrand.watch(self.proc, self.title_for(s["channel"]))
         threading.Thread(target=self._watch, args=(self.proc,), daemon=True).start()
 
     def _watch(self, proc):
