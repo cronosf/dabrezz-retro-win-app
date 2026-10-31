@@ -42,12 +42,14 @@ HELP = (
           "silenciamiento, restablecimiento del nombre, anulación de resultados o bloqueo de la cuenta."),
     ("p", "5. Datos. El servidor guarda tu correo, tu nombre de usuario, tu ranking, el historial de "
           "partidas y la dirección IP necesaria para conectar y detectar abusos. Tu nombre real y correo no se muestran a otros "
-          "jugadores. Tu contraseña se guarda cifrada de forma irreversible (scrypt) y viaja siempre por una conexión cifrada."),
+          "jugadores. Tu contraseña se guarda cifrada de forma irreversible (scrypt) y viaja siempre por una conexión cifrada. Del país "
+          "que indica tu dirección IP al conectarte solo se guarda su código, para mostrar tu bandera junto a tu nombre; la IP en sí no se guarda."),
     ("p", "6. Conexión entre jugadores. Para jugar en línea tu equipo se conecta con el del rival (o a través del servidor), por lo que "
           "este puede conocer tu dirección IP durante la partida."),
     ("p", f"7. Responsabilidad. {AUTHOR} no se hace responsable de daños, pérdida de datos o problemas derivados del uso de la app, "
           "de los emuladores o de partidas con terceros."),
     ("p", "8. Cambios. Estos términos pueden actualizarse con nuevas versiones de la app. Usarla implica aceptarlos."),
+    ("p", "9. Créditos. Banderas: flag-icons (licencia MIT). Países por IP: datos «IP to Country Lite» de DB-IP.com (licencia CC BY 4.0)."),
     ("h", "Contacto y soporte"),
     ("p", f"Desarrollada por {AUTHOR}. Para dudas, errores, sugerencias o reportes de abuso escribe a:"),
 )

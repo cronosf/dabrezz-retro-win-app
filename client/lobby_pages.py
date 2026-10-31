@@ -22,12 +22,18 @@ class LobbyPages:
         return head
 
     # ---------- Ranking / Historial / En vivo ----------
-    def table(self, title, cols, rows):
+    def table(self, title, cols, rows, flags=None, roles=None):
+        """Tabla simple. Con `flags` (codigos de pais, uno por fila) la primera columna muestra la bandera; `roles` colorea el nick de admins y developers."""
         frame = self._clear("table")
         self.page_head(frame, title, back="multi")
         box = tk.Frame(frame, bg=th.PANEL)
         box.pack(fill="both", expand=True)
-        tv = ttk.Treeview(box, columns=[c[0] for c in cols], show="headings")
+        tv = ttk.Treeview(box, columns=[c[0] for c in cols], show="tree headings" if flags is not None else "headings")
+        if flags is not None:
+            tv.heading("#0", text="")
+            tv.column("#0", width=44, stretch=False, anchor="center")
+        for role, color in th.ROLE_COLOR.items():
+            tv.tag_configure(role, foreground=color)
         for key, width, text in cols:
             tv.heading(key, text=text)
             tv.column(key, width=width, anchor="center", stretch=True)
@@ -35,8 +41,10 @@ class LobbyPages:
         tv.configure(yscrollcommand=sb.set)
         sb.pack(side="right", fill="y")
         tv.pack(side="left", fill="both", expand=True)
-        for r in rows:
-            tv.insert("", "end", values=r)
+        for i, r in enumerate(rows):
+            flag = th.flag(flags[i]) if flags is not None else None
+            role = roles[i] if roles is not None and roles[i] in th.ROLE_COLOR else ""
+            tv.insert("", "end", values=r, tags=(role,) if role else (), **({"image": flag} if flag else {}))
         if not rows:
             tk.Label(box, text="Todavía no hay datos.", fg=th.MUTED, bg=th.PANEL, font=(th.BODY, 10)).place(relx=.5, rely=.4, anchor="center")
         self.show_view("table")
@@ -64,7 +72,7 @@ class LobbyPages:
         tk.Label(names, text=me.get("user_name") or "—", font=(th.DISPLAY, 20), fg="#ffffff", bg=th.PANEL).pack(anchor="w")
         tk.Label(names, text="Nombre de usuario (el único que ven los demás jugadores)", fg=th.MUTED, bg=th.PANEL,
                  font=(th.BODY, 9)).pack(anchor="w")
-        rows = [("Correo", self.cfg.get("email") or "—"), ("Cuenta", "Dabrezz Play" + (" · administrador" if me.get("role") == "admin" else "")),
+        rows = [("Correo", self.cfg.get("email") or "—"), ("Cuenta", "Dabrezz Play · " + th.ROLE_LABEL.get(me.get("role"), "Player")),
                 ("Acceso", f"Hasta el {me['expires']}" if me.get("expires") else "Sin límite")]
         if self.channel:
             rows.append(("Ranking", f"ELO {me.get('elo', 1500)} · {me.get('wins', 0)}G {me.get('losses', 0)}P en {self.channel}"))
@@ -77,7 +85,7 @@ class LobbyPages:
         btns.pack(fill="x", pady=(24, 0))
         ttk.Button(btns, text="CAMBIAR CONTRASEÑA", style="Accent.TButton", command=self.ask_password).pack(side="left")
         ttk.Button(btns, text="CERRAR SESIÓN", command=self.logout).pack(side="left", padx=8)
-        if me.get("role") == "admin":
+        if me.get("role") in th.STAFF:
             ttk.Button(btns, text="PANEL DE ADMINISTRACIÓN", style="Cta.TButton", command=lambda: self.show_view("admin")).pack(side="left", padx=8)
 
     # ---------- cambiar contraseña ----------

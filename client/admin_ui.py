@@ -44,14 +44,16 @@ class AdminUI:
 
     # ---------- pagina ----------
     def _fill_admin(self):
-        if not (self.me or {}).get("role") == "admin":
+        if (self.me or {}).get("role") not in th.STAFF:
             return self.show_view("profile")
+        dev = self.me["role"] == "developer"                 # los ajustes del servidor y los roles son solo del Developer
         frame = self._clear("admin")
         self.page_head(frame, "Administración", back="profile")
         bar = tk.Frame(frame, bg=th.BG)
         bar.pack(fill="x", pady=(0, 10))
         self.adm_tab_btns, self.adm_pages = {}, {}
-        for key, text in TABS:
+        tabs = [t for t in TABS if dev or t[0] != "settings"]
+        for key, text in tabs:
             b = ttk.Button(bar, text=text, style="Chip.TButton", command=lambda k=key: self.adm_show(k))
             b.pack(side="left", padx=(0, 6))
             self.adm_tab_btns[key] = b
@@ -59,12 +61,13 @@ class AdminUI:
         self.lbl_adm.pack(side="bottom", fill="x", pady=(8, 0))
         host = tk.Frame(frame, bg=th.BG)
         host.pack(fill="both", expand=True)
-        for key, _ in TABS:
+        for key, _ in tabs:
             self.adm_pages[key] = tk.Frame(host, bg=th.BG)
-        self._adm_build_players(self.adm_pages["players"])
+        self._adm_build_players(self.adm_pages["players"], dev)
         self._adm_build_bans(self.adm_pages["bans"])
         self._adm_build_flags(self.adm_pages["flags"])
-        self._adm_build_settings(self.adm_pages["settings"])
+        if dev:
+            self._adm_build_settings(self.adm_pages["settings"])
         self._adm_build_notice(self.adm_pages["notice"])
         self.adm_show("players")
 
@@ -78,10 +81,13 @@ class AdminUI:
          "flags": lambda: self.net.send(t="admin_flags"), "settings": lambda: self.net.send(t="admin_settings"),
          "notice": lambda: None}[key]()
 
-    def _adm_tree(self, parent, cols, height=7):
+    def _adm_tree(self, parent, cols, height=7, flags=False):
         box = tk.Frame(parent, bg=th.PANEL)
         box.pack(fill="both", expand=True)
-        tv = ttk.Treeview(box, columns=[c[0] for c in cols], show="headings", height=height, selectmode="browse")
+        tv = ttk.Treeview(box, columns=[c[0] for c in cols], show="tree headings" if flags else "headings", height=height, selectmode="browse")
+        if flags:                                              # la columna del arbol lleva la bandera del pais
+            tv.heading("#0", text="")
+            tv.column("#0", width=44, stretch=False, anchor="center")
         for key, width, text in cols:
             tv.heading(key, text=text)
             tv.column(key, width=width, anchor="w", stretch=True)
@@ -100,7 +106,7 @@ class AdminUI:
             lbl.config(text=text, fg=th.OK if ok else th.ERR)
 
     # ---------- jugadores ----------
-    def _adm_build_players(self, page):
+    def _adm_build_players(self, page, dev=False):
         top = tk.Frame(page, bg=th.BG)
         top.pack(fill="x", pady=(0, 8))
         self.v_adm_q = tk.StringVar()
@@ -111,11 +117,13 @@ class AdminUI:
         self.lbl_adm_count = tk.Label(top, text="", fg=th.MUTED, bg=th.BG, font=(th.BODY, 9))
         self.lbl_adm_count.pack(side="left", padx=6)
         self.adm_tv = self._adm_tree(page, (("nick", 120, "JUGADOR"), ("email", 200, "CORREO"), ("role", 90, "ROL"), ("state", 150, "ESTADO"),
-                                             ("until", 120, "ACCESO HASTA"), ("last", 120, "ÚLTIMO ACCESO")))
+                                             ("until", 120, "ACCESO HASTA"), ("last", 120, "ÚLTIMO ACCESO")),
+                                 flags=True)
         for group in ((("BANEAR…", self.adm_ban, "Accent.TButton"), ("DESBANEAR", lambda: self.adm_simple("unban"), "TButton"),
                        ("EXPULSAR", lambda: self.adm_simple("kick"), "TButton"), ("SILENCIAR…", self.adm_mute, "TButton"),
                        ("FECHA DE ACCESO…", self.adm_expire, "Accent.TButton")),
-                      (("ROL…", self.adm_role, "TButton"), ("CAMBIAR NICK…", self.adm_rename, "TButton"),
+                      ((("ROL…", self.adm_role, "TButton"),) if dev else ()) +
+                      (("CAMBIAR NICK…", self.adm_rename, "TButton"),
                        ("NUEVA CONTRASEÑA…", self.adm_password, "TButton"), ("ELIMINAR…", self.adm_delete, "TButton"))):
             rows = tk.Frame(page, bg=th.BG)
             rows.pack(fill="x", pady=(8, 0))
@@ -143,8 +151,9 @@ class AdminUI:
             until = p["expires"] or "Sin límite"
             if p["expires"] and p["expires"] <= now:
                 until, tag = "VENCIDO " + p["expires"], tag or "expired"
-            tv.insert("", "end", iid=str(p["uid"]), tags=(tag,) if tag else (),
-                      values=(p["user_name"] or "—", p["email"], "Admin" if p["role"] == "admin" else "Jugador", state, until, p["last_login"] or "—"))
+            flag = th.flag(p.get("country"))
+            tv.insert("", "end", iid=str(p["uid"]), tags=(tag,) if tag else (), **({"image": flag} if flag else {}),
+                      values=(p["user_name"] or "—", p["email"], th.ROLE_LABEL.get(p["role"], "Player"), state, until, p["last_login"] or "—"))
         if keep and tv.exists(keep[0]):
             tv.selection_set(keep[0])
         self.lbl_adm_count.config(text=f"{len(m['players'])} jugadores · {m['online']} en línea")
@@ -244,12 +253,13 @@ class AdminUI:
         p = self.adm_selected()
         if not p:
             return
-        names = {"Jugador": "customer", "Administrador": "admin"}
+        names = {"Player": "customer", "Admin": "admin", "Developer": "developer"}
 
         def submit(v):
             self.net.send(t="admin_do", uid=p["uid"], action="role", role=names[v["role"]])
-        self.adm_form(f"Rol de {p['user_name']}", "Un administrador puede usar este panel y los comandos de moderación del chat.",
-                      [("role", "Rol", "Administrador" if p["role"] == "admin" else "Jugador", list(names))], "GUARDAR", submit)
+        self.adm_form(f"Rol de {p['user_name']}", "Admin: controla jugadores (bans, expulsiones, accesos). Developer: además cambia roles y los ajustes "
+                      "del servidor. Solo puedes cambiar a quien tenga un rol inferior al tuyo.",
+                      [("role", "Rol", th.ROLE_LABEL.get(p["role"], "Player"), list(names))], "GUARDAR", submit)
 
     def adm_rename(self):
         p = self.adm_selected()

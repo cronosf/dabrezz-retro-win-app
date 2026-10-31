@@ -493,6 +493,8 @@ class Views:
         self.chat = th.textbox(mid, state="disabled", height=10)
         self.chat.pack(fill="both", expand=True)
         self.chat.tag_config("name", foreground=th.LINK)
+        for role, color in th.ROLE_COLOR.items():
+            self.chat.tag_config("name_" + role, foreground=color)
         self.chat.tag_config("sys", foreground=th.YELLOW)
         self.emo_tray = tk.Frame(mid, bg=th.FIELD, padx=6, pady=6)          # bandeja de emoticonos (se muestra con el boton)
         for i, code in enumerate(EMOTES):
@@ -515,12 +517,14 @@ class Views:
         right = ttk.Frame(body, style="Panel.TFrame", padding=12)
         right.grid(row=0, column=1, sticky="ns", padx=(14, 0))
         ttk.Label(right, text="Jugadores en línea", style="H.TLabel").pack(anchor="w", pady=(0, 6))
-        self.tv_users = ttk.Treeview(right, columns=("elo", "wl", "ping"), show="tree headings", height=6, selectmode="browse")
+        self.tv_users = ttk.Treeview(right, columns=("role", "elo", "wl", "ping"), show="tree headings", height=6, selectmode="browse")
         self.tv_users.heading("#0", text="NOMBRE")
         self.tv_users.column("#0", width=150)
-        for c, w, t in (("elo", 52, "ELO"), ("wl", 58, "W-L"), ("ping", 54, "PING")):
+        for c, w, t in (("role", 72, ""), ("elo", 48, "ELO"), ("wl", 54, "W-L"), ("ping", 54, "PING")):      # el rol va sin titulo
             self.tv_users.heading(c, text=t)
             self.tv_users.column(c, width=w, anchor="center")
+        for role, color in th.ROLE_COLOR.items():
+            self.tv_users.tag_configure(role, foreground=color)
         # los botones se empaquetan primero (abajo): en una ventana baja la lista se encoge y los botones siguen visibles
         ttk.Button(right, text="NORMAL PLAY (amistoso)", command=lambda: self.challenge(False)).pack(side="bottom", fill="x")
         ttk.Button(right, text="RETAR (ranked)", style="Accent.TButton",
@@ -538,12 +542,15 @@ class Views:
             r = f"\nELO {self.me['elo']} · {self.me['wins']}W {self.me['losses']}L" if self.channel else ""
             self.lbl_me.config(text=f"{self.me['user_name']}{r}")
 
-    def log(self, text, tag=None, name=None):
+    def log(self, text, tag=None, name=None, role=None, country=None):
         if not hasattr(self, "chat"):
             return
         self.chat.config(state="normal")
         if name:
-            self.chat.insert("end", name + ": ", "name")
+            flag = th.flag(country)
+            if flag:
+                self.chat.image_create("end", image=flag, padx=3)
+            self.chat.insert("end", name + ": ", "name_" + role if role in th.ROLE_COLOR else "name")
         for chunk, code in split_text(text):                # :smile: -> imagen
             if code:
                 self.chat.image_create("end", image=th.image(f"emo_{code}.png"), padx=1)

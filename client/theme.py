@@ -27,6 +27,12 @@ DISPLAY = "Segoe UI Black"      # pasa a "Bungee" si la fuente incluida se carga
 BODY = "Segoe UI"
 
 _images = {}
+_flags = {}
+DEV_RED = "#ff3b3b"
+ROLE_LABEL = {"customer": "Player", "admin": "Admin", "developer": "Developer"}
+ROLE_COLOR = {"admin": YELLOW, "developer": DEV_RED}            # color del nick (los Player usan el normal)
+ROLE_RANK = {"customer": 1, "admin": 2, "developer": 3}
+STAFF = ("admin", "developer")
 
 
 def resource_path(rel):
@@ -50,6 +56,19 @@ def image(name):
     if name not in _images:
         _images[name] = tk.PhotoImage(file=resource_path(os.path.join("assets", name)))
     return _images[name]
+
+
+def flag(code):
+    """Bandera (PNG de client/assets/flags, nombre = codigo de pais en minusculas) o None si no hay codigo o no existe."""
+    cc = code.lower() if isinstance(code, str) else ""
+    if len(cc) != 2 or not cc.isalpha():
+        return None
+    if cc not in _flags:
+        try:
+            _flags[cc] = tk.PhotoImage(file=resource_path(os.path.join("assets", "flags", cc + ".png")))
+        except tk.TclError:
+            _flags[cc] = None
+    return _flags[cc]
 
 
 def set_icon(win):

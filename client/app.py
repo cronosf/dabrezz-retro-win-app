@@ -627,10 +627,14 @@ class App(Views, LoginPages, LobbyPages, FriendsUI, AdminUI, HelpUI, UpdateUI, t
     # ---------- eventos ----------
     def show_roster(self, users):
         self.tv_users.delete(*self.tv_users.get_children())
-        for u in users:
+        # Developer primero, luego Admin y luego Player; dentro de cada grupo, por ELO
+        for u in sorted(users, key=lambda u: (-th.ROLE_RANK.get(u.get("role"), 1), -u["elo"], u["user_name"].lower())):
             if self.me and u["id"] == self.me["id"]:
                 self.refresh_me(elo=u["elo"], wins=u["wins"], losses=u["losses"])
-            self.tv_users.insert("", "end", iid=str(u["id"]), values=(u["elo"], f"{u['wins']}-{u['losses']}", f"{u['ping']}ms"),
+            role = u.get("role") if u.get("role") in th.ROLE_LABEL else "customer"
+            flag = th.flag(u.get("country"))
+            self.tv_users.insert("", "end", iid=str(u["id"]), tags=(role,), **({"image": flag} if flag else {}),
+                                 values=(th.ROLE_LABEL[role], u["elo"], f"{u['wins']}-{u['losses']}", f"{u['ping']}ms"),
                                  text=("⚔ " if u["busy"] else "") + u["user_name"])
 
     def ping_loop(self):
@@ -747,7 +751,7 @@ class App(Views, LoginPages, LobbyPages, FriendsUI, AdminUI, HelpUI, UpdateUI, t
             if m["channel"] == self.channel:
                 self.show_roster(m["users"])
         elif t == "chat":
-            self.log(m["text"], name=m["user_name"])
+            self.log(m["text"], name=m["user_name"], role=m.get("role"), country=m.get("country"))
         elif t == "challenge":
             ok = messagebox.askyesno(APP_NAME, f"{m['from_user_name']} te reta ({'ranked a ' + str(m['first_to']) if m['ranked'] else 'amistoso'}) en {m['channel']}.\n¿Aceptas?")
             self.net.send(t="accept" if ok else "decline", to=m["from"])
@@ -801,7 +805,8 @@ class App(Views, LoginPages, LobbyPages, FriendsUI, AdminUI, HelpUI, UpdateUI, t
                          f"ELO reducido al {round(f * 100)}% por jugar varias veces contra el mismo rival hoy.", "sys")
         elif t == "top":
             self.table(f"Ranking · {m['channel']}", (("n", 190, "JUGADOR"), ("elo", 70, "ELO"), ("w", 60, "W"), ("l", 60, "L")),
-                       [(u["user_name"], u["elo"], u["wins"], u["losses"]) for u in m["users"]])
+                       [(u["user_name"], u["elo"], u["wins"], u["losses"]) for u in m["users"]],
+                       flags=[u.get("country") for u in m["users"]], roles=[u.get("role") for u in m["users"]])
         elif t == "history":
             self.table("Historial", (("g", 90, "JUEGO"), ("a", 130, "P1"), ("b", 130, "P2"), ("s", 80, "ESTADO"), ("d", 140, "FECHA")),
                        [(x["game"], x["p1_user_name"], x["p2_user_name"], x["status"], x["started_at"][:16]) for x in m["matches"]])
