@@ -98,6 +98,40 @@ def prepare_emulator_config(exe, roms_dir):
     os.makedirs(os.path.join(os.path.dirname(exe), "dabrezz"), exist_ok=True)
 
 
+def prepare_snes_config(exe):
+    """Snes9x siempre arranca con el Super Multitap (5 jugadores) en el puerto 2: se fija Port2 en [Controls] de fcadesnes9x.conf
+    (se parte de fcadesnes9x.default.conf si aun no existe). El resto de la configuracion del jugador no se toca."""
+    folder = os.path.dirname(exe)
+    conf, default = os.path.join(folder, "fcadesnes9x.conf"), os.path.join(folder, "fcadesnes9x.default.conf")
+    src = conf if os.path.exists(conf) else default
+    if not os.path.exists(src):
+        return
+    with open(src, encoding="latin-1", newline="") as f:
+        text = f.read()
+    nl = "\r\n" if "\r\n" in text else "\n"
+    lines, out, section, done = text.split(nl), [], "", False
+    want = "Port2 = mp5:2345"
+    for ln in lines:
+        s = ln.strip()
+        if s.startswith("["):
+            if section == "[Controls]" and not done:
+                out.append(want)
+                done = True
+            section = s
+        elif section == "[Controls]" and s.split("=", 1)[0].strip() == "Port2":
+            ln, done = want, True
+        out.append(ln)
+    if section == "[Controls]" and not done:
+        out.append(want)
+        done = True
+    if not done:
+        out += ["", "[Controls]", want]
+    if out == lines and src == conf:
+        return
+    with open(conf, "w", encoding="latin-1", newline="") as f:
+        f.write(nl.join(out))
+
+
 def build_argv(template, channel, host, port, local_port, player, rival, delay=0):
     """Argumentos del emulador. Se parte la plantilla ANTES de sustituir: ningun valor (ni los que manda el servidor)
     puede añadir ni separar argumentos."""
@@ -515,7 +549,9 @@ class App(Views, LoginPages, LobbyPages, FriendsUI, HelpUI, UpdateUI, tk.Tk):
                                   m["rival_user_name"], min(delay or 0, 9))
             except (KeyError, IndexError, ValueError):
                 return self.log("Argumentos del emulador invalidos: revisa AJUSTES.", "sys")
-            if not snes:
+            if snes:
+                prepare_snes_config(exe)
+            else:
                 prepare_emulator_config(exe, self.cfg["roms_dir"] or os.path.join(self.data, "roms"))
             cmd = [exe, *argv]
         self.net.udp_close()     # libera el puerto: el emulador usa el mismo mapeo NAT
