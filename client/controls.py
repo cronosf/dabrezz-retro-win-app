@@ -1,4 +1,4 @@
-"""Controles personales para RetroArch (SNES, PS1 y N64): cada jugador elige sus teclas y los botones de su mando una vez; al abrir una partida se escriben
+"""Controles personales para RetroArch (SNES de 3 a 5 jugadores): cada jugador elige sus teclas y los botones de su mando una vez; al abrir una partida se escriben
 en la configuracion de esa partida (client/retro.py: prepare).
 
 Cada PC solo lee SUS controles: en RetroArch son siempre los del "jugador 1" local, y el netplay los manda al puerto que le toque a ese jugador. El anfitrion
@@ -11,8 +11,8 @@ import sys
 
 # (id de RetroPad, nombre en pantalla)
 BUTTONS = (("up", "Arriba"), ("down", "Abajo"), ("left", "Izquierda"), ("right", "Derecha"),
-           ("b", "B   (✕ en PS1)"), ("a", "A   (○ en PS1)"), ("y", "Y   (□ en PS1)"), ("x", "X   (△ en PS1)"),
-           ("l", "L   (L1)"), ("r", "R   (R1)"), ("l2", "L2"), ("r2", "R2"), ("start", "Start"), ("select", "Select"))
+           ("b", "B"), ("a", "A"), ("y", "Y"), ("x", "X"),
+           ("l", "L"), ("r", "R"), ("l2", "L2"), ("r2", "R2"), ("start", "Start"), ("select", "Select"))
 IDS = tuple(b for b, _ in BUTTONS)
 
 # Teclas de RetroArch que se reservan: Escape cierra la partida y las F las usa el propio RetroArch (menu, estados, capturas...).

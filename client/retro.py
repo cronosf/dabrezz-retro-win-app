@@ -1,4 +1,4 @@
-"""RetroArch para partidas de 3 a 5 jugadores (SNES con Super Multitap, PS1 con multitap, N64) y para el ranked de SNES.
+"""RetroArch para partidas de SNES de 3 a 5 jugadores (Super Multitap) y para el ranked de SNES. (PS1 va con DuckStation y N64 se retiro: daban demasiado retraso.)
 
 RetroArch viene en el instalador como los demas emuladores (vendor/emulator-retroarch.zip, ver tools/make_retroarch.py) y queda en
 <datos>\\emulators\\retroarch.
@@ -14,12 +14,12 @@ import threading
 BIOS_FILE = "openbios.bin"                       # BIOS libre de PS1 (MIT), incluida en el paquete: nadie necesita la BIOS de Sony
 RA_PORT = 55435                                  # puerto TCP del netplay de RetroArch (el anfitrion escucha aqui)
 CMD_PORT = 55355                                 # puerto UDP de comandos de RetroArch (solo en ranked: lectura de memoria para los detectores)
-CORES = {"snes": "snes9x_libretro.dll", "ps1": "swanstation_libretro.dll", "n64": "mupen64plus_next_libretro.dll"}
+CORES = {"snes": "snes9x_libretro.dll"}
 SNES_MULTITAP = 257                              # dispositivo "Super Multitap" de Snes9x para el puerto 2 (RETRO_DEVICE_JOYPAD_MULTITAP)
 
 
 def system_of(channel):
-    """'snes' | 'ps1' | 'n64' si el canal se juega con RetroArch, o None."""
+    """'snes' si el canal se juega con RetroArch, o None."""
     for s in CORES:
         if channel.startswith(s + "_"):
             return s
@@ -43,7 +43,7 @@ def bios_path(data):
 
 
 def installed(data):
-    return os.path.isfile(exe_path(data)) and all(os.path.isfile(core_path(data, s)) for s in CORES) and os.path.isfile(bios_path(data))
+    return os.path.isfile(exe_path(data)) and all(os.path.isfile(core_path(data, s)) for s in CORES)
 
 
 def nick_arg(name):

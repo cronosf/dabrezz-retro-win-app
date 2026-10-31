@@ -3,7 +3,7 @@
 Uso:  python tools/make_retroarch.py <carpeta RetroArch-Win64 extraida> <carpeta con los *_libretro.dll>
 
 Se parte de RetroArch 1.22.2 estable (https://buildbot.libretro.com/stable/1.22.2/windows/x86_64/RetroArch.7z) y de los nucleos de
-https://buildbot.libretro.com/nightly/windows/x86_64/latest/ (snes9x, swanstation, mupen64plus_next). Se quitan assets, shaders, overlays,
+https://buildbot.libretro.com/nightly/windows/x86_64/latest/ (snes9x). Se quitan assets, shaders, overlays,
 base de datos e info (unos 370 MB que la app no usa: se usa el menu rgui, sin imagenes); las DLL que quedan las exige la tabla de
 importaciones de retroarch.exe, aunque la app no use ffmpeg. El zip va en el instalador como los demas emuladores (build.py / installer.py).
 """
@@ -12,15 +12,12 @@ import os
 import sys
 import zipfile
 
-CORES = ("snes9x_libretro.dll", "swanstation_libretro.dll", "mupen64plus_next_libretro.dll")
+CORES = ("snes9x_libretro.dll",)        # solo SNES: PS1 (DuckStation) y N64 (sin emulador) salieron de RetroArch
 NOTICE = """Componente de netplay multijugador de Dabrezz Play: RetroArch 1.22.2 y nucleos libretro.
 
   * RetroArch (GPL v3): https://github.com/libretro/RetroArch (etiqueta v1.22.2). Las DLL incluidas (FFmpeg, SDL2, Qt...) son las del
     paquete oficial https://buildbot.libretro.com/stable/1.22.2/windows/x86_64/RetroArch.7z (sus licencias LGPL/GPL estan en ese paquete).
   * Snes9x (nucleo de SNES, licencia propia no comercial): https://github.com/libretro/snes9x
-  * SwanStation (nucleo de PlayStation, GPL v3): https://github.com/libretro/swanstation
-  * Mupen64Plus-Next (nucleo de Nintendo 64, GPL v2): https://github.com/libretro/mupen64plus-libretro-nx
-  * OpenBIOS (BIOS libre de PlayStation, MIT): https://github.com/pcsx-redux/nugget
 
 Dabrezz Play no modifica estos programas: solo los recorta (sin assets ni shaders) y los lanza con sus opciones de linea de comandos.
 Descarga el codigo fuente de cada uno en los enlaces de arriba.
@@ -47,7 +44,6 @@ def main():
         for dp, _d, fs in sorted(os.walk(auto)):
             for f in sorted(fs):
                 z.write(os.path.join(dp, f), "autoconfig/" + os.path.relpath(os.path.join(dp, f), auto).replace(os.sep, "/"))
-        z.write(os.path.join(root, "vendor", "openbios.bin"), "bios/openbios.bin")      # OpenBIOS (la BIOS libre de PS1 que usa SwanStation)
         z.writestr("NOTICE-RETROARCH.txt", NOTICE)
     with open(os.path.join(root, "vendor", "RETROARCH-NOTICE.txt"), "w", encoding="utf-8") as f:
         f.write(NOTICE)

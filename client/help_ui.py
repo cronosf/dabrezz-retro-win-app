@@ -22,10 +22,10 @@ HELP = (
     ("b", "Inicia sesión con tu correo y contraseña, o crea una cuenta desde el botón CREAR CUENTA."),
     ("b", "La primera vez elige un nombre de usuario único (5 a 12 caracteres)."),
     ("b", "Multijugador: crea una sala de un juego (CREAR SALA) o únete a la de otro desde Salas Públicas, Mis Salas o Amigos. El creador invita a "
-          "amigos o a jugadores del juego y inicia la partida. Las partidas de 2 jugadores usan el emulador de siempre; las de 3 a 5 "
-          "(Super Bomberman 3, 4 y 5 con Super Multitap, Crash Team Racing con multitap) y las de Nintendo 64 usan RetroArch, que viene con el instalador."),
-    ("b", "Controles: el botón CONTROLES (en Multijugador y dentro de la sala) te deja elegir tus teclas y los botones de tu mando Xbox para SNES, PS1 y N64 "
-          "(RetroArch). Se guardan y se aplican solos al empezar cada partida; cada jugador usa los suyos. El que crea la sala es el jugador 1 y los demás ocupan "
+          "amigos o a jugadores del juego y inicia la partida. Las partidas de 2 jugadores usan el emulador de cada juego; las de SNES de 3 a 5 "
+          "(Super Bomberman 3, 4 y 5 con Super Multitap) usan RetroArch, que viene con el instalador."),
+    ("b", "Controles: el botón CONTROLES (en Multijugador y dentro de la sala) te deja elegir tus teclas y los botones de tu mando Xbox para los juegos de SNES de 3 a 5 "
+          "jugadores (RetroArch). Se guardan y se aplican solos al empezar cada partida; cada jugador usa los suyos. El que crea la sala es el jugador 1 y los demás ocupan "
           "los siguientes puertos al conectarse."),
     ("b", "Zona Baile: los juegos de baile (Bust a Groove 1 y 2) se juegan aquí, con Mednafen. Elige el juego, pulsa BUSCAR PARTIDA (amistosa, 2 jugadores) "
           "o crea una sala con CREAR SALA; las salas abiertas aparecen en la lista con UNIRSE."),
@@ -34,10 +34,10 @@ HELP = (
     ("b", "Amigos: agrega a otros jugadores por su nombre de usuario (ellos aceptan la solicitud), mira quién está en línea, invítalos a una partida amistosa o escríbeles un mensaje privado. Haz clic derecho sobre un jugador de la lista para enviarle una invitación de amistad. Los mensajes privados solo se pueden enviar entre amigos y no se guardan: se borran al cerrar la app."),
     ("b", "La app se actualiza sola al abrirse cuando existe una versión nueva firmada."),
     ("h", "PlayStation 1 (beta)"),
-    ("b", "El PS1 se juega con RetroArch (núcleo SwanStation), que viene con el instalador. No necesitas la BIOS de Sony: se usa OpenBIOS, una BIOS "
+    ("b", "El PS1 se juega con DuckStation, que viene con el instalador. No necesitas la BIOS de Sony: se usa OpenBIOS, una BIOS "
           "libre, y todos los jugadores usan la misma. Pocos juegos no arrancan con ella. Tu rival necesita el mismo disco."),
-    ("b", "Las partidas son de 2 a 4 jugadores (multitap en los juegos que lo admiten): el creador de la sala es el anfitrión. Solo amistoso (sin ELO)."),
-    ("b", "Descarga el disco con DESCARGAR ROM y configura tus controles con PROBAR JUEGO (en RetroArch: F1 > Ajustes > Entrada)."),
+    ("b", "Las partidas son de 2 jugadores (1 contra 1): el creador de la sala es el anfitrión. Solo amistoso (sin ELO)."),
+    ("b", "Descarga el disco con DESCARGAR ROM y configura tus controles con PROBAR JUEGO (en DuckStation: Ajustes > Controladores)."),
     ("h", "Términos y condiciones"),
     ("p", f"1. Gratuita. Dabrezz Play es gratuita y se puede distribuir libremente sin cobrar por ella. Está desarrollada por {AUTHOR}. "
           "No se debe vender ni cobrar por su descarga, instalación o uso."),

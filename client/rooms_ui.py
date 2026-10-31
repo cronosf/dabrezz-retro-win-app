@@ -14,7 +14,7 @@ from client.views import PLATFORMS, initials, platform_of
 from shared.capabilities import is_dance, retro_system, system_of
 from shared.protocol import CHANNEL_LABELS
 
-EMU_NAMES = {"fbneo": "FBNeo", "snes9x": "Snes9x", "ps1": "RetroArch", "n64": "RetroArch", "mednafen": "Mednafen"}
+EMU_NAMES = {"fbneo": "FBNeo", "snes9x": "Snes9x", "duckstation": "DuckStation", "mednafen": "Mednafen"}
 INVITE_TTL = 180
 TABS = (("public", "Salas Públicas"), ("mine", "Mis Salas"), ("friends", "Amigos"))
 
@@ -161,7 +161,7 @@ class RoomsUI:
             self._rm_render_list(force=True)
 
     def on_rooms(self, m):
-        self.rooms_data = m.get("rooms") or []
+        self.rooms_data = [r for r in (m.get("rooms") or []) if not str(r.get("channel", "")).startswith("n64_")]      # N64 sin emulador por ahora
         self._rm_render_list()
         self.dance_render_rooms()
         self.home_rooms_render()
@@ -322,8 +322,8 @@ class RoomsUI:
 
     @staticmethod
     def rm_needs_retro(r):
-        """Las salas de varios jugadores (y las de N64) se juegan con RetroArch."""
-        return retro_system(r["channel"]) is not None and (r["max"] > 2 or r["channel"].startswith("n64_"))
+        """Las salas de SNES de varios jugadores (3 a 5) se juegan con RetroArch."""
+        return retro_system(r["channel"]) is not None and r["max"] > 2
 
     def _rm_notice_changes(self, old, new):
         before, after = {x["id"]: x["user_name"] for x in old["members"]}, {x["id"]: x["user_name"] for x in new["members"]}

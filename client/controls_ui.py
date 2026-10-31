@@ -30,7 +30,7 @@ class ControlsUI:
         pad = tk.Frame(win, bg=th.BG, padx=18, pady=14)
         pad.pack(fill="both", expand=True)
         tk.Label(pad, text="Controles", font=(th.DISPLAY, 14), fg="#ffffff", bg=th.BG).pack(anchor="w")
-        info = tk.Label(pad, text="Elige tus teclas y los botones de tu mando para los juegos de SNES, PS1 y N64 (RetroArch). Tus controles se aplican solos al "
+        info = tk.Label(pad, text="Elige tus teclas y los botones de tu mando para los juegos de SNES de 3 a 5 jugadores (RetroArch). Tus controles se aplican solos al "
                         "empezar la partida; cada jugador usa los suyos, sin importar si le toca ser el jugador 1, 2, 3... (el que crea la sala es siempre el 1).",
                         fg=th.MUTED, bg=th.BG, font=(th.BODY, 9), justify="left", anchor="w", wraplength=500)
         info.pack(fill="x", pady=(4, 6))
@@ -45,8 +45,7 @@ class ControlsUI:
         self._ctl["msg"] = tk.Label(pad, text="", fg=th.YELLOW, bg=th.BG, font=(th.BODY, 9, "bold"), anchor="w", justify="left", wraplength=500)
         self._ctl["msg"].pack(side="bottom", fill="x", pady=(8, 0))
         th.fit_wrap(self._ctl["msg"], margin=44)
-        note = tk.Label(pad, text="N64: A = B, B = Y, Z = L2, botones C = stick derecho (valores por defecto del emulador). Mando: Xbox o compatible (XInput); "
-                        "los que no lo son usan su configuración automática.", fg=th.MUTED, bg=th.BG, font=(th.BODY, 8), justify="left", anchor="w", wraplength=500)
+        note = tk.Label(pad, text="Mando: Xbox o compatible (XInput); los que no lo son usan su configuración automática.", fg=th.MUTED, bg=th.BG, font=(th.BODY, 8), justify="left", anchor="w", wraplength=500)
         note.pack(side="bottom", fill="x")
         th.fit_wrap(note, margin=44)
         head = tk.Frame(pad, bg=th.BG)

@@ -15,7 +15,7 @@ from shared.protocol import CHANNEL_LABELS, DEFAULT_CHANNELS, VERSION
 CARD_W = 196
 PLATFORMS = {"Arcade": ("#8b00fd", "#3a0a8a"), "Mega Drive": ("#1f6fe0", "#0c2a70"), "NES": ("#e0402a", "#6e1410"),
              "SNES": ("#c9941a", "#5e4208"), "PS1": ("#2aa6a6", "#0c4a4a"), "N64": ("#2f9e44", "#0f4a1c")}
-FILTERS = ("Todos", "Arcade", "Mega Drive", "NES", "SNES", "PS1", "N64", "⚡ Ranked")
+FILTERS = ("Todos", "Arcade", "Mega Drive", "NES", "SNES", "PS1", "⚡ Ranked")
 SEARCH_HINT = "Buscar juegos, títulos..."
 
 
@@ -346,14 +346,14 @@ class Views:
         cats = tk.Frame(self.home_body, bg=th.BG)
         cats.pack(anchor="w")
         for img, flt in (("tile_all.png", "Todos"), ("tile_arcade.png", "Arcade"), ("tile_snes.png", "SNES"),
-                         ("tile_md.png", "Mega Drive"), ("tile_ps1.png", "PS1"), ("tile_n64.png", "N64")):
+                         ("tile_md.png", "Mega Drive"), ("tile_ps1.png", "PS1")):
             t = tk.Label(cats, image=th.image(img), bg=th.BG, cursor="hand2", bd=0)
             t.pack(side="left", padx=(0, 10))
             t.bind("<Button-1>", lambda e, n=flt: (self.set_filter(n), self.show_view("games")))
 
     # ---------- juegos / favoritos ----------
     def game_list(self):
-        return list(self.channels) or list(DEFAULT_CHANNELS)
+        return [c for c in (list(self.channels) or list(DEFAULT_CHANNELS)) if not c.startswith("n64_")]      # N64 sin emulador por ahora
 
     def _build_games(self):
         v = self.views["games"]
