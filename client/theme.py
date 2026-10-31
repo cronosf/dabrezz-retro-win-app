@@ -1,28 +1,29 @@
-"""Tema Dabrezz Retro, tomado de la hoja de marca (assets/theme_dabrez_retro.png): fondo azul marino muy oscuro,
-morado electrico para acciones, morado profundo para la seleccion y magenta como brillo."""
+"""Tema Dabrezz Play, tomado de la hoja de marca (assets/theme_dabrez_play.png): fondo violeta casi negro, morado electrico para la
+seleccion y las acciones, amarillo para la accion principal (JUGAR / UNIRSE) y magenta como brillo. Titulos en Bungee."""
 import os
 import sys
 import tkinter as tk
 from tkinter import ttk
 
-BG = "#0a0a24"            # ventana
-SIDEBAR = "#06071a"       # barra lateral
-PANEL = "#10103a"         # paneles y tarjetas
-PANEL_2 = "#1b1b4a"       # tarjetas elevadas / hover
-FIELD = "#1e1e48"         # campos de texto y buscador
-BORDER = "#2c2a6a"
-ACCENT = "#8b00fd"        # boton principal
-ACCENT_D = "#6a00c8"
-NAV_SEL = "#5001b0"       # elemento seleccionado del menu
+BG = "#0b0722"            # ventana
+SIDEBAR = "#070419"       # barra lateral
+PANEL = "#140d36"         # paneles y tarjetas
+PANEL_2 = "#1f1450"       # tarjetas elevadas / hover
+FIELD = "#1d1348"         # campos de texto y buscador
+BORDER = "#3b2394"
+ACCENT = "#8a2cf6"        # boton principal
+ACCENT_D = "#6a14d0"
+NAV_SEL = "#7b24ee"       # elemento seleccionado del menu
 PINK = "#f038f8"          # brillo del icono
-YELLOW = "#ffd21f"
+YELLOW = "#ffc41a"        # accion principal (JUGAR / UNIRSE)
+YELLOW_D = "#e0a800"
 TEXT = "#f2f0ff"
 MUTED = "#9d9bc8"
 LINK = "#c58bff"
 OK = "#3ddc97"
 ERR = "#ff6b8a"
 
-DISPLAY = "Segoe UI Black"
+DISPLAY = "Segoe UI Black"      # pasa a "Bungee" si la fuente incluida se carga (load_fonts)
 BODY = "Segoe UI"
 
 _images = {}
@@ -31,6 +32,17 @@ _images = {}
 def resource_path(rel):
     base = getattr(sys, "_MEIPASS", os.path.dirname(os.path.abspath(__file__)))
     return os.path.join(base, rel)
+
+
+def load_fonts():
+    """Registra Bungee (SIL OFL, client/assets) solo para este proceso: no se instala en Windows. Debe llamarse antes de crear la ventana."""
+    global DISPLAY
+    try:
+        import ctypes
+        if ctypes.windll.gdi32.AddFontResourceExW(resource_path(os.path.join("assets", "Bungee-Regular.ttf")), 0x10, 0):    # FR_PRIVATE
+            DISPLAY = "Bungee"
+    except (OSError, AttributeError):
+        pass
 
 
 def image(name):
@@ -71,6 +83,8 @@ def apply(root: tk.Tk):
     st.map("TButton", background=[("active", BORDER), ("disabled", PANEL)], foreground=[("disabled", MUTED)])
     st.configure("Accent.TButton", background=ACCENT, foreground="#ffffff")
     st.map("Accent.TButton", background=[("active", ACCENT_D), ("disabled", PANEL)])
+    st.configure("Cta.TButton", background=YELLOW, foreground="#1a0f00")
+    st.map("Cta.TButton", background=[("active", YELLOW_D), ("disabled", PANEL)], foreground=[("disabled", MUTED)])
     st.configure("Chip.TButton", background=PANEL, foreground=MUTED, padding=(14, 5), font=(BODY, 9, "bold"))
     st.map("Chip.TButton", background=[("active", PANEL_2)])
     st.configure("ChipOn.TButton", background=ACCENT, foreground="#ffffff", padding=(14, 5), font=(BODY, 9, "bold"))

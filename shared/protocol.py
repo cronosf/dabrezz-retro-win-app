@@ -1,8 +1,8 @@
 """Protocolo Dabrezz Retro: JSON por lineas sobre TCP (lobby) + UDP (descubrimiento de endpoint para P2P)."""
 import json
 
-APP_NAME = "Dabrezz Retro"
-VERSION = "1.0.22"
+APP_NAME = "Dabrezz Play"
+VERSION = "1.0.23"
 DEFAULT_TCP_PORT = 7600
 DEFAULT_UDP_PORT = 7601
 MAX_LINE = 8 * 1024

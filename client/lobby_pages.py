@@ -64,7 +64,7 @@ class LobbyPages:
         tk.Label(names, text=me.get("user_name") or "—", font=(th.DISPLAY, 20), fg="#ffffff", bg=th.PANEL).pack(anchor="w")
         tk.Label(names, text="Nombre de usuario (el único que ven los demás jugadores)", fg=th.MUTED, bg=th.PANEL,
                  font=(th.BODY, 9)).pack(anchor="w")
-        rows = [("Correo", self.cfg.get("email") or "—"), ("Cuenta", "Dabrezz Retro" + (" · administrador" if me.get("role") == "admin" else ""))]
+        rows = [("Correo", self.cfg.get("email") or "—"), ("Cuenta", "Dabrezz Play" + (" · administrador" if me.get("role") == "admin" else ""))]
         if self.channel:
             rows.append(("Ranking", f"ELO {me.get('elo', 1500)} · {me.get('wins', 0)}G {me.get('losses', 0)}P en {self.channel}"))
         grid = tk.Frame(card, bg=th.PANEL)

@@ -11,8 +11,8 @@ CONTACT = "cronosfvr@gmail.com"
 
 # (estilo, texto): "h" = titulo de seccion, "p" = parrafo, "b" = vineta
 HELP = (
-    ("h", "Acerca de Dabrezz Retro"),
-    ("p", "Dabrezz Retro es una plataforma de juego en línea para clásicos de arcade, Mega Drive y NES. Te permite crear o unirte a "
+    ("h", "Acerca de Dabrezz Play"),
+    ("p", "Dabrezz Play es una plataforma de juego en línea para clásicos de arcade, Mega Drive y NES. Te permite crear o unirte a "
           "partidas contra otros jugadores, con ranking, chat y resultados registrados automáticamente."),
     ("b", "Partidas en línea con rollback: el juego responde como si estuvieras en local aunque haya latencia."),
     ("b", "Ranking ELO: el resultado lo lee el servidor directamente del emulador de ambos jugadores, no lo reporta ninguno de los dos."),
@@ -22,6 +22,7 @@ HELP = (
     ("b", "Inicia sesión con tu correo y contraseña, o crea una cuenta desde el botón CREAR CUENTA."),
     ("b", "La primera vez elige un nombre de usuario único (5 a 12 caracteres)."),
     ("b", "En Juegos o Multijugador elige un título, crea una sala o únete a la de otro jugador."),
+    ("b", "Amigos: agrega a otros jugadores por su nombre de usuario (ellos aceptan la solicitud), mira quién está en línea e invítalos a una partida amistosa."),
     ("b", "La app se actualiza sola al abrirse cuando existe una versión nueva firmada."),
     ("h", "PlayStation 1 (beta)"),
     ("b", "No necesitas la BIOS de Sony: se instala OpenBIOS, una BIOS libre, y todos los jugadores usan la misma. Pocos juegos no "
@@ -29,13 +30,13 @@ HELP = (
     ("b", "Una partida es de 2 jugadores: el jugador 1 es el anfitrión y el 2 se une. Solo amistoso (sin ELO)."),
     ("b", "Descarga el disco con DESCARGAR ROM y configura tus controles con PROBAR JUEGO (Ajustes > Controladores del emulador)."),
     ("h", "Términos y condiciones"),
-    ("p", f"1. Gratuita. Dabrezz Retro es gratuita y se puede distribuir libremente sin cobrar por ella. Está desarrollada por {AUTHOR}. "
+    ("p", f"1. Gratuita. Dabrezz Play es gratuita y se puede distribuir libremente sin cobrar por ella. Está desarrollada por {AUTHOR}. "
           "No se debe vender ni cobrar por su descarga, instalación o uso."),
     ("p", "2. Sin garantía. La app se ofrece \"tal cual\", sin garantías de disponibilidad, continuidad ni ausencia de errores. El servicio "
           "puede cambiar, interrumpirse o cerrarse en cualquier momento."),
     ("p", "3. Emuladores y juegos. Los emuladores incluidos pertenecen a sus autores y se distribuyen bajo sus propias licencias "
           "(consulta la carpeta de avisos de licencias de la instalación). Los juegos (ROMs) son propiedad de sus titulares: "
-          "usa únicamente copias que tengas derecho a usar. Dabrezz Retro no es propietaria de ellos ni está afiliada a sus fabricantes."),
+          "usa únicamente copias que tengas derecho a usar. Dabrezz Play no es propietaria de ellos ni está afiliada a sus fabricantes."),
     ("p", "4. Conducta. Está prohibido hacer trampas, usar clientes modificados o no oficiales, manipular resultados, acordar partidas "
           "para inflar el ranking, suplantar a otros, usar nombres ofensivos o atacar el servicio. El incumplimiento puede causar "
           "silenciamiento, restablecimiento del nombre, anulación de resultados o bloqueo de la cuenta."),
@@ -57,7 +58,7 @@ class HelpUI:
         """Rellena `parent` con la ayuda: titulo (opcional), texto desplazable y boton de contacto."""
         if heading:
             tk.Label(parent, text="Ayuda", font=(th.DISPLAY, 20), fg="#ffffff", bg=th.BG).pack(anchor="w")
-        tk.Label(parent, text=f"Dabrezz Retro  ·  versión {VERSION}  ·  por {AUTHOR}", fg=th.MUTED, bg=th.BG,
+        tk.Label(parent, text=f"Dabrezz Play  ·  versión {VERSION}  ·  por {AUTHOR}", fg=th.MUTED, bg=th.BG,
                  font=(th.BODY, 10)).pack(anchor="w", pady=(2, 12))
         box = tk.Frame(parent, bg=th.PANEL)
         box.pack(fill="both", expand=True)

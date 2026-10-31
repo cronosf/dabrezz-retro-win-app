@@ -1,4 +1,4 @@
-"""Cliente Dabrezz Retro (Windows): login con la cuenta, lobby, chat, retos, matchmaking y emulador."""
+"""Cliente Dabrezz Play (Windows): login con la cuenta, lobby, chat, retos, matchmaking y emulador."""
 import json
 import os
 import queue
@@ -27,6 +27,7 @@ from client.bridge import OverlayBridge  # noqa: E402
 import client.defender as defender  # noqa: E402
 import client.ps1 as ps1  # noqa: E402
 import client.secure as secure  # noqa: E402
+from client.friends_ui import FriendsUI  # noqa: E402
 from client.help_ui import HelpUI  # noqa: E402
 from client.lobby_pages import LobbyPages  # noqa: E402
 from client.login_pages import LoginPages  # noqa: E402
@@ -35,13 +36,16 @@ from client.views import Views  # noqa: E402
 from client.net import Net  # noqa: E402
 from shared.protocol import APP_NAME, CHANNEL_LABELS, VERSION  # noqa: E402
 
-DEFAULTS = {
+# Valores internos: el usuario no los ve ni los cambia, siempre se aplican estos (aunque el config.json guardado diga otra cosa).
+# Emulador: quark:direct,<rom>,<puerto local>,<ip rival>,<puerto rival>,<jugador 0/1>,<delay>,<ranked>
+# (en modo direct el emulador ignora «ranked»). Variables: {rom} {host} {port} {local_port} {player} {player0} {delay} {channel} {rival}
+FIXED = {
     "site": "https://dabrezzstore.com", "server_host": "retro.dabrezzstore.com", "server_tcp": 7600, "server_udp": 7601, "tls": True,
-    "email": "", "emulator": "", "roms_dir": "", "rom_manifest": "",
-    # Emulador: quark:direct,<rom>,<puerto local>,<ip rival>,<puerto rival>,<jugador 0/1>,<delay>,<ranked>
-    # (en modo direct el emulador ignora «ranked»). -w = ventana
-    # Variables: {rom} {host} {port} {local_port} {player} {player0} {delay} {channel} {rival}
     "emu_args": "quark:direct,{rom},{local_port},{host},{port},{player0},{delay},0",
+}
+DEFAULTS = {
+    **FIXED, "email": "", "emulator": "", "roms_dir": "",
+    "rom_manifest": "https://retro.dabrezzstore.com/roms-dabrezz/roms/arcade/roms.json",
 }
 
 
@@ -118,16 +122,17 @@ def data_dir():
 
 
 def detect_emulator(data):
-    """El emulador que instala Dabrezz Retro, en <datos>\\emulators\\fbneo."""
+    """El emulador que instala Dabrezz Play, en <datos>\\emulators\\fbneo."""
     p = os.path.join(data, "emulators", "fbneo", "fcadefbneo.exe")
     return p if os.path.exists(p) else ""
 
 
-class App(Views, LoginPages, LobbyPages, HelpUI, UpdateUI, tk.Tk):
+class App(Views, LoginPages, LobbyPages, FriendsUI, HelpUI, UpdateUI, tk.Tk):
     auto_session = False
     rom_busy = False
     av_asked = False
     def __init__(self):
+        th.load_fonts()
         super().__init__()
         self.title(f"{APP_NAME} {VERSION}")
         self.geometry("1180x700")
@@ -137,9 +142,9 @@ class App(Views, LoginPages, LobbyPages, HelpUI, UpdateUI, tk.Tk):
         for sub in ("", "roms", "emulators", "replays", "webview"):
             os.makedirs(os.path.join(self.data, sub), exist_ok=True)
         self.cfg_path = os.path.join(self.data, "config.json")
-        self.cfg = {**DEFAULTS, **self._load_cfg()}
-        if self.cfg["server_host"] in ("", "10.55.82.172"):       # servidor anterior (host del sitio o IP de pruebas)
-            self.cfg["server_host"] = DEFAULTS["server_host"]
+        self.cfg = {**DEFAULTS, **self._load_cfg(), **FIXED}
+        if not self.cfg["rom_manifest"]:
+            self.cfg["rom_manifest"] = DEFAULTS["rom_manifest"]
         if not self.cfg["emulator"]:
             self.cfg["emulator"] = detect_emulator(self.data)
         self.net = Net()
@@ -427,10 +432,8 @@ class App(Views, LoginPages, LobbyPages, HelpUI, UpdateUI, tk.Tk):
     def settings_form(self, pad, on_done, wide=False, btn_parent=None):
         """Formulario de ajustes. wide: etiqueta a la izquierda (ventana); si no, apilado (panel estrecho de la pantalla de acceso)."""
         vars_ = {}
-        rows = (("Sitio de la cuenta", "site", False), ("Servidor de juego (vacío = host del sitio)", "server_host", False),
-                ("Puerto TCP del servidor", "server_tcp", False), ("Puerto UDP del servidor", "server_udp", False),
-                ("Emulador (.exe)", "emulator", "file"), ("Carpeta de ROMs", "roms_dir", "dir"), ("Catálogo de ROMs (URL .json)", "rom_manifest", False),
-                ("Argumentos del emulador", "emu_args", False))
+        rows = (("Emulador (.exe)", "emulator", "file"), ("Carpeta de ROMs", "roms_dir", "dir"),
+                ("Catálogo de ROMs (URL .json)", "rom_manifest", False))
         pad.columnconfigure(0 if not wide else 1, weight=1)
         r0 = 0
         for lbl, key, browse in rows:
@@ -452,27 +455,20 @@ class App(Views, LoginPages, LobbyPages, HelpUI, UpdateUI, tk.Tk):
                 ttk.Button(pad, text="...", width=3, command=pick).grid(row=r0, column=col, padx=(6, 0))
             r0 += 1
         span = 3 if wide else 2
-        v_tls = tk.BooleanVar(value=bool(self.cfg["tls"]))
-        ttk.Checkbutton(pad, text="Conexión cifrada (TLS) con el servidor de juego (recomendado)" if wide else "Conexión cifrada (TLS) (recomendado)",
-                        variable=v_tls).grid(row=r0, columnspan=span, sticky="w", pady=(8, 0))
-        ttk.Label(pad, text="Variables: {rom} {host} {port} {local_port} {player} {player0} {delay} {channel} {rival}   ·   añade -w para ventana",
-                  style="Muted.TLabel", wraplength=0 if wide else 400).grid(row=r0 + 1, columnspan=span, sticky="w", pady=4)
-        ttk.Label(pad, text=f"Datos: {self.data}", style="Muted.TLabel", wraplength=0 if wide else 400).grid(row=r0 + 2, columnspan=span, sticky="w")
+        ttk.Label(pad, text=f"Datos: {self.data}", style="Muted.TLabel", wraplength=0 if wide else 400).grid(row=r0, columnspan=span, sticky="w", pady=(8, 0))
 
         def detect():
             p = detect_emulator(self.data)
             if p:
                 vars_["emulator"].set(p)
             else:
-                messagebox.showinfo(APP_NAME, "No se encontró el emulador incluido. Reinstala Dabrezz Retro o indica la ruta del .exe.")
+                messagebox.showinfo(APP_NAME, "No se encontró el emulador incluido. Reinstala Dabrezz Play o indica la ruta del .exe.")
 
         def save():
-            try:
-                for k, v in vars_.items():
-                    self.cfg[k] = int(v.get()) if k.startswith("server_t") or k == "server_udp" else v.get().strip()
-            except ValueError:
-                return messagebox.showerror(APP_NAME, "Los puertos deben ser números.")
-            self.cfg["tls"] = v_tls.get()
+            for k, v in vars_.items():
+                self.cfg[k] = v.get().strip()
+            if not self.cfg["rom_manifest"]:
+                self.cfg["rom_manifest"] = DEFAULTS["rom_manifest"]
             self.save_cfg()
             on_done()
             if self.me:
@@ -481,7 +477,7 @@ class App(Views, LoginPages, LobbyPages, HelpUI, UpdateUI, tk.Tk):
         if btn_parent:
             r.pack(pady=(10, 0))
         else:
-            r.grid(row=r0 + 3, columnspan=span, pady=(12, 0))
+            r.grid(row=r0 + 1, columnspan=span, pady=(12, 0))
         ttk.Button(r, text="DETECTAR EMULADOR", command=detect).pack(side="left", padx=4)
         ttk.Button(r, text="GUARDAR", style="Accent.TButton", command=save).pack(side="left", padx=4)
 
@@ -542,8 +538,8 @@ class App(Views, LoginPages, LobbyPages, HelpUI, UpdateUI, tk.Tk):
         return ps1.join_command(exe, host, port, local, nick, delay)
 
     def need_bios(self):
-        """Falta OpenBIOS (la BIOS libre que instala Dabrezz Retro): casi seguro la borro el antivirus o el paquete esta incompleto."""
-        messagebox.showinfo(APP_NAME, "Falta la BIOS de PS1 (openbios.bin) que instala Dabrezz Retro. Probablemente tu antivirus la "
+        """Falta OpenBIOS (la BIOS libre que instala Dabrezz Play): casi seguro la borro el antivirus o el paquete esta incompleto."""
+        messagebox.showinfo(APP_NAME, "Falta la BIOS de PS1 (openbios.bin) que instala Dabrezz Play. Probablemente tu antivirus la "
                             "borró: restáurala desde Seguridad de Windows (Historial de protección) o vuelve a ejecutar el instalador.\n\n"
                             f"{ps1.bios_dir(self.data)}")
 
@@ -704,6 +700,12 @@ class App(Views, LoginPages, LobbyPages, HelpUI, UpdateUI, tk.Tk):
         elif t == "challenge":
             ok = messagebox.askyesno(APP_NAME, f"{m['from_user_name']} te reta ({'ranked a ' + str(m['first_to']) if m['ranked'] else 'amistoso'}) en {m['channel']}.\n¿Aceptas?")
             self.net.send(t="accept" if ok else "decline", to=m["from"])
+        elif t == "friends":
+            self.on_friends(m)
+        elif t == "friend_result":
+            self.on_friend_result(m)
+        elif t == "invite":
+            self.on_invite(m)
         elif t == "declined":
             self.log(f"{m['by_user_name']} rechazó el reto", "sys")
         elif t == "queued":

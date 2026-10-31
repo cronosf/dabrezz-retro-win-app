@@ -27,7 +27,8 @@ from shared.dx_manifest import DX_SHA256  # noqa: E402
 from shared.protocol import APP_NAME, VERSION  # noqa: E402
 
 MARKER = ".dabrezz-retro-data"    # solo se borra una carpeta de datos que el instalador marco como suya
-EXE = "DabrezzRetro.exe"
+EXE = "DabrezzRetro.exe"          # el nombre del archivo no cambia (las actualizaciones y los accesos dependen de el)
+LNK, OLD_LNK = "Dabrezz Play.lnk", "Dabrezz Retro.lnk"       # la app se llama Dabrezz Play; el acceso antiguo se reemplaza
 UNINSTALL = "Desinstalar DabrezzRetro.exe"
 REG = r"Software\Microsoft\Windows\CurrentVersion\Uninstall\DabrezzRetro"
 
@@ -127,7 +128,7 @@ def payload(name):
 
 EMULATORS = ("fbneo", "snes9x", "ggpofba", "flycast", "duckstation")
 NOTICES = ("EMULATOR-NOTICE.txt", "FBNEO-LICENSE.txt", "SNES9X-LICENSE.txt", "FLYCAST-GPL2-LICENSE.txt", "DUCKSTATION-GPL3-LICENSE.txt",
-           "OPENBIOS-MIT-LICENSE.txt", "DIRECTX-LICENSE.txt")
+           "OPENBIOS-MIT-LICENSE.txt", "BUNGEE-OFL-LICENSE.txt", "DIRECTX-LICENSE.txt")
 
 
 def emulator_complete(dest, zp):
@@ -247,8 +248,13 @@ def start_menu():
     return os.path.join(os.environ["APPDATA"], "Microsoft", "Windows", "Start Menu", "Programs")
 
 
+def has_lnk(folder):
+    return any(os.path.exists(os.path.join(folder, n)) for n in (LNK, OLD_LNK))
+
+
 class Installer(tk.Tk):
     def __init__(self, update=False):
+        th.load_fonts()
         super().__init__()
         self.update_mode = update
         self.title(f"Instalador {APP_NAME}")
@@ -262,8 +268,8 @@ class Installer(tk.Tk):
         prev = existing_install()                  # instalacion anterior: se propone la MISMA carpeta (se conservan config, ROMs y sesion)
         self.v_app = tk.StringVar(value=prev[0] if prev else root)
         self.v_data = tk.StringVar(value=prev[1] if prev else os.path.join(root, "Datos"))
-        self.v_desk = tk.BooleanVar(value=os.path.exists(os.path.join(desktop(), "Dabrezz Retro.lnk")) if prev else True)
-        self.v_menu = tk.BooleanVar(value=os.path.exists(os.path.join(start_menu(), "Dabrezz Retro.lnk")) if prev else True)
+        self.v_desk = tk.BooleanVar(value=has_lnk(desktop()) if prev else True)
+        self.v_menu = tk.BooleanVar(value=has_lnk(start_menu()) if prev else True)
         f = ttk.Frame(self, padding=28)
         f.pack(fill="both", expand=True)
         tk.Label(f, image=th.image("logo_side.png"), bg=th.BG).pack(anchor="w")
@@ -292,8 +298,8 @@ class Installer(tk.Tk):
         self.btn = None
         self.v_app = tk.StringVar(value=cur[0])
         self.v_data = tk.StringVar(value=cur[1])
-        self.v_desk = tk.BooleanVar(value=os.path.exists(os.path.join(desktop(), "Dabrezz Retro.lnk")))
-        self.v_menu = tk.BooleanVar(value=os.path.exists(os.path.join(start_menu(), "Dabrezz Retro.lnk")))
+        self.v_desk = tk.BooleanVar(value=has_lnk(desktop()))
+        self.v_menu = tk.BooleanVar(value=has_lnk(start_menu()))
         self.configure(bg=th.ACCENT)
         self.overrideredirect(True)
         self.attributes("-topmost", True)
@@ -367,10 +373,11 @@ class Installer(tk.Tk):
             self.check_antivirus(data)
             self.step(60, "Creando accesos directos…")
             target = os.path.join(app, EXE)
-            if self.v_desk.get():
-                shortcut(os.path.join(desktop(), "Dabrezz Retro.lnk"), target, app)
-            if self.v_menu.get():
-                shortcut(os.path.join(start_menu(), "Dabrezz Retro.lnk"), target, app)
+            for folder, want in ((desktop(), self.v_desk.get()), (start_menu(), self.v_menu.get())):
+                if os.path.exists(os.path.join(folder, OLD_LNK)):
+                    os.remove(os.path.join(folder, OLD_LNK))
+                if want:
+                    shortcut(os.path.join(folder, LNK), target, app)
             self.step(85, "Registrando en Windows…")
             with winreg.CreateKey(winreg.HKEY_CURRENT_USER, REG) as k:
                 for name, val in (("DisplayName", APP_NAME), ("DisplayVersion", VERSION), ("Publisher", "Dabrezz"),
@@ -452,7 +459,7 @@ class Installer(tk.Tk):
                 subprocess.Popen([target], cwd=app)
             self.cleanup_download()
             return self.destroy()
-        if messagebox.askyesno(APP_NAME, "Instalación completada. ¿Abrir Dabrezz Retro ahora?"):
+        if messagebox.askyesno(APP_NAME, "Instalación completada. ¿Abrir Dabrezz Play ahora?"):
             subprocess.Popen([target], cwd=app)
         self.destroy()
 
@@ -470,13 +477,13 @@ def uninstall():
             data = json.load(fh)["data_dir"]
     except (OSError, ValueError, KeyError):
         data = None
-    if not messagebox.askyesno(APP_NAME, "¿Desinstalar Dabrezz Retro?"):
+    if not messagebox.askyesno(APP_NAME, "¿Desinstalar Dabrezz Play?"):
         return
     # install.json es editable por cualquiera con acceso a la carpeta: solo se borra si la ruta es segura y esta marcada
     purge = bool(data) and safe_dir(data) and os.path.exists(os.path.join(data, MARKER)) and messagebox.askyesno(
         APP_NAME, f"¿Borrar también los datos (ROMs, config, replays)?\n{data}")
-    for p in (os.path.join(desktop(), "Dabrezz Retro.lnk"), os.path.join(start_menu(), "Dabrezz Retro.lnk"),
-              os.path.join(app, EXE), os.path.join(app, "install.json")):
+    for p in (os.path.join(desktop(), LNK), os.path.join(start_menu(), LNK), os.path.join(desktop(), OLD_LNK),
+              os.path.join(start_menu(), OLD_LNK), os.path.join(app, EXE), os.path.join(app, "install.json")):
         try:
             os.remove(p)
         except OSError:

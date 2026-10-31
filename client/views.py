@@ -29,7 +29,7 @@ def initials(ch):
 
 
 class Views:
-    NAV = (("home", "Inicio"), ("games", "Juegos"), ("fav", "Favoritos"), ("multi", "Multijugador"), ("help", "Ayuda"))
+    NAV = (("home", "Inicio"), ("games", "Juegos"), ("fav", "Favoritos"), ("multi", "Multijugador"), ("friends", "Amigos"), ("help", "Ayuda"))
     first_to = [2, 3, 5, 10]
 
     # ---------- acceso ----------
@@ -64,7 +64,7 @@ class Views:
                        font=(th.BODY, 9)).pack(anchor="w", pady=(10, 0))
         self.lbl_status = tk.Label(box, text="", fg=th.ERR, bg=th.SIDEBAR, wraplength=330, justify="left", font=(th.BODY, 9))
         self.lbl_status.pack(pady=10, anchor="w")
-        self.btn_login = ttk.Button(box, text="ENTRAR", style="Accent.TButton", command=self.auth)
+        self.btn_login = ttk.Button(box, text="ENTRAR", style="Cta.TButton", command=self.auth)
         self.btn_login.pack(fill="x")
         ttk.Button(box, text="CREAR CUENTA", command=self.show_register_page).pack(fill="x", pady=(8, 0))
         row = tk.Frame(box, bg=th.SIDEBAR)
@@ -134,12 +134,13 @@ class Views:
 
         self.content = tk.Frame(main, bg=th.BG)
         self.content.pack(fill="both", expand=True, padx=24, pady=(0, 18))
-        self.views = {n: tk.Frame(self.content, bg=th.BG) for n in ("home", "games", "multi", "help", "settings", "profile", "table")}
+        self.views = {n: tk.Frame(self.content, bg=th.BG) for n in ("home", "games", "multi", "friends", "help", "settings", "profile", "table")}
         self.build_help(self.views["help"])
         self.filter, self.view_name, self.sel_game = "Todos", "home", None
         self._build_home()
         self._build_games()
         self._build_multi()
+        self._build_friends()
         self.refresh_me()
         self.render_channels()
         self.show_view("home")
@@ -171,6 +172,8 @@ class Views:
             self._fill_settings()
         elif view == "profile":
             self._fill_profile()
+        elif view == "friends":
+            self._fill_friends()
 
     def search_text(self):
         t = self.v_search.get().strip().lower()
@@ -385,7 +388,7 @@ class Views:
         self.lbl_chan.pack(anchor="w")
         bar = tk.Frame(v, bg=th.BG)
         bar.pack(fill="x", pady=(10, 0))
-        self.btn_queue = ttk.Button(bar, text="BUSCAR PARTIDA", style="Accent.TButton", command=self.toggle_queue)
+        self.btn_queue = ttk.Button(bar, text="BUSCAR PARTIDA", style="Cta.TButton", command=self.toggle_queue)
         self.btn_queue.pack(side="left", padx=(0, 8))
         for text, cmd in (("PROBAR JUEGO", self.test_game), ("DESCARGAR ROMS", self.download_roms), ("RANKING", lambda: self.net.send(t="top")),
                           ("HISTORIAL", lambda: self.net.send(t="history")), ("EN VIVO", lambda: self.net.send(t="live"))):
