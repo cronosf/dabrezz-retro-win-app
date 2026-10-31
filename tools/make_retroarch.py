@@ -43,6 +43,7 @@ def main():
             if not os.path.isfile(p):
                 sys.exit("Falta el nucleo " + p)
             z.write(p, "cores/" + c)
+        z.write(os.path.join(root, "vendor", "openbios.bin"), "bios/openbios.bin")      # OpenBIOS (la BIOS libre de PS1 que usa SwanStation)
         z.writestr("NOTICE-RETROARCH.txt", NOTICE)
     with open(os.path.join(root, "vendor", "RETROARCH-NOTICE.txt"), "w", encoding="utf-8") as f:
         f.write(NOTICE)

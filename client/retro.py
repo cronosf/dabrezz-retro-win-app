@@ -11,6 +11,7 @@ import shutil
 import socket
 import threading
 
+BIOS_FILE = "openbios.bin"                       # BIOS libre de PS1 (MIT), incluida en el paquete: nadie necesita la BIOS de Sony
 RA_PORT = 55435                                  # puerto TCP del netplay de RetroArch (el anfitrion escucha aqui)
 CMD_PORT = 55355                                 # puerto UDP de comandos de RetroArch (solo en ranked: lectura de memoria para los detectores)
 CORES = {"snes": "snes9x_libretro.dll", "ps1": "swanstation_libretro.dll", "n64": "mupen64plus_next_libretro.dll"}
@@ -37,8 +38,12 @@ def core_path(data, system):
     return os.path.join(folder(data), "cores", CORES[system])
 
 
+def bios_path(data):
+    return os.path.join(folder(data), "bios", BIOS_FILE)
+
+
 def installed(data):
-    return os.path.isfile(exe_path(data)) and all(os.path.isfile(core_path(data, s)) for s in CORES)
+    return os.path.isfile(exe_path(data)) and all(os.path.isfile(core_path(data, s)) for s in CORES) and os.path.isfile(bios_path(data))
 
 
 def nick_arg(name):
@@ -51,10 +56,11 @@ def prepare(data, system, nick, delay=2, ranked=False, players=2, bios_src=None)
     base = os.path.join(folder(data), "dz")
     for sub in ("saves", "states", "system", "config"):
         os.makedirs(os.path.join(base, sub), exist_ok=True)
-    if system == "ps1" and bios_src and os.path.isfile(bios_src):               # OpenBIOS (MIT): nadie necesita la BIOS de Sony
-        dst = os.path.join(base, "system", "openbios.bin")
-        if not os.path.isfile(dst):
-            shutil.copyfile(bios_src, dst)
+    src = bios_src or bios_path(data)
+    if system == "ps1" and os.path.isfile(src):                                 # RetroArch busca la BIOS en su carpeta "system"
+        dst = os.path.join(base, "system", BIOS_FILE)
+        if not os.path.isfile(dst) or os.path.getsize(dst) != os.path.getsize(src) or open(dst, "rb").read() != open(src, "rb").read():
+            shutil.copyfile(src, dst)
     opts = os.path.join(base, "config", f"{system}-core-options.cfg")
     with open(opts, "w", encoding="utf-8") as f:
         if system == "ps1":

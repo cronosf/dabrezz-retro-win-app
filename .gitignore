@@ -23,3 +23,8 @@ roms/
 *.cue
 *.chd
 *.iso
+
+# toolchain MIPS y codigo de OpenBIOS (herramientas locales, mucho peso)
+MIPS/
+# respaldos de emuladores retirados: los zips quedan solo en este equipo
+EMUS BACK/**/*.zip

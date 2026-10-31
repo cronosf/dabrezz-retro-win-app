@@ -29,10 +29,10 @@ HELP = (
     ("b", "Amigos: agrega a otros jugadores por su nombre de usuario (ellos aceptan la solicitud), mira quién está en línea, invítalos a una partida amistosa o escríbeles un mensaje privado. Haz clic derecho sobre un jugador de la lista para enviarle una invitación de amistad. Los mensajes privados solo se pueden enviar entre amigos y no se guardan: se borran al cerrar la app."),
     ("b", "La app se actualiza sola al abrirse cuando existe una versión nueva firmada."),
     ("h", "PlayStation 1 (beta)"),
-    ("b", "No necesitas la BIOS de Sony: se instala OpenBIOS, una BIOS libre, y todos los jugadores usan la misma. Pocos juegos no "
-          "arrancan con ella (por ejemplo Azure Dreams y Wipeout NTSC-U). Tu rival necesita el mismo disco."),
-    ("b", "Una partida es de 2 jugadores: el jugador 1 es el anfitrión y el 2 se une. Solo amistoso (sin ELO)."),
-    ("b", "Descarga el disco con DESCARGAR ROM y configura tus controles con PROBAR JUEGO (Ajustes > Controladores del emulador)."),
+    ("b", "El PS1 se juega con RetroArch (núcleo SwanStation), que viene con el instalador. No necesitas la BIOS de Sony: se usa OpenBIOS, una BIOS "
+          "libre, y todos los jugadores usan la misma. Pocos juegos no arrancan con ella. Tu rival necesita el mismo disco."),
+    ("b", "Las partidas son de 2 a 4 jugadores (multitap en los juegos que lo admiten): el creador de la sala es el anfitrión. Solo amistoso (sin ELO)."),
+    ("b", "Descarga el disco con DESCARGAR ROM y configura tus controles con PROBAR JUEGO (en RetroArch: F1 > Ajustes > Entrada)."),
     ("h", "Términos y condiciones"),
     ("p", f"1. Gratuita. Dabrezz Play es gratuita y se puede distribuir libremente sin cobrar por ella. Está desarrollada por {AUTHOR}. "
           "No se debe vender ni cobrar por su descarga, instalación o uso."),

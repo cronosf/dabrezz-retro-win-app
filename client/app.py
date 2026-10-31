@@ -304,8 +304,6 @@ class App(Views, LoginPages, LobbyPages, FriendsUI, DmUI, RoomsUI, AdminUI, Help
             falta.append("Snes9x (SNES)")
         if os.path.isdir(retro.folder(self.data)) and not retro.installed(self.data):          # la carpeta existe: lo borro el antivirus
             falta.append("RetroArch (3 a 5 jugadores y N64)")
-        if os.path.isdir(ps1.folder(self.data)) and not os.path.exists(ps1.exe_path(self.data)):   # la carpeta existe: lo borro el antivirus
-            falta.append("DuckStation (PS1)")
         if falta:
             self.log("Falta el emulador de " + " y de ".join(falta) + ". Casi seguro tu antivirus lo borró: en Seguridad de Windows → "
                      "Protección contra virus y amenazas → Historial de protección, restaura el archivo y permite el elemento; añade "
@@ -340,15 +338,15 @@ class App(Views, LoginPages, LobbyPages, FriendsUI, DmUI, RoomsUI, AdminUI, Help
 
     @staticmethod
     def system_of(channel):
-        """Emulador de un canal: snes_* -> Snes9x, ps1_* -> DuckStation, n64_* -> RetroArch; el resto, FBNeo."""
-        return ("snes9x" if channel.startswith("snes_") else "duckstation" if channel.startswith("ps1_") else
+        """Emulador de un canal: snes_* -> Snes9x (RetroArch en salas de 3 o mas); ps1_* y n64_* -> RetroArch; el resto, FBNeo."""
+        return ("snes9x" if channel.startswith("snes_") else "ps1" if channel.startswith("ps1_") else
                 "n64" if channel.startswith("n64_") else "fbneo")
 
     def emulator_for(self, channel):
         if self.system_of(channel) == "snes9x":
             return os.path.join(self.data, "emulators", "snes9x", "fcadesnes9x.exe")
-        if self.system_of(channel) == "duckstation":
-            return ps1.exe_path(self.data)
+        if self.system_of(channel) in ("ps1", "n64"):
+            return retro.exe_path(self.data)
         return self.cfg["emulator"]
 
     def spawn(self, cmd, cwd, channel):
@@ -364,16 +362,16 @@ class App(Views, LoginPages, LobbyPages, FriendsUI, DmUI, RoomsUI, AdminUI, Help
     def rom_file(self, channel):
         """Ruta del juego descargado para RetroArch (SNES: zip de Snes9x; PS1: imagen de disco; N64: zip) o None."""
         system = self.system_of(channel)
-        if system == "duckstation":
-            return ps1.image_path(self.roms_dest("duckstation"), channel)
+        if system == "ps1":
+            return ps1.image_path(self.roms_dest("ps1"), channel)
         p = os.path.join(self.roms_dest(system), channel + ".zip")
         return p if os.path.exists(p) else None
 
     def rom_exists(self, channel):
         if self.system_of(channel) == "n64":
             return os.path.exists(os.path.join(self.roms_dest("n64"), channel + ".zip"))
-        if self.system_of(channel) == "duckstation":
-            return ps1.image_path(self.roms_dest("duckstation"), channel) is not None
+        if self.system_of(channel) == "ps1":
+            return ps1.image_path(self.roms_dest("ps1"), channel) is not None
         if self.system_of(channel) == "snes9x":
             return os.path.exists(os.path.join(self.roms_dest("snes9x"), channel + ".zip"))
         dirs = [self.cfg["roms_dir"], os.path.join(self.data, "roms")]
@@ -412,7 +410,7 @@ class App(Views, LoginPages, LobbyPages, FriendsUI, DmUI, RoomsUI, AdminUI, Help
             put = self.net.events.put
             self._retro = RetroSession(self.data, self.net.send, self.cfg["server_host"], (self.me or {}).get("user_name", "Jugador"), self.rom_file,
                                        title_for=self.window_title,
-                                       bios_src=os.path.join(ps1.bios_dir(self.data), ps1.BIOS_FILE),
+                                       bios_src=retro.bios_path(self.data),
                                        log=lambda text: put({"t": "_log", "text": text}), on_end=lambda: put({"t": "_raend"}))
         self._retro.nick = (self.me or {}).get("user_name", "Jugador")
         return self._retro
@@ -421,6 +419,8 @@ class App(Views, LoginPages, LobbyPages, FriendsUI, DmUI, RoomsUI, AdminUI, Help
         """Carpeta donde cada emulador busca sus ROMs."""
         if system == "fbneo":
             return self.cfg["roms_dir"] or os.path.join(self.data, "roms")
+        if system in ("ps1", "duckstation"):                      # discos de PS1 (el catalogo antiguo los llama "duckstation")
+            return os.path.join(self.data, "roms", "ps1")
         return os.path.join(self.data, "emulators", system, "ROMs")
 
     def download_roms(self, game=None):
@@ -478,29 +478,18 @@ class App(Views, LoginPages, LobbyPages, FriendsUI, DmUI, RoomsUI, AdminUI, Help
                 return messagebox.showinfo(APP_NAME, "Falta la ROM: pulsa DESCARGAR ROM en la tarjeta del juego.")
             # Snes9x busca <emulador>\ROMs\<juego>.zip: se le pasa solo el nombre (con ruta o con .zip da "Invalid Zip archive")
             return self.spawn([exe, sel[0]], os.path.dirname(exe), sel[0])      # offline: aqui se configuran los controles (menu Input)
-        if sel and self.system_of(sel[0]) == "duckstation":
-            exe = self.emulator_for(sel[0])
-            if not os.path.exists(exe):
-                return messagebox.showinfo(APP_NAME, "No se encontró DuckStation (PS1). Si tu antivirus lo borró, restáuralo desde "
-                                           "Seguridad de Windows y vuelve a ejecutar el instalador.")
-            image = ps1.image_path(self.roms_dest("duckstation"), sel[0])
-            if not image:
-                return messagebox.showinfo(APP_NAME, "Falta el disco: pulsa DESCARGAR ROM en la tarjeta del juego.")
-            if not ps1.has_bios(self.data):
-                return self.need_bios()
-            ps1.prepare(self.data, self.roms_dest("duckstation"))
-            # solo: aqui se configuran los controles (Ajustes > Controladores del propio emulador); el netplay usa el mando 1
-            return self.spawn([exe, image], os.path.dirname(exe), sel[0])
-        if sel and self.system_of(sel[0]) == "n64":              # N64: solo RetroArch (se descarga la primera vez)
+        if sel and self.system_of(sel[0]) in ("ps1", "n64"):      # PS1 y N64: RetroArch
             if not retro.installed(self.data):
                 self.ensure_retro()
-                return messagebox.showinfo(APP_NAME, "No se encontró RetroArch (necesario para Nintendo 64). Vuelve a ejecutar el instalador.")
+                return messagebox.showinfo(APP_NAME, "No se encontró RetroArch (PS1 y Nintendo 64). Si tu antivirus lo borró, restáuralo desde "
+                                           "Seguridad de Windows y vuelve a ejecutar el instalador.")
             rom = self.rom_file(sel[0])
             if not rom:
-                return messagebox.showinfo(APP_NAME, "Falta la ROM: pulsa DESCARGAR ROM en la tarjeta del juego.")
-            cfg = retro.prepare(self.data, "n64", (self.me or {}).get("user_name", "Jugador"))
-            return self.spawn([retro.exe_path(self.data), "-L", retro.core_path(self.data, "n64"), "--appendconfig", cfg, rom],
-                              retro.folder(self.data), sel[0])      # offline: aqui se configuran los controles (F1 > Entrada)
+                return messagebox.showinfo(APP_NAME, "Falta el juego: pulsa DESCARGAR ROM en la tarjeta del juego.")
+            rs = retro.system_of(sel[0])
+            cfg = retro.prepare(self.data, rs, (self.me or {}).get("user_name", "Jugador"))
+            return self.spawn([retro.exe_path(self.data), "-L", retro.core_path(self.data, rs), "--appendconfig", cfg, rom],
+                              retro.folder(self.data), sel[0])      # solo: aqui se configuran los controles (F1 > Entrada)
         exe = self.cfg["emulator"]
         if not sel or not exe or not os.path.exists(exe):
             return messagebox.showinfo(APP_NAME, "Elige un juego y configura el emulador en AJUSTES.")
@@ -577,7 +566,7 @@ class App(Views, LoginPages, LobbyPages, FriendsUI, DmUI, RoomsUI, AdminUI, Help
             except OSError:
                 return self.log("No se pudo resolver la direccion del relay.", "sys")
         system = self.system_of(m["channel"])
-        snes, duck = system == "snes9x", system == "duckstation"
+        snes = system == "snes9x"
         exe = self.emulator_for(m["channel"])
         delay = max(0, -(-int(rtt) // 2 // 17)) if rtt is not None else None   # frames de 16,7 ms (media ida)
         self.log(("Conexión por relay" if relay else f"Conexión directa · {rtt} ms") +
@@ -587,22 +576,17 @@ class App(Views, LoginPages, LobbyPages, FriendsUI, DmUI, RoomsUI, AdminUI, Help
         if not exe or not os.path.exists(exe):
             return self.log(f"Configura el emulador en AJUSTES. Rival: {host}:{port} (eres P{player})", "sys")
         local = self.net.local_udp_port()
-        if duck:                 # PS1: el jugador 1 es el anfitrion y el 2 se une (ver client/ps1.py)
-            cmd = self.duck_command(m, host, port, player, min(delay or 0, 9), local)
-            if cmd is None:
-                return
+        # Se parte la plantilla ANTES de sustituir: ningun valor (ni siquiera los del servidor) puede añadir argumentos.
+        try:
+            argv = build_argv(SNES_ARGS if snes else self.cfg["emu_args"], m["channel"], host, port, local, player,
+                              m["rival_user_name"], min(delay or 0, 9))
+        except (KeyError, IndexError, ValueError):
+            return self.log("Argumentos del emulador invalidos: revisa AJUSTES.", "sys")
+        if snes:
+            prepare_snes_config(exe)
         else:
-            # Se parte la plantilla ANTES de sustituir: ningun valor (ni siquiera los del servidor) puede añadir argumentos.
-            try:
-                argv = build_argv(SNES_ARGS if snes else self.cfg["emu_args"], m["channel"], host, port, local, player,
-                                  m["rival_user_name"], min(delay or 0, 9))
-            except (KeyError, IndexError, ValueError):
-                return self.log("Argumentos del emulador invalidos: revisa AJUSTES.", "sys")
-            if snes:
-                prepare_snes_config(exe)
-            else:
-                prepare_emulator_config(exe, self.cfg["roms_dir"] or os.path.join(self.data, "roms"))
-            cmd = [exe, *argv]
+            prepare_emulator_config(exe, self.cfg["roms_dir"] or os.path.join(self.data, "roms"))
+        cmd = [exe, *argv]
         self.net.udp_close()     # libera el puerto: el emulador usa el mismo mapeo NAT
         self.auto = None
         if m["ranked"]:          # resultado automatico: se leen los archivos que escribe el detector del emulador (client/bridge.py)
@@ -611,31 +595,6 @@ class App(Views, LoginPages, LobbyPages, FriendsUI, DmUI, RoomsUI, AdminUI, Help
                                         lambda ev: self.net.events.put({"t": "_emu", "ev": ev}))
         self.emu = self.spawn(cmd, os.path.dirname(exe), m["channel"])
         self.log("Emulador iniciado.", "sys")
-
-    def duck_command(self, m, host, port, player, delay, local):
-        """Comando de DuckStation para esta partida, o None si falta algo (la BIOS o el disco)."""
-        roms = self.roms_dest("duckstation")
-        if not ps1.has_bios(self.data):
-            self.need_bios()
-            return None
-        ps1.prepare(self.data, roms)
-        exe = self.emulator_for(m["channel"])
-        nick = (self.me or {}).get("user_name", "Jugador")
-        if player == 1:                                   # anfitrion: arranca el juego y espera al rival
-            image = ps1.image_path(roms, m["channel"])
-            if not image:
-                self.log("Falta el disco del juego: pulsa DESCARGAR ROM en su tarjeta.", "sys")
-                return None
-            self.log("Eres el anfitrión: el rival se unirá a tu partida.", "sys")
-            return ps1.host_command(exe, image, local, nick, delay)
-        self.log("Te unes a la partida del anfitrión (necesitas el mismo disco).", "sys")
-        return ps1.join_command(exe, host, port, local, nick, delay)
-
-    def need_bios(self):
-        """Falta OpenBIOS (la BIOS libre que instala Dabrezz Play): casi seguro la borro el antivirus o el paquete esta incompleto."""
-        messagebox.showinfo(APP_NAME, "Falta la BIOS de PS1 (openbios.bin) que instala Dabrezz Play. Probablemente tu antivirus la "
-                            "borró: restáurala desde Seguridad de Windows (Historial de protección) o vuelve a ejecutar el instalador.\n\n"
-                            f"{ps1.bios_dir(self.data)}")
 
     def stop_emulator(self):
         """La partida ranked llego a su meta (primero en N): se cierra el emulador para que no sigan jugando."""

@@ -41,8 +41,8 @@ if __name__ == "__main__":
         icon = os.path.join(assets, "icon.ico")      # icono de los .exe: tambien el de los accesos directos y el de Inicio
         pyi(tmp, "--name", "DabrezzRetro", "--icon", icon, "--add-data", f"{assets};assets", os.path.join(ROOT, "client", "app.py"))
         vendor = os.path.join(ROOT, "vendor")       # emulador, runtime de DirectX y sus licencias (ver vendor/SOURCE.txt)
-        names = ("emulator-fbneo.zip", "emulator-snes9x.zip", "emulator-ggpofba.zip", "emulator-flycast.zip", "emulator-duckstation.zip", "emulator-retroarch.zip", "directx-redist.zip",
-                 "EMULATOR-NOTICE.txt", "FBNEO-LICENSE.txt", "SNES9X-LICENSE.txt", "FLYCAST-GPL2-LICENSE.txt", "DUCKSTATION-GPL3-LICENSE.txt", "OPENBIOS-MIT-LICENSE.txt", "BUNGEE-OFL-LICENSE.txt",
+        names = ("emulator-fbneo.zip", "emulator-snes9x.zip", "emulator-ggpofba.zip", "emulator-flycast.zip", "emulator-retroarch.zip", "directx-redist.zip",
+                 "EMULATOR-NOTICE.txt", "FBNEO-LICENSE.txt", "SNES9X-LICENSE.txt", "FLYCAST-GPL2-LICENSE.txt", "OPENBIOS-MIT-LICENSE.txt", "BUNGEE-OFL-LICENSE.txt",
                  "RETROARCH-NOTICE.txt", "DIRECTX-LICENSE.txt")
         pyi(tmp, "--name", "DabrezzRetro-Setup", "--icon", icon, "--add-data", f"{assets};assets",
             "--add-data", f"{os.path.join(DIST, 'DabrezzRetro.exe')};payload",
