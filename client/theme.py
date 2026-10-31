@@ -71,6 +71,11 @@ def flag(code):
     return _flags[cc]
 
 
+def fit_wrap(label, margin=0, minimum=120):
+    """El texto largo de `label` se ajusta al ancho de su contenedor (no se recorta en ventanas estrechas)."""
+    label.master.bind("<Configure>", lambda e: label.config(wraplength=max(e.width - margin, minimum)), add="+")
+
+
 def set_icon(win):
     """Icono de la ventana y de la barra de tareas."""
     try:
@@ -104,9 +109,9 @@ def apply(root: tk.Tk):
     st.map("Accent.TButton", background=[("active", ACCENT_D), ("disabled", PANEL)])
     st.configure("Cta.TButton", background=YELLOW, foreground="#1a0f00")
     st.map("Cta.TButton", background=[("active", YELLOW_D), ("disabled", PANEL)], foreground=[("disabled", MUTED)])
-    st.configure("Chip.TButton", background=PANEL, foreground=MUTED, padding=(14, 5), font=(BODY, 9, "bold"))
+    st.configure("Chip.TButton", background=PANEL, foreground=MUTED, padding=(9, 5), font=(BODY, 9, "bold"))
     st.map("Chip.TButton", background=[("active", PANEL_2)])
-    st.configure("ChipOn.TButton", background=ACCENT, foreground="#ffffff", padding=(14, 5), font=(BODY, 9, "bold"))
+    st.configure("ChipOn.TButton", background=ACCENT, foreground="#ffffff", padding=(9, 5), font=(BODY, 9, "bold"))
     st.map("ChipOn.TButton", background=[("active", ACCENT_D)])
     st.configure("Treeview", background=PANEL, fieldbackground=PANEL, foreground=TEXT, rowheight=28, borderwidth=0)
     st.configure("Treeview.Heading", background=PANEL_2, foreground=MUTED, font=(BODY, 9, "bold"), borderwidth=0)

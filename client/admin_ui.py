@@ -319,9 +319,10 @@ class AdminUI:
 
     # ---------- banderas anti-colusion ----------
     def _adm_build_flags(self, page):
-        tk.Label(page, text="Partidas ranked sospechosas (repetidas entre la misma pareja, resultados siempre para el mismo, etc.). "
-                 "Revísalas y márcalas como revisadas.", fg=th.MUTED, bg=th.BG, font=(th.BODY, 9), anchor="w", justify="left",
-                 wraplength=760).pack(fill="x", pady=(0, 8))
+        note = tk.Label(page, text="Partidas ranked sospechosas (repetidas entre la misma pareja, resultados siempre para el mismo, etc.). "
+                        "Revísalas y márcalas como revisadas.", fg=th.MUTED, bg=th.BG, font=(th.BODY, 9), anchor="w", justify="left", wraplength=600)
+        note.pack(fill="x", pady=(0, 8))
+        th.fit_wrap(note)
         self.adm_flags_tv = self._adm_tree(page, (("id", 50, "#"), ("reason", 150, "MOTIVO"), ("who", 220, "JUGADORES"), ("details", 320, "DETALLE")))
         row = tk.Frame(page, bg=th.BG)
         row.pack(fill="x", pady=(10, 0))

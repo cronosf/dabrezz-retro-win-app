@@ -78,9 +78,11 @@ class DmUI:
         head = tk.Frame(top, bg=th.PANEL_2)
         head.pack(fill="x")
         tk.Label(head, text=name, font=(th.BODY, 11, "bold"), fg="#ffffff", bg=th.PANEL_2, padx=14, pady=8).pack(side="left")
-        tk.Label(head, text="La conversación no se guarda: se borra al cerrar la app", fg=th.MUTED, bg=th.PANEL_2, font=(th.BODY, 8)).pack(side="right", padx=12)
+        tk.Label(head, text="Sin historial", fg=th.MUTED, bg=th.PANEL_2, font=(th.BODY, 8)).pack(side="right", padx=12)
         inp = tk.Frame(top, bg=th.BG)
         inp.pack(side="bottom", fill="x", padx=10, pady=10)
+        send = lambda e=None: self.dm_send(uid)          # noqa: E731
+        ttk.Button(inp, text="ENVIAR", style="Accent.TButton", command=send).pack(side="right", padx=(8, 0))      # primero: no se aplasta
         lbl = tk.Label(top, text="", fg=th.ERR, bg=th.BG, font=(th.BODY, 9), anchor="w", justify="left", wraplength=360)
         lbl.pack(side="bottom", fill="x", padx=12)
         box = tk.Frame(top, bg=th.PANEL)
@@ -98,8 +100,6 @@ class DmUI:
         entry.pack(side="left", fill="x", expand=True, ipady=4)
         win = {"top": top, "txt": txt, "entry": entry, "lbl": lbl, "name": name}
         self.dm_wins[uid] = win
-        send = lambda e=None: self.dm_send(uid)          # noqa: E731
-        ttk.Button(inp, text="ENVIAR", style="Accent.TButton", command=send).pack(side="left", padx=(8, 0))
         entry.bind("<Return>", send)
         top.protocol("WM_DELETE_WINDOW", lambda: self._dm_close(uid))
         for who, text, when in self.dm_hist.get(uid, []):       # la conversacion de esta sesion, si ya se habia cerrado la ventana

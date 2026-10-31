@@ -166,8 +166,7 @@ class App(Views, LoginPages, LobbyPages, FriendsUI, DmUI, RoomsUI, AdminUI, Help
         th.load_fonts()
         super().__init__()
         self.title(f"{APP_NAME} {VERSION}")
-        self.geometry("1180x700")
-        self.minsize(980, 600)
+        self.fit_window()
         th.apply(self)
         self.data = data_dir()
         for sub in ("", "roms", "emulators", "replays"):
@@ -200,6 +199,14 @@ class App(Views, LoginPages, LobbyPages, FriendsUI, DmUI, RoomsUI, AdminUI, Help
         self.after(100, self.pump)
         self.boot()                                    # oculta hasta saber si hay una version nueva en GitHub
         self.after(5000, self.ping_loop)
+
+    def fit_window(self):
+        """Tamaño inicial y minimo segun la pantalla (laptops de 1366x768 o 1280x720, tambien con escalado de Windows): la ventana nunca
+        es mas grande que la pantalla, y se centra."""
+        sw, sh = self.winfo_screenwidth(), self.winfo_screenheight()
+        w, h = min(1180, sw - 60), min(700, sh - 110)           # deja sitio a la barra de tareas y al titulo de la ventana
+        self.minsize(min(980, w), min(600, h))
+        self.geometry(f"{w}x{h}+{max((sw - w) // 2, 0)}+{max((sh - h) // 2 - 20, 0)}")
 
     # ---------- config ----------
     def _load_cfg(self):

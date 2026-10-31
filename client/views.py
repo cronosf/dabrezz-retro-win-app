@@ -95,10 +95,12 @@ class Views:
         side = tk.Frame(f, bg=th.SIDEBAR, width=232)
         side.pack(side="left", fill="y")
         side.pack_propagate(False)
-        tk.Label(side, image=th.image("logo_side.png"), bg=th.SIDEBAR).pack(pady=(20, 24))
+        self.side_logo = tk.Label(side, image=th.image("logo_side.png"), bg=th.SIDEBAR)
+        self.side_logo.pack(pady=(20, 24))
         self.nav = {}
         for key, text in self.NAV:
             self._nav_item(side, key, text, lambda k=key: self.show_view(k))
+        f.bind("<Configure>", lambda e: self._side_fit(e.height))
         self._nav_item(side, "settings", "Configuración", lambda: self.show_view("settings"))
         user = tk.Frame(side, bg=th.SIDEBAR, cursor="hand2")        # clic: Mi perfil
         user.pack(side="bottom", fill="x", padx=14, pady=16)
@@ -156,6 +158,14 @@ class Views:
         self.show_view("home")
         self.after(2000, self.check_emulators)
 
+    def _side_fit(self, height):
+        """En ventanas bajas el logo se oculta para que el menu y el usuario (abajo) quepan siempre."""
+        show = height >= 720
+        if show and not self.side_logo.winfo_manager():
+            self.side_logo.pack(before=next(iter(self.nav.values())), pady=(20, 24))
+        elif not show and self.side_logo.winfo_manager():
+            self.side_logo.pack_forget()
+
     def _nav_item(self, parent, key, text, command):
         lbl = tk.Label(parent, text="  " + text, image=th.image(f"ico_{key}.png"), compound="left", anchor="w", padx=22, pady=11,
                        fg=th.TEXT, bg=th.SIDEBAR, cursor="hand2", font=(th.BODY, 11))
@@ -212,11 +222,38 @@ class Views:
     # ---------- inicio ----------
     def _build_home(self):
         v = self.views["home"]
-        banner = tk.Label(v, image=th.image("banner_home.png"), bg=th.BG, cursor="hand2", bd=0)     # JUGAR ONLINE va dibujado en la imagen
+        canvas = self.home_canvas = tk.Canvas(v, bg=th.BG, highlightthickness=0)
+        self.home_sb = ttk.Scrollbar(v, orient="vertical", command=canvas.yview)
+        canvas.configure(yscrollcommand=self._home_scrolled)
+        canvas.pack(side="left", fill="both", expand=True)
+        inner = tk.Frame(canvas, bg=th.BG)
+        self._home_win = canvas.create_window((0, 0), window=inner, anchor="nw")
+        inner.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+        canvas.bind("<Configure>", self._home_resized)
+        canvas.bind("<Enter>", lambda e: canvas.bind_all("<MouseWheel>", lambda ev: canvas.yview_scroll(-1 * (ev.delta // 120), "units")))
+        canvas.bind("<Leave>", lambda e: canvas.unbind_all("<MouseWheel>"))
+        banner = tk.Label(inner, image=th.image("banner_home.png"), bg=th.BG, cursor="hand2", bd=0)     # JUGAR ONLINE va dibujado en la imagen
         banner.pack(anchor="w")
         banner.bind("<Button-1>", lambda e: self.show_view("games"))
-        self.home_body = tk.Frame(v, bg=th.BG)
+        self.home_body = tk.Frame(inner, bg=th.BG)
         self.home_body.pack(fill="both", expand=True)
+        self._home_cards = 0
+
+    def _home_scrolled(self, lo, hi):
+        """La barra de scroll de Inicio solo aparece si el contenido no cabe."""
+        self.home_sb.set(lo, hi)
+        if float(lo) <= 0 and float(hi) >= 1:
+            self.home_sb.pack_forget()
+        elif not self.home_sb.winfo_manager():
+            self.home_sb.pack(side="right", fill="y", before=self.home_canvas)
+
+    def _home_resized(self, e):
+        self.home_canvas.itemconfigure(self._home_win, width=e.width)
+        if self._home_card_count() != self._home_cards and self.view_name == "home":        # cambia el ancho: caben mas o menos fichas
+            self.after_idle(self._fill_home)
+
+    def _home_card_count(self):
+        return max(2, min(6, (self.home_canvas.winfo_width() + 10) // 142))
 
     def _mini_card(self, parent, ch):
         """Ficha compacta de Juegos Destacados: ilustracion de la plataforma, titulo e insignia."""
@@ -247,7 +284,8 @@ class Views:
         more.bind("<Button-1>", lambda e: (self.set_filter("Todos"), self.show_view("games")))
         row = tk.Frame(self.home_body, bg=th.BG)
         row.pack(anchor="w")
-        feat = ([c for c in self.game_list() if c in self.auto_channels] + [c for c in self.game_list() if c not in self.auto_channels])[:6]
+        self._home_cards = self._home_card_count()
+        feat = ([c for c in self.game_list() if c in self.auto_channels] + [c for c in self.game_list() if c not in self.auto_channels])[:self._home_cards]
         if not feat:
             tk.Label(row, text="Aún no hay juegos disponibles en el servidor.", fg=th.MUTED, bg=th.BG).pack(anchor="w")
         for ch in feat:
@@ -273,8 +311,8 @@ class Views:
         chips.pack(fill="x", pady=(10, 12))
         self.chips = {}
         for name in FILTERS:
-            b = ttk.Button(chips, text=name, command=lambda n=name: self.set_filter(n))
-            b.pack(side="left", padx=(0, 8))
+            b = ttk.Button(chips, text=name, style="Chip.TButton", command=lambda n=name: self.set_filter(n))
+            b.pack(side="left", padx=(0, 4))
             self.chips[name] = b
         wrap = tk.Frame(v, bg=th.BG)
         wrap.pack(fill="both", expand=True)
@@ -296,7 +334,7 @@ class Views:
     def set_filter(self, name, relayout=True):
         self.filter = name
         for n, b in self.chips.items():
-            b.config(style="Accent.TButton" if n == name else "TButton")
+            b.config(style="ChipOn.TButton" if n == name else "Chip.TButton")
         if relayout:
             self.layout_games()
 
@@ -509,11 +547,11 @@ class Views:
         self.chat_inp = inp = ttk.Frame(mid, style="Panel.TFrame")
         inp.pack(fill="x", pady=(8, 0))
         ttk.Button(inp, image=th.image("emo_smile.png"), command=self.toggle_emotes).pack(side="left", padx=(0, 8))
+        ttk.Button(inp, text="ENVIAR", style="Accent.TButton", command=self.send_chat).pack(side="right", padx=(8, 0))   # primero: no se aplasta
         self.v_msg = tk.StringVar()
         self.chat_entry = e = ttk.Entry(inp, textvariable=self.v_msg)
         e.pack(side="left", fill="x", expand=True)
         e.bind("<Return>", self.send_chat)
-        ttk.Button(inp, text="ENVIAR", style="Accent.TButton", command=self.send_chat).pack(side="left", padx=(8, 0))
         self.log("Elige un juego en la sección Juegos (abre su tarjeta) para entrar a su sala y chatear con los jugadores. "
                  "Usa el botón 🙂 para los emoticonos.", "sys")
 
