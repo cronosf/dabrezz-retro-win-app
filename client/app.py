@@ -14,6 +14,7 @@ import re
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 import client.attest as attest  # noqa: E402
+import client.retro as retro  # noqa: E402
 import client.romman as romman  # noqa: E402
 import client.theme as th  # noqa: E402
 from client.bridge import OverlayBridge  # noqa: E402
@@ -22,6 +23,7 @@ import client.ps1 as ps1  # noqa: E402
 import client.secure as secure  # noqa: E402
 from client.admin_ui import AdminUI  # noqa: E402
 from client.dm_ui import DmUI  # noqa: E402
+from client.retro_session import RetroSession  # noqa: E402
 from client.rooms_ui import RoomsUI  # noqa: E402
 from client.friends_ui import FriendsUI  # noqa: E402
 from client.help_ui import HelpUI  # noqa: E402
@@ -284,6 +286,7 @@ class App(Views, LoginPages, LobbyPages, FriendsUI, DmUI, RoomsUI, AdminUI, Help
         self.net.close()
         self.dm_reset()
         self.rooms_reset()
+        self.retro_stop()
         self.me = self.channel = self.match = None
         self.queued = False
         self.show_login()
@@ -298,6 +301,8 @@ class App(Views, LoginPages, LobbyPages, FriendsUI, DmUI, RoomsUI, AdminUI, Help
             falta.append("FBNeo (arcade, Mega Drive y NES)")
         if not os.path.exists(self.emulator_for("snes_x")):
             falta.append("Snes9x (SNES)")
+        if os.path.isdir(retro.folder(self.data)) and not retro.installed(self.data):          # la carpeta existe: lo borro el antivirus
+            falta.append("RetroArch (3 a 5 jugadores y N64)")
         if os.path.isdir(ps1.folder(self.data)) and not os.path.exists(ps1.exe_path(self.data)):   # la carpeta existe: lo borro el antivirus
             falta.append("DuckStation (PS1)")
         if falta:
@@ -334,8 +339,9 @@ class App(Views, LoginPages, LobbyPages, FriendsUI, DmUI, RoomsUI, AdminUI, Help
 
     @staticmethod
     def system_of(channel):
-        """Emulador de un canal: snes_* -> Snes9x, ps1_* -> DuckStation; el resto, FBNeo."""
-        return "snes9x" if channel.startswith("snes_") else "duckstation" if channel.startswith("ps1_") else "fbneo"
+        """Emulador de un canal: snes_* -> Snes9x, ps1_* -> DuckStation, n64_* -> RetroArch; el resto, FBNeo."""
+        return ("snes9x" if channel.startswith("snes_") else "duckstation" if channel.startswith("ps1_") else
+                "n64" if channel.startswith("n64_") else "fbneo")
 
     def emulator_for(self, channel):
         if self.system_of(channel) == "snes9x":
@@ -344,7 +350,17 @@ class App(Views, LoginPages, LobbyPages, FriendsUI, DmUI, RoomsUI, AdminUI, Help
             return ps1.exe_path(self.data)
         return self.cfg["emulator"]
 
+    def rom_file(self, channel):
+        """Ruta del juego descargado para RetroArch (SNES: zip de Snes9x; PS1: imagen de disco; N64: zip) o None."""
+        system = self.system_of(channel)
+        if system == "duckstation":
+            return ps1.image_path(self.roms_dest("duckstation"), channel)
+        p = os.path.join(self.roms_dest(system), channel + ".zip")
+        return p if os.path.exists(p) else None
+
     def rom_exists(self, channel):
+        if self.system_of(channel) == "n64":
+            return os.path.exists(os.path.join(self.roms_dest("n64"), channel + ".zip"))
         if self.system_of(channel) == "duckstation":
             return ps1.image_path(self.roms_dest("duckstation"), channel) is not None
         if self.system_of(channel) == "snes9x":
@@ -368,6 +384,26 @@ class App(Views, LoginPages, LobbyPages, FriendsUI, DmUI, RoomsUI, AdminUI, Help
         if not self.queued and self.channel not in self.auto_channels:
             return messagebox.showinfo(APP_NAME, "Este juego aún no tiene ranked: no se detecta el resultado solo.\nPara jugar con otros usa Multijugador (salas).")
         self.net.send(t="queue", on=not self.queued)
+
+    # ---------- RetroArch (partidas de 3 a 5 jugadores y N64) ----------
+    def ensure_retro(self):
+        """RetroArch viene con el instalador; si falta (casi seguro lo borro el antivirus) se avisa una vez."""
+        if retro.installed(self.data) or getattr(self, "retro_warned", False):
+            return
+        self.retro_warned = True
+        self.log("Falta RetroArch (partidas de 3 a 5 jugadores y N64). Casi seguro tu antivirus lo borró: restáuralo desde Seguridad de Windows y "
+                 "vuelve a ejecutar el instalador.", "sys")
+        if hasattr(self, "rm_say"):
+            self.rm_say("Falta RetroArch: vuelve a ejecutar el instalador (revisa que tu antivirus no lo haya borrado).", False)
+
+    def retro_session(self):
+        if getattr(self, "_retro", None) is None:
+            put = self.net.events.put
+            self._retro = RetroSession(self.data, self.net.send, self.cfg["server_host"], (self.me or {}).get("user_name", "Jugador"), self.rom_file,
+                                       bios_src=os.path.join(ps1.bios_dir(self.data), ps1.BIOS_FILE),
+                                       log=lambda text: put({"t": "_log", "text": text}), on_end=lambda: put({"t": "_raend"}))
+        self._retro.nick = (self.me or {}).get("user_name", "Jugador")
+        return self._retro
 
     def roms_dest(self, system):
         """Carpeta donde cada emulador busca sus ROMs."""
@@ -443,6 +479,16 @@ class App(Views, LoginPages, LobbyPages, FriendsUI, DmUI, RoomsUI, AdminUI, Help
             ps1.prepare(self.data, self.roms_dest("duckstation"))
             # solo: aqui se configuran los controles (Ajustes > Controladores del propio emulador); el netplay usa el mando 1
             return subprocess.Popen([exe, image], cwd=os.path.dirname(exe))
+        if sel and self.system_of(sel[0]) == "n64":              # N64: solo RetroArch (se descarga la primera vez)
+            if not retro.installed(self.data):
+                self.ensure_retro()
+                return messagebox.showinfo(APP_NAME, "No se encontró RetroArch (necesario para Nintendo 64). Vuelve a ejecutar el instalador.")
+            rom = self.rom_file(sel[0])
+            if not rom:
+                return messagebox.showinfo(APP_NAME, "Falta la ROM: pulsa DESCARGAR ROM en la tarjeta del juego.")
+            cfg = retro.prepare(self.data, "n64", (self.me or {}).get("user_name", "Jugador"))
+            return subprocess.Popen([retro.exe_path(self.data), "-L", retro.core_path(self.data, "n64"), "--appendconfig", cfg, rom],
+                                    cwd=retro.folder(self.data))      # offline: aqui se configuran los controles (F1 > Entrada)
         exe = self.cfg["emulator"]
         if not sel or not exe or not os.path.exists(exe):
             return messagebox.showinfo(APP_NAME, "Elige un juego y configura el emulador en AJUSTES.")
@@ -722,6 +768,7 @@ class App(Views, LoginPages, LobbyPages, FriendsUI, DmUI, RoomsUI, AdminUI, Help
             self.kick_msg = ""
             self.dm_reset()
             self.rooms_reset()
+            self.retro_stop()
             self.me = self.channel = self.match = None
             self.show_login()
             self.lbl_status.config(text="Desconectado", foreground=th.ERR)
@@ -736,6 +783,21 @@ class App(Views, LoginPages, LobbyPages, FriendsUI, DmUI, RoomsUI, AdminUI, Help
         elif t == "_coverdone":
             self.cover_busy = False
             self.cover_kick()          # por si llegaron juegos nuevos mientras tanto
+        elif t == "ra_session":
+            if not retro.installed(self.data):
+                self.ensure_retro()
+            self.retro_session().on_session(m)
+            self.rm_say("Partida de varios jugadores con RetroArch: se abre su ventana en unos segundos.")
+        elif t == "ra_join":
+            self.retro_session().on_join(m)
+        elif t == "ra_status":
+            self.retro_session().on_status(m)
+        elif t == "ra_conn":
+            self.retro_session().on_conn(m)
+        elif t == "ra_end":
+            self.retro_session().handle_end(m)
+        elif t == "_raend":
+            self.rm_say("La partida con RetroArch terminó.", True)
         elif t == "_romsdone":
             self.rom_busy = False
             self.render_channels()
@@ -826,7 +888,12 @@ class App(Views, LoginPages, LobbyPages, FriendsUI, DmUI, RoomsUI, AdminUI, Help
             self.table("Partidas en vivo", (("g", 100, "JUEGO"), ("a", 150, "JUGADORES"), ("r", 70, "RANKED")),
                        [(x["channel"], " vs ".join(x["players"]), "sí" if x["ranked"] else "no") for x in m["matches"]])
 
+    def retro_stop(self):
+        if getattr(self, "_retro", None) is not None:
+            self._retro.stop()
+
     def on_close(self):
+        self.retro_stop()
         if self.emu and self.emu.poll() is None:
             self.emu.terminate()
         self.net.close()

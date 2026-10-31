@@ -23,3 +23,7 @@ DirectX: vendor/directx-redist.zip es la carpeta Redist del "DirectX SDK (June 2
   (https://download.microsoft.com/download/A/E/7/AE743F1F-632B-4809-87A9-AA1BB3458E31/DXSDK_Jun10.exe,
   SHA-256 705271DC83BFEE54D9B94E028426E288D5F070784B7446D164F48ECFBB2A02CB, firmado por Microsoft).
   DIRECTX-LICENSE.txt autoriza redistribuir esa carpeta.
+
+RetroArch (3 a 5 jugadores y N64): vendor/emulator-retroarch.zip = RetroArch 1.22.2 estable (https://buildbot.libretro.com/stable/1.22.2/windows/x86_64/RetroArch.7z, GPL v3) recortado
+  con tools/make_retroarch.py (sin assets, shaders ni base de datos) + los nucleos snes9x, swanstation y mupen64plus_next de https://buildbot.libretro.com/nightly/windows/x86_64/latest/.
+  Codigo fuente: https://github.com/libretro/RetroArch (v1.22.2), https://github.com/libretro/snes9x, https://github.com/libretro/swanstation, https://github.com/libretro/mupen64plus-libretro-nx

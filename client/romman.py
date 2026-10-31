@@ -19,7 +19,7 @@ import re
 import urllib.parse
 import urllib.request
 
-SYSTEMS = ("fbneo", "snes9x", "ggpofba", "flycast", "duckstation")
+SYSTEMS = ("fbneo", "snes9x", "ggpofba", "flycast", "duckstation", "n64")
 NAME_RE = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_.\-]{0,79}$")
 EXTS = (".zip", ".7z", ".bin", ".rom", ".chd", ".iso", ".img", ".pbp")      # los 4 ultimos: imagenes de disco de PS1 (DuckStation)
 SHA_RE = re.compile(r"^[0-9a-fA-F]{64}$")

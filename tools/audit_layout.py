@@ -21,7 +21,7 @@ ME = {"id": 1, "user_name": "Cronos", "role": "developer", "elo": 1500, "wins": 
 USERS = [{"id": i, "user_name": n, "busy": False, "ping": 40 + i, "role": r, "country": c, "elo": 1500 + i, "wins": i, "losses": 1}
          for i, (n, r, c) in enumerate((("Cronos", "developer", "PE"), ("AdminUno", "admin", "ES"), ("Jugador1", "customer", "MX"),
                                        ("Jugador2", "customer", "AR")), 1)]
-ROOM = {"id": 1, "channel": "snes_sbomberman5g", "owner": 1, "max": 2, "game_max": 5, "netplay_max": 2, "playing": False,
+ROOM = {"id": 1, "channel": "snes_sbomberman5g", "owner": 1, "max": 5, "game_max": 5, "netplay_max": 5, "playing": False,
         "members": [{"id": 1, "user_name": "Cronos", "role": "developer", "country": "PE", "ping": 40},
                     {"id": 3, "user_name": "Jugador1", "role": "customer", "country": "MX", "ping": 90}]}
 

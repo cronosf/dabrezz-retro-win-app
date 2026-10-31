@@ -7,12 +7,13 @@ import tkinter as tk
 from tkinter import messagebox, ttk
 
 import client.colorlist as colorlist
+import client.retro as retro
 import client.theme as th
 from client.views import PLATFORMS, initials, platform_of
-from shared.capabilities import system_of
+from shared.capabilities import retro_system, system_of
 from shared.protocol import CHANNEL_LABELS
 
-EMU_NAMES = {"fbneo": "FBNeo", "snes9x": "Snes9x", "duckstation": "DuckStation"}
+EMU_NAMES = {"fbneo": "FBNeo", "snes9x": "Snes9x", "duckstation": "DuckStation", "n64": "RetroArch"}
 INVITE_TTL = 180
 TABS = (("public", "Salas Públicas"), ("mine", "Mis Salas"), ("friends", "Amigos"))
 
@@ -300,6 +301,8 @@ class RoomsUI:
         old = self.room
         self.room = m.get("room")
         if self.room and not old:                       # acabo de entrar o crear: se muestra mi sala
+            if self.rm_needs_retro(self.room):
+                self.ensure_retro()                     # avisa ya si falta RetroArch, no cuando el creador inicie
             self._rm_chat_clear()
             self.rm_chat_line("Entraste a la sala. Los mensajes de la sala no se guardan.", None)
             self.show_view("multi")
@@ -311,6 +314,11 @@ class RoomsUI:
             self.net.send(t="rooms")
         if self.room and self.rm_panel.winfo_ismapped():
             self._rm_fill_panel()
+
+    @staticmethod
+    def rm_needs_retro(r):
+        """Las salas de varios jugadores (y las de N64) se juegan con RetroArch."""
+        return retro_system(r["channel"]) is not None and (r["max"] > 2 or r["channel"].startswith("n64_"))
 
     def _rm_notice_changes(self, old, new):
         before, after = {x["id"]: x["user_name"] for x in old["members"]}, {x["id"]: x["user_name"] for x in new["members"]}
@@ -335,7 +343,7 @@ class RoomsUI:
             rows.append({"iid": str(x["id"]), "flag": th.flag(x.get("country")), "color": th.ROLE_COLOR.get(role),
                          "text": ("★ " if x["id"] == r["owner"] else "") + x["user_name"], "cells": (th.ROLE_LABEL[role], f"{x['ping']} ms")})
         self.rp_members.set_rows(rows)
-        can_start = owner and len(r["members"]) >= 2 and not r["playing"] and len(r["members"]) <= min(2, r["netplay_max"])
+        can_start = owner and len(r["members"]) >= 2 and not r["playing"] and len(r["members"]) <= r["max"]
         self.btn_rp_start.config(state="normal" if can_start else "disabled",
                                  text="EN PARTIDA…" if r["playing"] else "INICIAR PARTIDA")
         self.btn_rp_kick.config(state="normal" if owner else "disabled")
@@ -344,6 +352,9 @@ class RoomsUI:
         if r["game_max"] > r["max"]:
             notes.append(f"Este juego admite hasta {r['game_max']} jugadores, pero el netplay de {EMU_NAMES[system_of(ch)]} por ahora solo sincroniza "
                          f"{r['netplay_max']}: la sala es de {r['max']}.")
+        if self.rm_needs_retro(r):
+            notes.append("Con 3 o más jugadores se usa RetroArch" + ("" if retro.installed(self.data) else " (no está instalado: vuelve a ejecutar el instalador)")
+                         + ". Los controles se cambian en su menú (F1).")
         if not owner:
             notes.append("Solo el creador de la sala puede iniciar la partida e invitar.")
         elif len(r["members"]) < 2:

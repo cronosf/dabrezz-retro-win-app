@@ -18,6 +18,7 @@ SETTING_HELP = {
     "retro_client_min": "Versión mínima de la app que puede entrar (las anteriores deben actualizarse)",
     "retro_client_revoked": "Versiones bloqueadas, separadas por comas",
     "retro_rom_manifest": "URL del catálogo de juegos (roms.json)",
+    "retro_ra_relay": "Partidas de RetroArch (3+ jugadores): auto = directo si se puede y si no relay; always = siempre relay; never = nunca",
 }
 
 

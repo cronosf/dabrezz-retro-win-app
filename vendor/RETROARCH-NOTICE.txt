@@ -1,0 +1,11 @@
+Componente de netplay multijugador de Dabrezz Play: RetroArch 1.22.2 y nucleos libretro.
+
+  * RetroArch (GPL v3): https://github.com/libretro/RetroArch (etiqueta v1.22.2). Las DLL incluidas (FFmpeg, SDL2, Qt...) son las del
+    paquete oficial https://buildbot.libretro.com/stable/1.22.2/windows/x86_64/RetroArch.7z (sus licencias LGPL/GPL estan en ese paquete).
+  * Snes9x (nucleo de SNES, licencia propia no comercial): https://github.com/libretro/snes9x
+  * SwanStation (nucleo de PlayStation, GPL v3): https://github.com/libretro/swanstation
+  * Mupen64Plus-Next (nucleo de Nintendo 64, GPL v2): https://github.com/libretro/mupen64plus-libretro-nx
+  * OpenBIOS (BIOS libre de PlayStation, MIT): https://github.com/pcsx-redux/nugget
+
+Dabrezz Play no modifica estos programas: solo los recorta (sin assets ni shaders) y los lanza con sus opciones de linea de comandos.
+Descarga el codigo fuente de cada uno en los enlaces de arriba.
