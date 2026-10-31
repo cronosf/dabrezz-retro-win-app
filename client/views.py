@@ -346,7 +346,7 @@ class Views:
         cats = tk.Frame(self.home_body, bg=th.BG)
         cats.pack(anchor="w")
         for img, flt in (("tile_all.png", "Todos"), ("tile_arcade.png", "Arcade"), ("tile_snes.png", "SNES"),
-                         ("tile_md.png", "Mega Drive"), ("tile_ps1.png", "PS1")):
+                         ("tile_md.png", "Mega Drive"), ("tile_ps1.png", "PS1"), ("tile_n64.png", "N64")):
             t = tk.Label(cats, image=th.image(img), bg=th.BG, cursor="hand2", bd=0)
             t.pack(side="left", padx=(0, 10))
             t.bind("<Button-1>", lambda e, n=flt: (self.set_filter(n), self.show_view("games")))
