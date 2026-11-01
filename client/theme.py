@@ -79,10 +79,23 @@ def fit_wrap(label, margin=0, minimum=120):
 
 def titlebar(win):
     """Barra de titulo del color de la ventana, con letras y botones (minimizar, maximizar, cerrar) blancos. Windows 11 permite elegir el color;
-    en Windows 10 solo existe el modo oscuro (barra negra con botones blancos), que se aplica como alternativa."""
+    en Windows 10 solo existe el modo oscuro (barra negra con botones blancos), que se aplica como alternativa.
+    Windows pierde el color cuando la ventana se muestra o pasa a ser hija de otra (transient): por eso se vuelve a aplicar cuando ya esta visible."""
     if sys.platform != "win32":
         return
+    _titlebar_now(win)
     try:
+        win.after(60, lambda: _titlebar_now(win))
+        win.after(350, lambda: _titlebar_now(win))
+        win.bind("<Map>", lambda e=None: win.after(20, lambda: _titlebar_now(win)) if (e is None or e.widget is win) else None, add="+")
+    except tk.TclError:
+        pass
+
+
+def _titlebar_now(win):
+    try:
+        if not win.winfo_exists():
+            return
         import ctypes
         win.update_idletasks()
         hwnd = ctypes.windll.user32.GetParent(win.winfo_id()) or win.winfo_id()

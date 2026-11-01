@@ -74,6 +74,7 @@ class StreamSession:
         self.logf = None                                 # stream_view_log.txt (invitado) o stream_host_log.txt (anfitrion): todo lo que pasa, para diagnosticar
         self.profile = profile                           # () -> perfil de controles del invitado (cfg["dance_controls"])
         self.settings = settings or (lambda: None)       # () -> {"mbps": 4, "video_delay_ms": 0} (cfg["stream"])
+        self.host_controls = lambda: None                # () -> cfg["med_controls"]: las teclas del anfitrion (CONFIGURAR)
         self.pad_port = None                             # solo pruebas: fuerza el puerto de PSX que controla el invitado 1
         self.extra_args = []                             # solo pruebas: argumentos extra de Mednafen
         self.cheats_on = lambda: False                   # () -> bool: truques de la funcion en prueba (un solo emulador: no hay desincronizacion)
@@ -148,7 +149,7 @@ class StreamSession:
                 return self._fail("Falta Mednafen: vuelve a ejecutar el instalador (revisa que tu antivirus no lo haya borrado).")
             med_cheats.apply(med.folder(self.data), self.channel, self.cheats_on())
             pads = st.mednafen_pad_args(self.pad_port) if self.pad_port else st.mednafen_party_args(self.players)
-            cmd = med.command(self.data, cue, players=self.players)      # con 3 o 4: sin tarjetas de memoria en los puertos 3 y 4 (si no, sale "Memcard 4 save error")
+            cmd = med.command(self.data, cue, players=self.players, controls=self.host_controls())      # con 3 o 4: sin tarjetas de memoria en los puertos 3 y 4 (si no, sale "Memcard 4 save error")
             cmd = cmd[:-1] + ["-psx.xscale", "2", "-psx.yscale", "2", *pads, *self.extra_args] + cmd[-1:]
             try:
                 self.med = subprocess.Popen(cmd, cwd=med.folder(self.data))

@@ -17,12 +17,6 @@ WAIT_MS, POLL_MS = 8000, 40
 
 
 class DanceControlsUI:
-    def room_controls(self):
-        """CONTROLES de la sala: en la Zona Baile son los del Modo Anfitrion; en el resto, los de RetroArch."""
-        if self.room and (is_dance(self.room["channel"]) or is_party(self.room["channel"])):          # Modo Anfitrion: los controles del invitado
-            return self.dance_controls_dialog()
-        self.controls_dialog()
-
     def dance_controls_dialog(self):
         prof = self.cfg.get("dance_controls") or {}
         d = self._dc = {"kb": {b: int(v) for b, v in (prof.get("kb") or {}).items() if b in st.BIT}, "pad": {b: str(v) for b, v in (prof.get("pad") or {}).items() if b in st.BIT},

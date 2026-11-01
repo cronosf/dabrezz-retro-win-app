@@ -37,7 +37,6 @@ class RoomsUI:
         tk.Label(head, image=th.image("ico_multi.png"), bg=th.BG).pack(side="left")
         tk.Label(head, text="Multijugador Online", font=(th.DISPLAY, 16), fg="#ffffff", bg=th.BG).pack(side="left", padx=10)
         ttk.Button(head, text="CREAR SALA  ＋", style="Accent.TButton", command=self.rm_create).pack(side="right")
-        ttk.Button(head, text=" CONTROLES", image=th.image("ico_pad.png"), compound="left", command=self.controls_dialog).pack(side="right", padx=(0, 8))
         tabs = tk.Frame(v, bg=th.BG)
         tabs.pack(fill="x", pady=(12, 8))
         self.rm_tab_btns = {}
@@ -86,7 +85,7 @@ class RoomsUI:
         self.rp_title = tk.Label(top, text="", font=(th.DISPLAY, 14), fg="#ffffff", bg=th.PANEL)
         self.rp_title.pack(side="left")
         ttk.Button(top, text="SALIR", command=lambda: self.net.send(t="room_leave")).pack(side="right")
-        ttk.Button(top, text=" CONTROLES", image=th.image("ico_pad.png"), compound="left", command=self.room_controls).pack(side="right", padx=(0, 8))
+        ttk.Button(top, text=" CONFIGURAR", image=th.image("ico_pad.png"), compound="left", command=self.room_controls).pack(side="right", padx=(0, 8))
         self.btn_rp_start = ttk.Button(top, text="INICIAR", style="Cta.TButton", command=lambda: self.net.send(t="room_start"))
         self.btn_rp_start.pack(side="right", padx=8)
         self.rp_note = tk.Label(p, text="", fg=th.YELLOW, bg=th.BG, font=(th.BODY, 9), anchor="w", justify="left", wraplength=600)
@@ -408,7 +407,7 @@ class RoomsUI:
         if r.get("mode") == "host":
             host_note = ("Modo Anfitrión: tú corres el juego y el otro jugador lo ve y juega por transmisión (usa su teclado o su mando Xbox). Pulsa INICIAR cuando estén dentro (de 2 a 4 jugadores)."
                          if owner else "Modo Anfitrión: verás el juego del creador. Controles: I K J L (arriba, abajo, izquierda, derecha), Z X D E (✕ ○ □ △), U O Y H (L1 R1 L2 R2), "
-                                       "Enter (Start), Retroceso (Select) o tu mando (Xbox o genérico). Cámbialos en CONTROLES; la ventana de la transmisión debe tener el foco.")
+                                       "Enter (Start), Retroceso (Select) o tu mando (Xbox o genérico). Cámbialos en CONFIGURAR; la ventana de la transmisión debe tener el foco.")
         self.rp_note.config(text="Falta RetroArch: vuelve a ejecutar el instalador (revisa que tu antivirus no lo haya borrado)." if missing else
                             "Falta Mednafen: vuelve a ejecutar el instalador (revisa que tu antivirus no lo haya borrado)." if no_med else host_note)
         self.rm_cand_tab_set(self.rm_cand_tab)

@@ -30,6 +30,8 @@ from client.dm_ui import DmUI  # noqa: E402
 from client.retro_session import RetroSession  # noqa: E402
 from client.stream_session import StreamSession  # noqa: E402
 from client.controls_ui import ControlsUI  # noqa: E402
+import client.ctl_backends as ctl_backends  # noqa: E402
+from client.config_ui import ConfigUI  # noqa: E402
 from client.dance_controls_ui import DanceControlsUI  # noqa: E402
 from client.dance_settings_ui import DanceSettingsUI  # noqa: E402
 from client.dance_ui import DanceUI  # noqa: E402
@@ -171,7 +173,7 @@ def detect_emulator(data):
     return p if os.path.exists(p) else ""
 
 
-class App(Views, LoginPages, LobbyPages, FriendsUI, DmUI, RoomsUI, DanceUI, HomeRooms, ControlsUI, DanceControlsUI, DanceSettingsUI, AdminUI, HelpUI, UpdateUI, tk.Tk):
+class App(Views, LoginPages, LobbyPages, FriendsUI, DmUI, RoomsUI, DanceUI, HomeRooms, ControlsUI, ConfigUI, DanceControlsUI, DanceSettingsUI, AdminUI, HelpUI, UpdateUI, tk.Tk):
     auto_session = False
     kick_msg = ""           # motivo con el que el servidor expulso al jugador (se muestra al cerrarse la conexion)
     rom_busy = False
@@ -520,6 +522,7 @@ class App(Views, LoginPages, LobbyPages, FriendsUI, DmUI, RoomsUI, DanceUI, Home
             if not ps1.has_bios(self.data):
                 return self.need_bios()
             ps1.prepare(self.data, self.roms_dest("duckstation"))
+            self.apply_ds_controls()
             # solo: aqui se configuran los controles (Ajustes > Controladores del propio emulador); el netplay usa el mando 1
             return self.spawn([exe, image], os.path.dirname(exe), sel[0])
         exe = self.cfg["emulator"]
@@ -621,6 +624,7 @@ class App(Views, LoginPages, LobbyPages, FriendsUI, DmUI, RoomsUI, DanceUI, Home
                 return self.log("Argumentos del emulador invalidos: revisa AJUSTES.", "sys")
             if snes:
                 prepare_snes_config(exe)
+                self.apply_s9x_controls()
             else:
                 prepare_emulator_config(exe, self.cfg["roms_dir"] or os.path.join(self.data, "roms"))
             cmd = [exe, *argv]
@@ -640,6 +644,7 @@ class App(Views, LoginPages, LobbyPages, FriendsUI, DmUI, RoomsUI, DanceUI, Home
             self.need_bios()
             return None
         ps1.prepare(self.data, roms)
+        self.apply_ds_controls()
         exe = self.emulator_for(m["channel"])
         nick = (self.me or {}).get("user_name", "Jugador")
         if player == 1:                                   # anfitrion: arranca el juego y espera al rival
@@ -967,6 +972,7 @@ class App(Views, LoginPages, LobbyPages, FriendsUI, DmUI, RoomsUI, DanceUI, Home
                                        log=lambda text: put({"t": "_log", "text": text}), on_end=lambda: put({"t": "_raend"}),
                                        title_for=self.window_title)
         self._med.nick = (self.me or {}).get("user_name", "Jugador")
+        self._med.controls = lambda: self.cfg.get("med_controls")
         return self._med
 
     def stream_session(self):
@@ -976,7 +982,36 @@ class App(Views, LoginPages, LobbyPages, FriendsUI, DmUI, RoomsUI, DanceUI, Home
                                          on_end=lambda: put({"t": "_raend"}), title_for=self.window_title,
                                          profile=lambda: self.cfg.get("dance_controls"), settings=lambda: self.cfg.get("stream"))
         self._stream.cheats_on = lambda: self.feature(med_cheats.FEATURE)
+        self._stream.host_controls = lambda: self.cfg.get("med_controls")
         return self._stream
+
+    def apply_ds_controls(self, reset_if_empty=False):
+        """Escribe en la configuracion de DuckStation las teclas elegidas en CONFIGURAR (o, con reset_if_empty, vuelve a las de fabrica si no hay ninguna)."""
+        ini = os.path.join(ps1.folder(self.data), "settings.ini")
+        if not os.path.isfile(ini):
+            return
+        kb = (self.cfg.get("ds_controls") or {}).get("kb")
+        try:
+            if kb:
+                ctl_backends.apply_duckstation(ini, kb)
+            elif reset_if_empty:
+                ctl_backends.reset_duckstation(ini)
+        except OSError:
+            pass
+
+    def apply_s9x_controls(self, reset_if_empty=False):
+        """Igual para Snes9x (fcadesnes9x.conf)."""
+        conf = os.path.join(os.path.dirname(self.emulator_for("snes_x")), "fcadesnes9x.conf")
+        if not os.path.isfile(conf):
+            return
+        kb = (self.cfg.get("snes9x_controls") or {}).get("kb")
+        try:
+            if kb:
+                ctl_backends.apply_snes9x(conf, kb)
+            elif reset_if_empty:
+                ctl_backends.reset_snes9x(conf)
+        except OSError:
+            pass
 
     def stream_need_pack(self):
         """El Modo Anfitrion necesita ffmpeg y la captura de audio (~120 MB, se bajan una vez). True si ya estan; si no, ofrece descargarlos."""

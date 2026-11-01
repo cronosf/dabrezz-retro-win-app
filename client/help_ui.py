@@ -26,16 +26,16 @@ HELP = (
           "(Super Bomberman 3, 4 y 5 con Super Multitap) usan RetroArch, que viene con el instalador."),
     ("b", "PS1 de 3 a 4 jugadores (Crash Team Racing, Crash Bash…): al crear una sala en Multijugador elige primero «2 jugadores» o «3 a 4 jugadores». Con 2, los juegos de PS1 "
           "corren con DuckStation. Con 3 a 4 se juegan en Modo Anfitrión con Mednafen y su multitap: el creador corre el juego y transmite a los demás (hasta 3 invitados, cada uno "
-          "en su propio mando); los invitados no necesitan el juego. Sus controles se cambian en CONTROLES, dentro de la sala."),
-    ("b", "Controles: el botón CONTROLES (en Multijugador y dentro de la sala) te deja elegir tus teclas y los botones de tu mando Xbox para los juegos de SNES de 3 a 5 "
-          "jugadores (RetroArch). Se guardan y se aplican solos al empezar cada partida; cada jugador usa los suyos. El que crea la sala es el jugador 1 y los demás ocupan "
+          "en su propio mando); los invitados no necesitan el juego. Sus controles se cambian en CONFIGURAR, dentro de la sala."),
+    ("b", "Controles: el botón CONFIGURAR (dentro de la sala, junto a INICIAR) reconoce la consola del juego y cómo se juega y te deja elegir tus teclas (y el mando donde se puede) "
+          "para ese emulador: Mednafen o DuckStation en PS1, Snes9x o RetroArch en SNES. En el Modo Anfitrión tiene dos pestañas: «Como anfitrión» y «Como invitado». Se guardan y se aplican solos al empezar cada partida; cada jugador usa los suyos. El que crea la sala es el jugador 1 y los demás ocupan "
           "los siguientes puertos al conectarse."),
     ("b", "Zona Baile: los juegos de baile (Bust a Groove 1 y 2) se juegan aquí, con Mednafen. Elige el juego, pulsa BUSCAR PARTIDA (amistosa, 2 jugadores) "
           "o crea una sala con CREAR SALA; las salas abiertas aparecen en la lista con UNIRSE."),
     ("b", "Modo Anfitrión (Zona Baile): al crear la sala puedes elegirlo. Tú corres el juego en tu PC y el otro jugador lo ve en una ventana y juega por transmisión, "
           "sin tener el juego: no hay desincronización y el único retraso es el de su conexión contigo. La primera vez se descargan unas herramientas (unos 120 MB). "
           "El invitado juega con I K J L (arriba, abajo, izquierda, derecha), Z X D E (✕ ○ □ △), U O Y H (L1 R1 L2 R2), Enter (Start) y Retroceso (Select), o con su mando "
-          "(Xbox o genérico, como un control de PS1 con adaptador USB), con la ventana de la transmisión en primer plano. Puede cambiarlos en CONTROLES (en la sala o en la Zona Baile), "
+          "(Xbox o genérico, como un control de PS1 con adaptador USB), con la ventana de la transmisión en primer plano. Puede cambiarlos en CONFIGURAR (en la sala) o en la Zona Baile, "
           "con una prueba en vivo de lo que reconoce la app. En AJUSTES (Zona Baile) o AJUSTES DE TRANSMISIÓN (en cualquier sala, junto a EXPULSAR) el anfitrión elige el tope de calidad del video en Mbps (la calidad baja y sube sola según la conexión de cada invitado, como en Parsec) (lo que sube su conexión; por defecto 4 Mbps de video, unos "
           "5,6 Mbps en total con la recuperación de pérdidas y el audio) y el invitado puede alinear la imagen con el sonido."),
     ("b", "Ranked: elige un juego en Juegos y pulsa BUSCAR PARTIDA (debajo de la lista de jugadores). El ranked solo se juega buscando partida, "
