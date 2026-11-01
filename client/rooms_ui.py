@@ -101,6 +101,7 @@ class RoomsUI:
         mrow.pack(fill="x", pady=(6, 8))
         self.btn_rp_kick = ttk.Button(mrow, text="EXPULSAR", command=self.rm_kick)
         self.btn_rp_kick.pack(side="left")
+        ttk.Button(mrow, text="AJUSTES DE TRANSMISIÓN", command=self.dance_stream_settings).pack(side="left", padx=(8, 0))      # calidad (Mbps) del Modo Anfitrion
         tk.Label(left, text="Chat de la sala", font=(th.BODY, 11, "bold"), fg="#ffffff", bg=th.PANEL).pack(anchor="w", pady=(4, 4))
         self.rp_chat = th.textbox(left, state="disabled", height=4)
         self.rp_chat.pack(fill="both", expand=True)
