@@ -32,12 +32,11 @@ class UpdateUI:
 
     @staticmethod
     def update_log(text):
-        """Motivo de los fallos al actualizar, para pedirlo al usuario: %TEMP%\DabrezzRetro-update.log (fuera de la carpeta que se limpia)."""
+        """Motivo de los fallos al actualizar, para pedirlo al usuario: %TEMP%/DabrezzRetro-update.log (fuera de la carpeta que se limpia)."""
         try:
             import time
             with open(os.path.join(tempfile.gettempdir(), "DabrezzRetro-update.log"), "a", encoding="utf-8") as f:
-                f.write(time.strftime("%Y-%m-%d %H:%M:%S ") + f"v{VERSION} {text}
-")
+                f.write(time.strftime("%Y-%m-%d %H:%M:%S ") + f"v{VERSION} {text}\n")
         except OSError:
             pass
 

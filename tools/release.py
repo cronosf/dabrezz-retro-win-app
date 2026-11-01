@@ -65,6 +65,7 @@ def main():
     with open(secret_py, "w") as f:                       # temporal: se borra al terminar y esta en .gitignore
         f.write(f"BLOB = {blob!r}\nPAD = {pad!r}\n")
     try:
+        run(sys.executable, "-m", "compileall", "-q", "client", "shared", "server")             # un error de sintaxis hace que PyInstaller omita el modulo y la app instalada no abra (v1.0.83)
         run(sys.executable, os.path.join(ROOT, "build.py"))
     finally:
         os.remove(secret_py)
