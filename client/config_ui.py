@@ -78,9 +78,29 @@ class MedBackend(Backend):
         super().__init__(app)
         self.host_mode, self.reserved_ports = host_mode, tuple(reserved_ports)
         self.title = "Como anfitrión" if host_mode else "Mednafen"
-        self.note = ("Estas son TUS teclas en el juego que corre en tu PC (puerto 1 de Mednafen). Se aplican solas al abrir la partida. "
-                     "Los invitados juegan por su cuenta con las suyas (pestaña «Como invitado»)." if host_mode else
+        self.has_pad = host_mode
+        if host_mode:
+            self.reader = dp.PadReader()
+            self.base = set()
+            self.live = self._live
+        self.note = ("Estas son TUS teclas y los botones de TU mando en el juego que corre en tu PC (puerto 1 de Mednafen). Tu mando (Xbox o genérico, como un control de PS1 con "
+                     "adaptador USB) funciona solo; aquí puedes cambiar sus botones. Se aplican solos al abrir la partida. Los invitados juegan por su cuenta (pestaña «Como invitado»)."
+                     if host_mode else
                      "Tus teclas en Mednafen (netplay: cada jugador corre su emulador). Se aplican solas al abrir la partida.")
+
+    def default_label(self, bid):
+        if not self.host_mode:
+            return "Automático"
+        base = cb.MED_HOST_2P if len(self.reserved_ports) <= 1 else cb.MED_HOST_N
+        return cb.key_label(base[bid]) + " (auto)"
+
+    def _live(self, kb, pad):
+        tokens, xc, gc = self.reader.snapshot()
+        mask = dp.pressed_buttons({"pad": pad}, tokens, xc, gc, set())
+        names = dict(self.buttons)
+        pressed = [names[b] for b, _ in self.buttons if mask & st.BIT[b]]
+        dev = "mando Xbox" if xc else "mando genérico" if gc else "sin mando"
+        return f"Prueba en vivo ({dev}):  " + ("  ".join(pressed) if pressed else "pulsa tus botones…")
 
     def _taken_sdl(self):
         return {st.PORT_KEYS[p][b][3]: p for p in self.reserved_ports if p in st.PORT_KEYS for b in st.BUTTONS}
@@ -275,7 +295,8 @@ class GuestBackend(Backend):
 
 
 # el mando del anfitrion se lee igual que el del invitado (client/dance_pad.py)
-DsHostBackend.pad_label, DsHostBackend.pad_begin, DsHostBackend.pad_poll = GuestBackend.pad_label, GuestBackend.pad_begin, GuestBackend.pad_poll
+for _be in (DsHostBackend, MedBackend):
+    _be.pad_label, _be.pad_begin, _be.pad_poll = GuestBackend.pad_label, GuestBackend.pad_begin, GuestBackend.pad_poll
 
 
 class InfoBackend(Backend):

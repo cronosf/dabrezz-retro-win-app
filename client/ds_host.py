@@ -70,12 +70,17 @@ _VK = {"up": (0x26, True), "down": (0x28, True), "left": (0x25, True), "right": 
        "tab": (0x09, False)}
 
 
-def host_keymap(host_kb=None):
-    """{1: {boton: (nombre, VK, scancode, 0, extendida)}}: lo que necesita st.post_key para pulsar las teclas del anfitrion en la ventana de DuckStation."""
+def host_keymap(host_kb=None, players=None):
+    """{1: {boton: (nombre, VK, scancode, sdl, extendida)}}: lo que necesita st.post_key para pulsar las teclas del anfitrion en la ventana del emulador. Con `players` son las de
+    Mednafen (puerto 1); sin el, las de DuckStation."""
+    keys = cb.med_host_keys(players, host_kb) if players else effective_host_keys(host_kb)
     out = {}
-    for b, n in effective_host_keys(host_kb).items():
-        vk, ext = _VK.get(n) or (ord(n.upper()), False)
-        out[b] = (n, vk, ctypes.windll.user32.MapVirtualKeyW(vk, 0), 0, ext)
+    for b, n in keys.items():
+        if n.startswith("kp_") and n[3:].isdigit():
+            vk, ext = 0x60 + int(n[3:]), False
+        else:
+            vk, ext = _VK.get(n) or (ord(n.upper()), False)
+        out[b] = (n, vk, ctypes.windll.user32.MapVirtualKeyW(vk, 0), cb.to_sdl(n) or 0, ext)
     return {1: out}
 
 
@@ -83,8 +88,8 @@ class HostPad:
     """El mando del anfitrion (Xbox o generico, como un control de PS1 con adaptador USB) -> las teclas del mando 1 de DuckStation. La app lee el mando (client/dance_pad.py: lo mismo
     que usa el invitado) y pulsa esas teclas en la ventana del emulador sin darle el foco, asi funciona sin configurar nada en DuckStation. Los botones se pueden cambiar en CONFIGURAR."""
 
-    def __init__(self, hwnd_of, pad_of, host_kb_of, log=print):
-        self.hwnd_of, self.pad_of, self.host_kb_of, self.log = hwnd_of, pad_of, host_kb_of, log
+    def __init__(self, hwnd_of, pad_of, host_kb_of, log=print, players=None):
+        self.hwnd_of, self.pad_of, self.host_kb_of, self.log, self.players = hwnd_of, pad_of, host_kb_of, log, players
         self.running = False
         self.mask = 0
 
@@ -97,7 +102,7 @@ class HostPad:
 
     def _run(self):
         reader = dp.PadReader()
-        keymap = host_keymap(self.host_kb_of())
+        keymap = host_keymap(self.host_kb_of(), self.players)
         hwnd = None
         while self.running:
             try:

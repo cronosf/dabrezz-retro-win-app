@@ -88,6 +88,20 @@ def to_s9x(name):
 
 
 # ---------------------------------------------------------------- aplicar a cada emulador
+# Teclas del anfitrion en Mednafen (puerto 1) cuando su mando va por la app (client/ds_host.py: HostPad). Con 2 jugadores solo choca el puerto 2 del invitado; con 3-4 se usa el teclado
+# numerico (los digitos de arriba son atajos de Mednafen).
+MED_HOST_2P = {"up": "w", "down": "s", "left": "a", "right": "d", "cross": "k", "circle": "l", "square": "j", "triangle": "i", "l1": "r", "r1": "t", "l2": "f", "r2": "g",
+               "start": "return", "select": "h"}
+MED_HOST_N = {"up": "w", "down": "s", "left": "a", "right": "d", "cross": "kp_1", "circle": "kp_2", "square": "kp_3", "triangle": "kp_4", "l1": "kp_5", "r1": "kp_6", "l2": "kp_7",
+              "r2": "kp_8", "start": "return", "select": "kp_0"}
+
+
+def med_host_keys(players, kb=None):
+    """Teclas completas del puerto 1 de Mednafen para el anfitrion: las de fabrica y, encima, las que eligio en CONFIGURAR (las que Mednafen admite)."""
+    base = MED_HOST_2P if int(players) <= 2 else MED_HOST_N
+    return {**base, **{b: n for b, n in (kb or {}).items() if b in base and to_sdl(str(n)) is not None and str(n) not in MED_RESERVED}}
+
+
 def med_args(kb, port=1):
     """Argumentos de Mednafen para las teclas elegidas del puerto `port` (solo los botones que el jugador cambio)."""
     out = []
