@@ -31,7 +31,7 @@ def nick_arg(name):
     return re.sub(r"[^A-Za-z0-9_]", "", str(name))[:12] or "Jugador"
 
 
-def command(data, cue, nick="Jugador", host=None, port=None, key=None):
+def command(data, cue, nick="Jugador", host=None, port=None, key=None, players=2):
     """Linea de comandos de Mednafen: OpenBIOS (sin comprobar el hash), sin tarjetas de memoria (con netplay no se mezclan bien con los estados
     que se sincronizan) y, si hay servidor, conectado a el con la clave de la partida."""
     base = folder(data)
@@ -39,6 +39,8 @@ def command(data, cue, nick="Jugador", host=None, port=None, key=None):
            "-filesys.path_state", os.path.join(base, "mcs"), "-filesys.path_snap", os.path.join(base, "snaps"),
            "-psx.bios_na", BIOS_FILE, "-psx.bios_jp", BIOS_FILE, "-psx.bios_eu", BIOS_FILE, "-psx.bios_sanity", "0",
            "-psx.input.port1.memcard", "0", "-psx.input.port2.memcard", "0", "-video.fs", "0"]
+    if players > 2:                                      # PS1 de 3-4 jugadores: multitap (igual en todos los jugadores, o se desincroniza) y sin tarjetas de memoria
+        cmd += ["-psx.input.pport1.multitap", "1", "-psx.input.port3.memcard", "0", "-psx.input.port4.memcard", "0"]
     if host:
         cmd += ["-netplay.host", str(host), "-netplay.port", str(int(port)), "-netplay.gamekey", re.sub(r"[^0-9a-f]", "", str(key))[:32],
                 "-netplay.nick", nick_arg(nick), "-netplay.localplayers", "1", "-connect"]
@@ -67,7 +69,7 @@ class MedSession:
         if not isinstance(port, int) or not 1 <= port <= 65535:
             return self.send(t="ra_leave")
         med_cheats.apply(folder(self.data), m.get("channel"), is_public(med_cheats.FEATURE))     # en red: los dos jugadores con lo mismo
-        cmd = command(self.data, cue, self.nick, m.get("host"), port, m.get("key"))
+        cmd = command(self.data, cue, self.nick, m.get("host"), port, m.get("key"), players=max(2, min(int(m.get("players", 2) or 2), 4)))
         self.proc = subprocess.Popen(cmd, cwd=folder(self.data))
         if self.title_for:
             winbrand.watch(self.proc, self.title_for(m["channel"]))

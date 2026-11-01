@@ -250,7 +250,7 @@ class RoomsUI:
         win.title(title)
         th.set_icon(win)
         win.transient(self)
-        win.geometry("380x600" if modes else "380x590" if games is None else "380x520")
+        win.geometry("380x600" if modes else "380x660" if games is None else "380x520")
         pad = tk.Frame(win, bg=th.BG, padx=22, pady=18)
         pad.pack(fill="both", expand=True)
         tk.Label(pad, text=title, font=(th.DISPLAY, 14), fg="#ffffff", bg=th.BG).pack(anchor="w")
@@ -273,13 +273,12 @@ class RoomsUI:
         lbl = tk.Label(pad, text="", fg=th.ERR, bg=th.BG, font=(th.BODY, 9), anchor="w")
         lbl.pack(side="bottom", fill="x")
         v_mode = tk.StringVar(value="host")
-        if modes:                                          # Zona Baile: elegir como se juega
-            mrow = tk.Frame(pad, bg=th.BG)
-            mrow.pack(side="bottom", fill="x", pady=(8, 0))
-            for val, text in (("host", "Modo Anfitrión: tú corres el juego y el otro jugador lo ve y juega (menos retraso)"),
-                              ("netplay", "Netplay de Mednafen (cada uno corre su juego)")):
-                tk.Radiobutton(mrow, text=text, value=val, variable=v_mode, fg=th.TEXT, bg=th.BG, selectcolor=th.FIELD, activebackground=th.BG, activeforeground=th.TEXT,
-                               bd=0, highlightthickness=0, font=(th.BODY, 9), justify="left", anchor="w", wraplength=330).pack(fill="x", anchor="w")
+        mrow = tk.Frame(pad, bg=th.BG)                      # como se juega (Zona Baile y PS1 de 3 a 4 jugadores): Modo Anfitrion o netplay de Mednafen
+        tk.Label(mrow, text="¿Cómo se juega?", fg="#ffffff", bg=th.BG, font=(th.BODY, 9, "bold")).pack(anchor="w")
+        for val, text in (("host", "Modo Anfitrión: tú corres el juego y los demás lo ven y juegan (menos retraso; ellos no necesitan el juego)"),
+                          ("netplay", "Netplay de Mednafen: cada uno corre su juego (todos necesitan el disco; pasa por el servidor)")):
+            tk.Radiobutton(mrow, text=text, value=val, variable=v_mode, fg=th.TEXT, bg=th.BG, selectcolor=th.FIELD, activebackground=th.BG, activeforeground=th.TEXT,
+                           bd=0, highlightthickness=0, font=(th.BODY, 9), justify="left", anchor="w", wraplength=330).pack(fill="x", anchor="w")
         lst = colorlist.ColorList(pad, (("nick", 200, "JUEGO"), ("plat", 100, "")), height=8)
         lst.pack(fill="both", expand=True)
         fixed = games
@@ -297,19 +296,27 @@ class RoomsUI:
             t = q.get().strip().lower()
             if fixed is None:
                 info_players.config(text="1 contra 1: los juegos de PS1 corren con DuckStation." if v_players.get() == "2" else
-                                    "De 3 a 4 jugadores: los de PS1 (Crash Team Racing, Crash Bash…) corren con Mednafen en Modo Anfitrión (tú corres el juego y los demás lo ven y "
-                                    "juegan); los de SNES, con RetroArch.")
-            lst.set_rows([{"iid": g, "flag": None, "text": CHANNEL_LABELS.get(g, g), "cells": (platform_of(g) + (" · Anfitrión" if is_party(g) else ""),)}
+                                    "De 3 a 4 jugadores: los de PS1 (Crash Team Racing, Crash Bash…) corren con Mednafen (elige abajo si se juega en Modo Anfitrión o con netplay); "
+                                    "los de SNES, con RetroArch.")
+            lst.set_rows([{"iid": g, "flag": None, "text": CHANNEL_LABELS.get(g, g), "cells": (platform_of(g),)}
                           for g in visible() if t in CHANNEL_LABELS.get(g, g).lower() or t in platform_of(g).lower()])
+        def show_modes(*_):
+            """El selector de modo se ve en la Zona Baile y, en Multijugador, con 3 a 4 jugadores (solo cuenta para los juegos de PS1 de Mednafen)."""
+            if modes or (fixed is None and v_players.get() == "4"):
+                mrow.pack(side="bottom", fill="x", pady=(8, 0), before=lst)
+            else:
+                mrow.pack_forget()
         q.trace_add("write", fill)
         v_players.trace_add("write", fill)
+        v_players.trace_add("write", show_modes)
         fill()
+        show_modes()
 
         def go(_=None):
             sel = lst.selection()
             if not sel:
                 return lbl.config(text="Selecciona un juego de la lista.")
-            mode = "host" if is_party(sel[0]) else v_mode.get() if modes else "netplay"
+            mode = v_mode.get() if (modes or is_party(sel[0])) else "netplay"
             win.destroy()
             if mode == "host" and not self.stream_need_pack():
                 return
