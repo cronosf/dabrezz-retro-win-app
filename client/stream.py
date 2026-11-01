@@ -971,6 +971,7 @@ class StreamGuest:
         self.audio_delay_ms, self.sdl_dll = audio_delay_ms, sdl_dll          # sdl_dll: ruta de SDL2.dll (audio de baja latencia); sin ella, waveOut
         self.with_video, self.tunnel = with_video, tunnel               # with_video=False: solo audio (pruebas)
         self.ffplay_exe, self.video_port, self.host_addr, self.read_mask = ffplay_exe, int(video_port), host_addr, read_mask
+        self.pressed_ticks = self.mask_changes = self.last_mask = 0       # diagnostico de los botones que se mandan
         self.audio_port, self.player, self.audio_packets, self.audio_gaps, self.audio_sock = audio_port, None, 0, 0, None
         self.audio_buf, self.next_audio = {}, None                      # reordenador: paquetes que llegaron adelantados
         self.audio_late = 0
@@ -1114,7 +1115,12 @@ class StreamGuest:
         while self.running:
             mask = self.read_mask() if self.read_mask else self.mask
             now = time.time()
+            if mask:
+                self.pressed_ticks += 1                       # diagnostico: veces que habia algun boton pulsado
             if mask != last_sent or now - last_t >= KEEPALIVE_S:
+                if mask != last_sent:
+                    self.mask_changes += 1
+                self.last_mask = mask
                 self.seq = (self.seq + 1) & 0xFFFF
                 self._send(PACKET.pack(MAGIC, self.seq, mask))
                 last_sent, last_t = mask, now

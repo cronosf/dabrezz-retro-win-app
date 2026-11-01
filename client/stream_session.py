@@ -253,7 +253,9 @@ class StreamSession:
                 win = st.find_window(g.proc.pid, 100) if g is not None and g.proc is not None and g.proc.poll() is None else None
                 self.flog(f"[{age}s] túnel: conectado={t.connected.is_set()} recibidos={t.received} ({t.bytes_rx // 1024} KB) último hace {f"{time.time() - t.last_rx:.1f}s" if t.last_rx else "—"} ping={t.rtt and round(t.rtt)} · "
                           f"video={g.video_packets if g else 0} (recuperados {fec.recovered if fec else 0}, perdidos {fec.lost if fec else 0}) audio={g.audio_packets if g else 0} · "
-                          f"ffplay vivo={bool(g and g.proc and g.proc.poll() is None)} ventana={'sí' if win else 'no'}")
+                          f"ffplay vivo={bool(g and g.proc and g.proc.poll() is None)} ventana={'sí' if win else 'no'} · "
+                          f"botones: cambios enviados={g.mask_changes if g else 0} instantes con botón pulsado={g.pressed_ticks if g else 0} último={g.last_mask if g else 0:#x} "
+                          f"mando={'sí' if getattr(getattr(g, 'read_mask', None), '__self__', None) and g.read_mask.__self__.reader.snapshot()[1:] != (False, False) else 'no'}")
                 if age >= 15 and not told and g is not None and g.video_packets == 0:
                     told = True
                     why = ("no llega NADA del anfitrión (UDP bloqueado o el anfitrión no está transmitiendo: revisa su stream_host_log.txt)" if t.received == 0 else
@@ -270,7 +272,9 @@ class StreamSession:
                 else:
                     parts.append("aún no hay invitados conectados")
                 for slot, t in sorted(self.tunnels.items()):
-                    parts.append(f"jugador {slot + 1}: conectado={t.connected.is_set()} enviados={t.bytes_tx // 1024} KB recibidos={t.received} ping={t.rtt and round(t.rtt)}")
+                    pe = (h.peers.get(slot) if h is not None and hasattr(h, "peers") else None)
+                    inp = f" botones recibidos={pe.packets} último={pe.mask:#x}" if pe is not None else ""
+                    parts.append(f"jugador {slot + 1}: conectado={t.connected.is_set()} enviados={t.bytes_tx // 1024} KB recibidos={t.received} ping={t.rtt and round(t.rtt)}{inp}")
                 self.flog(" · ".join(parts))
                 if age >= 15 and not told and h is not None and h.video_packets == 0:
                     told = True
