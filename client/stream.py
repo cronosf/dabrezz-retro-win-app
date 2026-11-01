@@ -291,7 +291,7 @@ def mednafen_party_args(players):
         args += ["-psx.input.pport1.multitap", "1"]
     for port in range(2, min(players, 4) + 1):
         args += mednafen_pad_args(port)
-    for port in range(1, 5):
+    for port in range(1, 9):                         # con multitap en el puerto 1 el segundo puerto de la consola pasa a ser el 5: hay que apagar las 8 tarjetas
         args += [f"-psx.input.port{port}.memcard", "0"]
     return args
 

@@ -40,7 +40,7 @@ def command(data, cue, nick="Jugador", host=None, port=None, key=None, players=2
            "-psx.bios_na", BIOS_FILE, "-psx.bios_jp", BIOS_FILE, "-psx.bios_eu", BIOS_FILE, "-psx.bios_sanity", "0",
            "-psx.input.port1.memcard", "0", "-psx.input.port2.memcard", "0", "-video.fs", "0"]
     if players > 2:                                      # PS1 de 3-4 jugadores: multitap (igual en todos los jugadores, o se desincroniza) y sin tarjetas de memoria
-        cmd += ["-psx.input.pport1.multitap", "1", "-psx.input.port3.memcard", "0", "-psx.input.port4.memcard", "0"]
+        cmd += ["-psx.input.pport1.multitap", "1"] + [a for n in range(3, 9) for a in (f"-psx.input.port{n}.memcard", "0")]
     if host:
         cmd += ["-netplay.host", str(host), "-netplay.port", str(int(port)), "-netplay.gamekey", re.sub(r"[^0-9a-f]", "", str(key))[:32],
                 "-netplay.nick", nick_arg(nick), "-netplay.localplayers", "1", "-connect"]
