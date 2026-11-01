@@ -8,6 +8,7 @@ from tkinter import messagebox, ttk
 
 import client.colorlist as colorlist
 import client.emote_ui as emote_ui
+import client.ds_host as ds_host
 import client.med as med
 import client.retro as retro
 import client.theme as th
@@ -275,7 +276,7 @@ class RoomsUI:
         lbl = tk.Label(pad, text="", fg=th.ERR, bg=th.BG, font=(th.BODY, 9), anchor="w")
         lbl.pack(side="bottom", fill="x")
         v_mode = tk.StringVar(value="host")
-        mrow = tk.Frame(pad, bg=th.BG)                      # como se juega (Zona Baile y PS1 de 3 a 4 jugadores): Modo Anfitrion o netplay de Mednafen
+        mrow = tk.Frame(pad, bg=th.BG)                      # como se juega (solo Zona Baile, que es de Mednafen): Modo Anfitrion o netplay de Mednafen
         tk.Label(mrow, text="¿Cómo se juega?", fg="#ffffff", bg=th.BG, font=(th.BODY, 9, "bold")).pack(anchor="w")
         for val, text in (("host", "Modo Anfitrión: tú corres el juego y los demás lo ven y juegan (menos retraso; ellos no necesitan el juego)"),
                           ("netplay", "Netplay de Mednafen: cada uno corre su juego (todos necesitan el disco; pasa por el servidor)")):
@@ -287,7 +288,7 @@ class RoomsUI:
         all_games = sorted(fixed if fixed is not None else [g for g in self.game_list() if not is_dance(g)], key=lambda g: CHANNEL_LABELS.get(g, g).lower())
 
         def visible():
-            """Con 2 jugadores: todos menos los de PS1 de 3-4 (que se juegan con Mednafen); con 3 a 4: solo los que admiten al menos 3 (SNES con multitap y PS1 con Mednafen)."""
+            """Con 2 jugadores: todos menos los de PS1 de 3-4; con 3 a 4: solo los que admiten al menos 3 (SNES con multitap y PS1 con DuckStation en Modo Anfitrión)."""
             if fixed is not None:
                 return all_games
             if v_players.get() == "2":
@@ -298,13 +299,13 @@ class RoomsUI:
             t = q.get().strip().lower()
             if fixed is None:
                 info_players.config(text="1 contra 1: los juegos de PS1 corren con DuckStation." if v_players.get() == "2" else
-                                    "De 3 a 4 jugadores: los de PS1 (Crash Team Racing, Crash Bash…) corren con Mednafen (elige abajo si se juega en Modo Anfitrión o con netplay); "
+                                    "De 3 a 4 jugadores: los de PS1 (Crash Team Racing, Crash Bash…) corren con DuckStation en Modo Anfitrión (tú corres el juego y los demás lo ven y juegan); "
                                     "los de SNES, con RetroArch.")
             lst.set_rows([{"iid": g, "flag": None, "text": CHANNEL_LABELS.get(g, g), "cells": (platform_of(g),)}
                           for g in visible() if t in CHANNEL_LABELS.get(g, g).lower() or t in platform_of(g).lower()])
         def show_modes(*_):
-            """El selector de modo se ve en la Zona Baile y, en Multijugador, con 3 a 4 jugadores (solo cuenta para los juegos de PS1 de Mednafen)."""
-            if modes or (fixed is None and v_players.get() == "4"):
+            """El selector de modo solo se ve en la Zona Baile (Mednafen); el PS1 de 3 a 4 jugadores es siempre Modo Anfitrión con DuckStation."""
+            if modes:
                 mrow.pack(side="bottom", fill="x", pady=(8, 0), before=lst)
             else:
                 mrow.pack_forget()
@@ -318,7 +319,7 @@ class RoomsUI:
             sel = lst.selection()
             if not sel:
                 return lbl.config(text="Selecciona un juego de la lista.")
-            mode = v_mode.get() if (modes or is_party(sel[0])) else "netplay"
+            mode = v_mode.get() if modes else "host" if is_party(sel[0]) else "netplay"
             win.destroy()
             if mode == "host" and not self.stream_need_pack():
                 return
@@ -402,14 +403,16 @@ class RoomsUI:
         self.btn_rp_kick.config(state="normal" if owner else "disabled")
         self.btn_rp_invite.config(state="normal" if owner and len(r["members"]) < r["max"] else "disabled")
         missing = self.rm_needs_retro(r) and not retro.installed(self.data)
-        no_med = (is_dance(ch) or is_party(ch)) and not med.installed(self.data) and (r.get("mode") != "host" or owner)
+        no_med = is_dance(ch) and not med.installed(self.data) and (r.get("mode") != "host" or owner)
+        no_ds = is_party(ch) and owner and not ds_host.usable(self.data)
         host_note = ""
         if r.get("mode") == "host":
             host_note = ("Modo Anfitrión: tú corres el juego y el otro jugador lo ve y juega por transmisión (usa su teclado o su mando Xbox). Pulsa INICIAR cuando estén dentro (de 2 a 4 jugadores)."
                          if owner else "Modo Anfitrión: verás el juego del creador. Controles: I K J L (arriba, abajo, izquierda, derecha), Z X D E (✕ ○ □ △), U O Y H (L1 R1 L2 R2), "
                                        "Enter (Start), Retroceso (Select) o tu mando (Xbox o genérico). Cámbialos en CONFIGURAR; la ventana de la transmisión debe tener el foco.")
         self.rp_note.config(text="Falta RetroArch: vuelve a ejecutar el instalador (revisa que tu antivirus no lo haya borrado)." if missing else
-                            "Falta Mednafen: vuelve a ejecutar el instalador (revisa que tu antivirus no lo haya borrado)." if no_med else host_note)
+                            "Falta Mednafen: vuelve a ejecutar el instalador (revisa que tu antivirus no lo haya borrado)." if no_med else
+                            "Falta DuckStation o su BIOS: vuelve a ejecutar el instalador (revisa que tu antivirus no lo haya borrado)." if no_ds else host_note)
         self.rm_cand_tab_set(self.rm_cand_tab)
 
     # candidatos a invitar

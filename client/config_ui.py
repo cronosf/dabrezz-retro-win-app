@@ -313,11 +313,10 @@ def config_tabs(app, channel, mode, room_max=2):
     """[(clave, Backend)] segun la consola del juego y como se juega."""
     sysname = system_of(channel)
     if is_dance(channel) or is_party(channel):                         # PS1 con Mednafen
-        if mode == "host":
-            if is_party(channel) and ds_host.usable(app.data):         # PS1 de 3-4 jugadores: el anfitrion corre DuckStation (menos retraso)
-                return [("dsh", DsHostBackend(app, room_max)), ("guest", GuestBackend(app))]
-            reserved = range(2, min(int(room_max), 4) + 1)             # puertos que usan los invitados (sus teclas no pueden ser las del anfitrion)
-            return [("med", MedBackend(app, True, reserved)), ("guest", GuestBackend(app))]
+        if is_party(channel):                                          # PS1 de 3-4 jugadores: SIEMPRE Modo Anfitrion con DuckStation (Mednafen es solo de la Zona Baile)
+            return [("dsh", DsHostBackend(app, room_max)), ("guest", GuestBackend(app))]
+        if mode == "host":                                             # baile: 2 jugadores, el invitado usa el puerto 2
+            return [("med", MedBackend(app, True, (2,))), ("guest", GuestBackend(app))]
         return [("med", MedBackend(app, False))]
     if sysname == "duckstation":
         return [("ds", DsBackend(app))]

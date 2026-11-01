@@ -153,8 +153,9 @@ class StreamSession:
             cue = self.rom_for(self.channel)
             if not cue:
                 return self._fail("Falta el juego: descárgalo con DESCARGAR ROM.")
-            self.use_ds = (is_party(self.channel) and self.pad_port is None and not self.extra_args and ds_host.usable(self.data)
-                           and os.environ.get("DZ_HOST_EMU", "") != "mednafen")
+            self.use_ds = is_party(self.channel) and os.environ.get("DZ_HOST_EMU", "") != "mednafen"      # PS1 de 3-4: SIEMPRE DuckStation (Mednafen es solo de la Zona Baile; la variable es de pruebas)
+            if self.use_ds and not ds_host.usable(self.data):
+                return self._fail("Falta DuckStation o su BIOS: vuelve a ejecutar el instalador (revisa que tu antivirus no lo haya borrado).")
             if self.use_ds:                                  # DuckStation: menos retraso (run-ahead) y multitap de 4 (client/ds_host.py)
                 runahead = int((self.settings() or {}).get("runahead", ds_host.RUNAHEAD_DEFAULT))
                 try:

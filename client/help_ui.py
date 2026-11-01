@@ -25,10 +25,10 @@ HELP = (
           "amigos o a jugadores del juego y inicia la partida. Las partidas de 2 jugadores usan el emulador de cada juego; las de SNES de 3 a 5 "
           "(Super Bomberman 3, 4 y 5 con Super Multitap) usan RetroArch, que viene con el instalador."),
     ("b", "PS1 de 3 a 4 jugadores (Crash Team Racing, Crash Bash…): al crear una sala en Multijugador elige primero «2 jugadores» o «3 a 4 jugadores». Con 2, los juegos de PS1 "
-          "corren con DuckStation. Con 3 a 4 se juegan en Modo Anfitrión con Mednafen y su multitap: el creador corre el juego y transmite a los demás (hasta 3 invitados, cada uno "
+          "corren con DuckStation. Con 3 a 4 se juegan siempre en Modo Anfitrión con DuckStation y su multitap: el creador corre el juego y transmite a los demás (hasta 3 invitados, cada uno "
           "en su propio mando); los invitados no necesitan el juego. Sus controles se cambian en CONFIGURAR, dentro de la sala."),
     ("b", "Controles: el botón CONFIGURAR (dentro de la sala, junto a INICIAR) reconoce la consola del juego y cómo se juega y te deja elegir tus teclas (y el mando donde se puede) "
-          "para ese emulador: Mednafen o DuckStation en PS1, Snes9x o RetroArch en SNES. En el Modo Anfitrión tiene dos pestañas: «Como anfitrión» y «Como invitado». Se guardan y se aplican solos al empezar cada partida; cada jugador usa los suyos. El que crea la sala es el jugador 1 y los demás ocupan "
+          "para ese emulador: DuckStation en PS1 (Mednafen solo en la Zona Baile), Snes9x o RetroArch en SNES. En el Modo Anfitrión tiene dos pestañas: «Como anfitrión» y «Como invitado». Se guardan y se aplican solos al empezar cada partida; cada jugador usa los suyos. El que crea la sala es el jugador 1 y los demás ocupan "
           "los siguientes puertos al conectarse."),
     ("b", "Zona Baile: los juegos de baile (Bust a Groove 1 y 2) se juegan aquí, con Mednafen. Elige el juego, pulsa BUSCAR PARTIDA (amistosa, 2 jugadores) "
           "o crea una sala con CREAR SALA; las salas abiertas aparecen en la lista con UNIRSE."),
