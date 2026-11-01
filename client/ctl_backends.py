@@ -149,8 +149,51 @@ def _s9x_backup(conf_path):
     return bak
 
 
+S9X_PORTS = (1, 2)       # el emulador toma los controles del puerto que le toca (jugador 1 o 2); se escriben los dos para que cada uno use los suyos sea cual sea
+
+_XI_BTN = {"A": 0, "B": 1, "X": 2, "Y": 3, "LB": 4, "RB": 5, "BACK": 6, "START": 7}
+_DIRS = {"UP": "Up", "DOWN": "Down", "LEFT": "Left", "RIGHT": "Right", "LS_UP": "Up", "LS_DOWN": "Down", "LS_LEFT": "Left", "LS_RIGHT": "Right",
+         "hat_up": "Up", "hat_down": "Down", "hat_left": "Left", "hat_right": "Right", "y-": "Up", "y+": "Down", "x-": "Left", "x+": "Right"}
+# Botones de SNES en un mando por DirectInput (lo que usa Snes9x): Xbox (A=0 B=1 X=2 Y=3 LB=4 RB=5 Back=6 Start=7) y PS4/PS5/genericos (cuadrado=0 equis=1 circulo=2 triangulo=3 L1=4 R1=5 Share=8 Options=9)
+_PAD_SNES = {"xbox": {"b": 0, "a": 1, "y": 2, "x": 3, "l": 4, "r": 5, "select": 6, "start": 7},
+             "ps": {"b": 1, "a": 2, "y": 0, "x": 3, "l": 4, "r": 5, "select": 8, "start": 9}}
+_PAD_SNES["generic"] = _PAD_SNES["ps"]
+
+
+def s9x_pad_binding(token):
+    """Boton fisico de dance_pad ('xi:A', 'dj:b3', 'dj:hat_up'...) -> asignacion de Snes9x ('(J0)Button 3', '(J0)Up') o None si no se puede (gatillos analogicos)."""
+    kind, _, name = str(token).partition(":")
+    if name in _DIRS:
+        return f"(J0){_DIRS[name]}"
+    if kind == "xi" and name in _XI_BTN:
+        return f"(J0)Button {_XI_BTN[name]}"
+    if kind == "dj" and name[:1] == "b" and name[1:].isdigit():
+        return f"(J0)Button {int(name[1:])}"
+    return None
+
+
+def s9x_default_binding(button, kind):
+    """Asignacion de mando de fabrica de un boton de SNES para ese tipo de mando ('xbox', 'ps', 'generic') o None."""
+    if button in ("up", "down", "left", "right"):
+        return f"(J0){button.capitalize()}"
+    table = _PAD_SNES.get(kind)
+    return f"(J0)Button {table[button]}" if table and button in table else None
+
+
+def _s9x_set(lines, port, name, value):
+    pat = re.compile(rf"^(\s*Joypad{port}:{re.escape(name)}\s*=\s*).*$")
+    for i, ln in enumerate(lines):
+        if pat.match(ln):
+            lines[i] = pat.sub(lambda m: m.group(1) + value, ln)
+            return
+    for i, ln in enumerate(lines):                                         # el boton no estaba: se agrega dentro de [Controls\Win]
+        if ln.strip() == "[Controls\\Win]":
+            lines.insert(i + 1, f"     Joypad{port}:{name} = {value}")
+            return
+
+
 def reset_snes9x(conf_path):
-    """RESTABLECER: devuelve las lineas Joypad1:* a como estaban antes de que Dabrezz Play las cambiara."""
+    """RESTABLECER: devuelve las lineas Joypad1:* y Joypad2:* a como estaban antes de que Dabrezz Play las cambiara."""
     import os
     bak = conf_path + ".dz-orig"
     if not os.path.exists(bak):
@@ -161,41 +204,40 @@ def reset_snes9x(conf_path):
         text = f.read()
     nl = "\r\n" if "\r\n" in text else "\n"
     lines = text.split(nl)
-    for b, name in S9X_KEYS.items():
-        pat = re.compile(rf"^\s*Joypad1:{re.escape(name)}\s*=")
-        old = next((ln for ln in orig if pat.match(ln)), None)
-        if old is None:
-            continue
-        for i, ln in enumerate(lines):
-            if pat.match(ln):
-                lines[i] = old
-                break
+    for port in S9X_PORTS:
+        for name in S9X_KEYS.values():
+            pat = re.compile(rf"^\s*Joypad{port}:{re.escape(name)}\s*=")
+            old = next((ln for ln in orig if pat.match(ln)), None)
+            if old is None:
+                continue
+            for i, ln in enumerate(lines):
+                if pat.match(ln):
+                    lines[i] = old
+                    break
     with open(conf_path, "w", encoding="latin-1", newline="") as f:
         f.write(nl.join(lines))
 
 
-def apply_snes9x(conf_path, kb):
-    """Fija Joypad1:<boton> = <tecla> en [Controls\\Win] de la configuracion de Snes9x (se reemplaza la asignacion anterior de ese boton, sea de teclado o de mando)."""
-    if not kb:
+def apply_snes9x(conf_path, kb, pad=None, kind=None):
+    """Escribe en Snes9x los controles del jugador (puertos 1 y 2). Por boton, en este orden: su boton de mando elegido (`pad`), su tecla elegida (`kb`), el boton de mando de fabrica
+    del tipo de mando conectado (`kind`: 'xbox', 'ps', 'generic'; asi el jugador 2, que traia solo teclado, tambien juega con mando) y, si no hay nada, se deja como estaba."""
+    pad = pad or {}
+    if not kb and not pad and not kind:
         return
     _s9x_backup(conf_path)
     with open(conf_path, encoding="latin-1", newline="") as f:
         text = f.read()
     nl = "\r\n" if "\r\n" in text else "\n"
     lines = text.split(nl)
-    for b, n in kb.items():
-        key = to_s9x(str(n))
-        if not key or b not in S9X_KEYS:
+    for b, name in S9X_KEYS.items():
+        value = s9x_pad_binding(pad[b]) if b in pad else None
+        if value is None and kb and b in kb and to_s9x(str(kb[b])):
+            value = to_s9x(str(kb[b]))
+        if value is None and not (kb and b in kb):
+            value = s9x_default_binding(b, kind) if kind else None
+        if value is None:
             continue
-        pat = re.compile(rf"^(\s*Joypad1:{re.escape(S9X_KEYS[b])}\s*=\s*).*$")
-        for i, ln in enumerate(lines):
-            if pat.match(ln):
-                lines[i] = pat.sub(lambda m: m.group(1) + key, ln)
-                break
-        else:                                                              # el boton no estaba: se agrega dentro de [Controls\Win]
-            for i, ln in enumerate(lines):
-                if ln.strip() == "[Controls\\Win]":
-                    lines.insert(i + 1, f"     Joypad1:{S9X_KEYS[b]} = {key}")
-                    break
+        for port in S9X_PORTS:
+            _s9x_set(lines, port, name, value)
     with open(conf_path, "w", encoding="latin-1", newline="") as f:
         f.write(nl.join(lines))

@@ -57,6 +57,48 @@ def vk_label(vk):
     return chr(vk) if 0x30 <= vk <= 0x5A else f"Tecla {vk}"
 
 
+SONY_VID = 0x054C                                   # PlayStation: DualShock 4 (0x05C4, 0x09CC), DualSense (0x0CE6), DualSense Edge (0x0DF2), por USB o Bluetooth
+
+
+class _JoyCapsW(ctypes.Structure):
+    _fields_ = [("wMid", wintypes.WORD), ("wPid", wintypes.WORD), ("szPname", ctypes.c_wchar * 32)] + [(n, wintypes.UINT) for n in (
+        "wXmin", "wXmax", "wYmin", "wYmax", "wZmin", "wZmax", "wNumButtons", "wPeriodMin", "wPeriodMax", "wRmin", "wRmax", "wUmin", "wUmax", "wVmin", "wVmax", "wCaps",
+        "wMaxAxes", "wNumAxes", "wMaxButtons")] + [("szRegKey", ctypes.c_wchar * 32), ("szOEMVxD", ctypes.c_wchar * 260)]
+
+
+def generic_ids():
+    """[(VID, PID, nombre)] de los mandos genericos conectados (winmm)."""
+    out = []
+    if sys.platform != "win32":
+        return out
+    try:
+        winmm = ctypes.WinDLL("winmm")
+        for i in range(min(winmm.joyGetNumDevs(), 4)):
+            info = _JoyInfoEx()
+            info.dwSize, info.dwFlags = ctypes.sizeof(_JoyInfoEx), 0xFF
+            if winmm.joyGetPosEx(i, ctypes.byref(info)) != 0:
+                continue
+            caps = _JoyCapsW()
+            if winmm.joyGetDevCapsW(i, ctypes.byref(caps), ctypes.sizeof(caps)) == 0:
+                out.append((caps.wMid, caps.wPid, caps.szPname))
+    except OSError:
+        pass
+    return out
+
+
+def pad_kind(xi_connected, dj_connected):
+    """'xbox', 'ps' (DualShock 4 / DualSense), 'generic' o None (sin mando)."""
+    if xi_connected:
+        return "xbox"
+    if dj_connected:
+        return "ps" if any(v == SONY_VID for v, _p, _n in generic_ids()) else "generic"
+    return None
+
+
+def device_label(xi_connected, dj_connected):
+    return {"xbox": "mando Xbox", "ps": "mando PS4/PS5", "generic": "mando genérico"}.get(pad_kind(xi_connected, dj_connected), "sin mando")
+
+
 class _JoyInfoEx(ctypes.Structure):
     _fields_ = [(n, wintypes.DWORD) for n in ("dwSize", "dwFlags", "dwXpos", "dwYpos", "dwZpos", "dwRpos", "dwUpos", "dwVpos", "dwButtons", "dwButtonNumber", "dwPOV",
                                               "dwReserved1", "dwReserved2")]

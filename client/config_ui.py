@@ -99,7 +99,7 @@ class MedBackend(Backend):
         mask = dp.pressed_buttons({"pad": pad}, tokens, xc, gc, set())
         names = dict(self.buttons)
         pressed = [names[b] for b, _ in self.buttons if mask & st.BIT[b]]
-        dev = "mando Xbox" if xc else "mando genérico" if gc else "sin mando"
+        dev = dp.device_label(xc, gc)
         return f"Prueba en vivo ({dev}):  " + ("  ".join(pressed) if pressed else "pulsa tus botones…")
 
     def _taken_sdl(self):
@@ -139,7 +139,7 @@ class DsHostBackend(Backend):
         mask = dp.pressed_buttons({"pad": pad}, tokens, xc, gc, set())
         names = dict(self.buttons)
         pressed = [names[b] for b, _ in self.buttons if mask & st.BIT[b]]
-        dev = "mando Xbox" if xc else "mando genérico" if gc else "sin mando"
+        dev = dp.device_label(xc, gc)
         return f"Prueba en vivo ({dev}):  " + ("  ".join(pressed) if pressed else "pulsa tus botones…")
 
     def key_from_event(self, e, kb, bid):
@@ -180,13 +180,39 @@ class S9xBackend(Backend):
     buttons = cb.SNES_BUTTONS
     title = "2 jugadores · Snes9x"
     emulator = "Snes9x"
-    note = ("SNES de 2 jugadores: tus teclas en Snes9x. Un botón que cambies pasa a usar esa tecla en lugar de su botón de mando; los que no cambies quedan como estaban.")
+    has_pad = True
+    note = ("SNES de 2 jugadores (cada uno corre su Snes9x): tus teclas y los botones de TU mando, seas el jugador 1 o el 2: se aplican a los dos puertos, así que no importa cuál te toque. "
+            "Mando: Xbox, PS4 o PS5 (USB o Bluetooth) o genérico; sin configurar nada ya funciona con su disposición normal. Snes9x admite UNA sola cosa por botón: si en un botón "
+            "pones tecla y mando, gana el mando; si solo pones tecla, ese botón usa la tecla y no el mando.")
+
+    def __init__(self, app):
+        super().__init__(app)
+        self.reader = dp.PadReader()
+        self.base = set()
 
     def key_from_event(self, e, kb, bid):
         n = cb.key_name(e.keysym, e.keycode)
         if not n or not cb.to_s9x(n):
             return None, "Esa tecla no está soportada aquí (usa letras, números, flechas, Enter, Espacio o Tab)."
         return n, None
+
+    def pad_label(self, token):
+        return dp.token_label(token)
+
+    def pad_begin(self):
+        self.base = self.reader.snapshot()[0]
+        return True
+
+    def pad_poll(self):
+        tokens, xc, gc = self.reader.snapshot()
+        new = sorted(tokens - self.base)
+        self.base = self.base & tokens
+        return (new[0] if new else None), bool(xc or gc)
+
+    def live(self, kb, pad):
+        tokens, xc, gc = self.reader.snapshot()
+        shown = [dp.token_label(t) for t in sorted(tokens)]
+        return f"Prueba en vivo ({dp.device_label(xc, gc)}):  " + ("  ".join(shown) if shown else "pulsa tus botones…")
 
     def store(self, kb, pad):
         super().store(kb, pad)
@@ -290,7 +316,7 @@ class GuestBackend(Backend):
         tokens, xc, gc = self.reader.snapshot()
         mask = dp.pressed_buttons({"kb": kb, "pad": pad}, tokens, xc, gc, down)
         pressed = [b for b, _ in self.buttons if mask & st.BIT[b]]
-        dev = "mando Xbox" if xc else "mando genérico" if gc else "sin mando"
+        dev = dp.device_label(xc, gc)
         return f"Prueba en vivo ({dev}):  " + ("  ".join(pressed) if pressed else "pulsa tus botones…")
 
 

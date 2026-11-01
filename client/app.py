@@ -31,6 +31,7 @@ from client.retro_session import RetroSession  # noqa: E402
 from client.stream_session import StreamSession  # noqa: E402
 from client.controls_ui import ControlsUI  # noqa: E402
 import client.ctl_backends as ctl_backends  # noqa: E402
+import client.dance_pad as dance_pad  # noqa: E402
 from client.config_ui import ConfigUI  # noqa: E402
 from client.dance_controls_ui import DanceControlsUI  # noqa: E402
 from client.dance_settings_ui import DanceSettingsUI  # noqa: E402
@@ -1005,10 +1006,13 @@ class App(Views, LoginPages, LobbyPages, FriendsUI, DmUI, RoomsUI, DanceUI, Home
         conf = os.path.join(os.path.dirname(self.emulator_for("snes_x")), "fcadesnes9x.conf")
         if not os.path.isfile(conf):
             return
-        kb = (self.cfg.get("snes9x_controls") or {}).get("kb")
+        prof = self.cfg.get("snes9x_controls") or {}
         try:
-            if kb:
-                ctl_backends.apply_snes9x(conf, kb)
+            snap = dance_pad.PadReader().snapshot()
+            kind = dance_pad.pad_kind(snap[1], snap[2])
+            if prof.get("kb") or prof.get("pad") or kind:
+                ctl_backends.reset_snes9x(conf)                          # parte siempre de la configuracion original (un mando desconectado no deja restos)
+                ctl_backends.apply_snes9x(conf, prof.get("kb"), prof.get("pad"), kind)
             elif reset_if_empty:
                 ctl_backends.reset_snes9x(conf)
         except OSError:
