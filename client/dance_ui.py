@@ -221,7 +221,7 @@ class DanceUI:
 
     def dance_create(self):
         """Crear sala: lista con solo los juegos de baile (la misma ventana que en Multijugador)."""
-        self.rm_create(games=self.dance_games(), title="Crear sala de baile")
+        self.rm_create(games=self.dance_games(), title="Crear sala de baile", modes=True)
 
     # ---------- chat ----------
     def dance_log(self, text, name, role=None, country=None):

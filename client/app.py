@@ -16,6 +16,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."
 import client.attest as attest  # noqa: E402
 import client.med as med  # noqa: E402
 import client.med_cheats as med_cheats  # noqa: E402
+import client.stream_pack as stream_pack  # noqa: E402
 import client.retro as retro  # noqa: E402
 import client.winbrand as winbrand  # noqa: E402
 import client.romman as romman  # noqa: E402
@@ -27,6 +28,7 @@ import client.secure as secure  # noqa: E402
 from client.admin_ui import AdminUI  # noqa: E402
 from client.dm_ui import DmUI  # noqa: E402
 from client.retro_session import RetroSession  # noqa: E402
+from client.stream_session import StreamSession  # noqa: E402
 from client.controls_ui import ControlsUI  # noqa: E402
 from client.dance_ui import DanceUI  # noqa: E402
 from client.home_rooms import HomeRooms  # noqa: E402
@@ -838,10 +840,27 @@ class App(Views, LoginPages, LobbyPages, FriendsUI, DmUI, RoomsUI, DanceUI, Home
             self.dance_on_queued()
             self.med_session().on_session(m)
             self.rm_say("Partida de Bust a Groove con Mednafen: se abre su ventana en unos segundos.")
+        elif t == "stream_session":
+            self.queued = False
+            self.dance_on_queued()
+            if self.stream_session().on_session(m):
+                self.rm_say("Modo Anfitrión: " + ("se abre el juego y se espera al invitado." if m.get("role") == "host" else "conectando con el anfitrión…"), True)
+        elif t == "stream_peer":
+            self.stream_session().on_peer(m)
+        elif t == "stream_relay":
+            self.stream_session().on_relay(m)
+        elif t == "_stream_dl":
+            self.show_download("Herramientas del Modo Anfitrión", m["pct"])
+        elif t == "_stream_done":
+            self.stream_dl_busy = False
+            self.show_download_result(m["ok"], m["msg"])
+            self.rm_say(m["msg"], m["ok"])
         elif t == "ra_end":
             self.retro_session().handle_end(m)
             if getattr(self, "_med", None) is not None:
                 self._med.handle_end(m)
+            if getattr(self, "_stream", None) is not None:
+                self._stream.handle_end(m)
         elif t == "_raend":
             self.rm_say("La partida con RetroArch terminó.", True)
         elif t == "_romsdone":
@@ -948,11 +967,49 @@ class App(Views, LoginPages, LobbyPages, FriendsUI, DmUI, RoomsUI, DanceUI, Home
         self._med.nick = (self.me or {}).get("user_name", "Jugador")
         return self._med
 
+    def stream_session(self):
+        if getattr(self, "_stream", None) is None:
+            put = self.net.events.put
+            self._stream = StreamSession(self.data, self.net.send, self.net, self.rom_file, log=lambda text: put({"t": "_log", "text": text}),
+                                         on_end=lambda: put({"t": "_raend"}), title_for=self.window_title)
+        self._stream.cheats_on = lambda: self.feature(med_cheats.FEATURE)
+        return self._stream
+
+    def stream_need_pack(self):
+        """El Modo Anfitrion necesita ffmpeg y la captura de audio (~120 MB, se bajan una vez). True si ya estan; si no, ofrece descargarlos."""
+        if stream_pack.installed(self.data):
+            return True
+        if getattr(self, "stream_dl_busy", False):
+            self.rm_say("Las herramientas del Modo Anfitrión se están descargando: espera a que termine.", False)
+            return False
+        if messagebox.askyesno("Modo Anfitrión", "Para el Modo Anfitrión hace falta descargar unas herramientas (ffmpeg, unos 120 MB). Se descargan una sola vez.\n\n"
+                               "¿Descargarlas ahora?"):
+            self.stream_dl_busy = True
+            put = self.net.events.put
+
+            def work():
+                last = [-1]
+
+                def progress(_name, got, total):
+                    pct = got * 100 // max(total, 1)
+                    if pct != last[0]:
+                        last[0] = pct
+                        put({"t": "_stream_dl", "pct": pct})
+                try:
+                    stream_pack.install(self.data, progress)
+                    put({"t": "_stream_done", "ok": True, "msg": "Herramientas del Modo Anfitrión listas. Ya puedes crear o unirte a una sala en Modo Anfitrión."})
+                except Exception as e:  # noqa: BLE001
+                    put({"t": "_stream_done", "ok": False, "msg": f"No se pudieron descargar las herramientas del Modo Anfitrión: {e}"})
+            threading.Thread(target=work, daemon=True).start()
+        return False
+
     def retro_stop(self):
         if getattr(self, "_retro", None) is not None:
             self._retro.stop()
         if getattr(self, "_med", None) is not None:
             self._med.stop()
+        if getattr(self, "_stream", None) is not None:
+            self._stream.stop()
 
     def on_close(self):
         """La X de la ventana: la app sigue en segundo plano (icono junto al reloj), como Discord o Steam. Sin bandeja, cierra."""

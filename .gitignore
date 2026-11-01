@@ -28,3 +28,5 @@ roms/
 MIPS/
 # respaldos de emuladores retirados: los zips quedan solo en este equipo
 EMUS BACK/**/*.zip
+
+test/

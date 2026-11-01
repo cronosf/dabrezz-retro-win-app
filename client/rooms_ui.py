@@ -28,6 +28,7 @@ class RoomsUI:
     def _build_rooms(self):
         self.room, self.rooms_data, self.rm_tab, self.rm_sig = None, [], "public", None
         self.rm_invites = {}                                   # id de sala -> (quien invita, juego, vence)
+        self.rm_invite_mode = {}                               # id de sala -> "host" si es Modo Anfitrión
         self.rm_cand_tab = "friends"
         v = self.views["multi"]
         head = tk.Frame(v, bg=th.BG)
@@ -204,7 +205,7 @@ class RoomsUI:
         info = tk.Frame(row, bg=th.PANEL)
         info.pack(side="left", padx=14, fill="x", expand=True)
         tk.Label(info, text=CHANNEL_LABELS.get(ch, ch), font=(th.BODY, 12, "bold"), fg="#ffffff", bg=th.PANEL, anchor="w").pack(anchor="w")
-        sub = f"Sala de {r['owner_name']} · {platform_of(ch)}" + (" · en partida" if r["playing"] else "")
+        sub = f"Sala de {r['owner_name']} · {platform_of(ch)}" + (" · Modo Anfitrión" if r.get("mode") == "host" else "") + (" · en partida" if r["playing"] else "")
         tk.Label(info, text=sub, font=(th.BODY, 9), fg=th.MUTED, bg=th.PANEL, anchor="w").pack(anchor="w")
         cnt = tk.Frame(row, bg=th.PANEL)
         cnt.pack(side="left", padx=18)
@@ -216,7 +217,7 @@ class RoomsUI:
             ttk.Button(row, text="TU SALA", style="Accent.TButton", command=mine_cmd or (lambda: self.rm_show_tab("mine"))).pack(side="left", padx=(6, 0))
         else:
             ttk.Button(row, text="LLENA" if full else "UNIRSE", style="Cta.TButton", state="disabled" if full else "normal",
-                       command=lambda i=r["id"], c=ch: self.rm_join(i, c)).pack(side="left", padx=(6, 0))
+                       command=lambda i=r["id"], c=ch, md=r.get("mode"): self.rm_join(i, c, md)).pack(side="left", padx=(6, 0))
 
     # ---------- acciones ----------
     def rm_say(self, text, ok=True):
@@ -231,13 +232,17 @@ class RoomsUI:
             self.download_roms(ch)
         return False
 
-    def rm_join(self, rid, ch):
+    def rm_join(self, rid, ch, mode=None):
         if self.match:
             return self.rm_say("Ya estás en una partida.", False)
+        if mode == "host":                                 # Modo Anfitrión: el invitado no necesita el juego, solo las herramientas de transmisión
+            if self.stream_need_pack():
+                self.net.send(t="room_join", id=rid)
+            return
         if self.rm_need_game(ch, "unirte a esta sala"):
             self.net.send(t="room_join", id=rid)
 
-    def rm_create(self, games=None, title="Crear sala"):
+    def rm_create(self, games=None, title="Crear sala", modes=False):
         """Elegir el juego de la sala (lista con buscador) y crearla. Multijugador ofrece los juegos que no son de baile; la Zona Baile, solo los de baile."""
         if self.match:
             return self.rm_say("Ya estás en una partida.", False)
@@ -245,7 +250,7 @@ class RoomsUI:
         win.title(title)
         th.set_icon(win)
         win.transient(self)
-        win.geometry("380x520")
+        win.geometry("380x600" if modes else "380x520")
         pad = tk.Frame(win, bg=th.BG, padx=22, pady=18)
         pad.pack(fill="both", expand=True)
         tk.Label(pad, text=title, font=(th.DISPLAY, 14), fg="#ffffff", bg=th.BG).pack(anchor="w")
@@ -258,6 +263,14 @@ class RoomsUI:
         row.pack(side="bottom", fill="x", pady=(10, 0))
         lbl = tk.Label(pad, text="", fg=th.ERR, bg=th.BG, font=(th.BODY, 9), anchor="w")
         lbl.pack(side="bottom", fill="x")
+        v_mode = tk.StringVar(value="host")
+        if modes:                                          # Zona Baile: elegir como se juega
+            mrow = tk.Frame(pad, bg=th.BG)
+            mrow.pack(side="bottom", fill="x", pady=(8, 0))
+            for val, text in (("host", "Modo Anfitrión: tú corres el juego y el otro jugador lo ve y juega (menos retraso)"),
+                              ("netplay", "Netplay de Mednafen (cada uno corre su juego)")):
+                tk.Radiobutton(mrow, text=text, value=val, variable=v_mode, fg=th.TEXT, bg=th.BG, selectcolor=th.FIELD, activebackground=th.BG, activeforeground=th.TEXT,
+                               bd=0, highlightthickness=0, font=(th.BODY, 9), justify="left", anchor="w", wraplength=330).pack(fill="x", anchor="w")
         lst = colorlist.ColorList(pad, (("nick", 200, "JUEGO"), ("plat", 100, "")), height=8)
         lst.pack(fill="both", expand=True)
         games = sorted(games if games is not None else [g for g in self.game_list() if not is_dance(g)], key=lambda g: CHANNEL_LABELS.get(g, g).lower())
@@ -273,9 +286,12 @@ class RoomsUI:
             sel = lst.selection()
             if not sel:
                 return lbl.config(text="Selecciona un juego de la lista.")
+            mode = v_mode.get() if modes else "netplay"
             win.destroy()
+            if mode == "host" and not self.stream_need_pack():
+                return
             if self.rm_need_game(sel[0], "crear la sala"):
-                self.net.send(t="room_create", channel=sel[0])
+                self.net.send(t="room_create", channel=sel[0], mode=mode)
         ttk.Button(row, text="CREAR", style="Cta.TButton", command=go).pack(side="left", fill="x", expand=True)
         ttk.Button(row, text="CANCELAR", command=win.destroy).pack(side="left", padx=(8, 0))
         lst.canvas.bind("<Double-Button-1>", go)             # doble clic sobre un juego: crea la sala
@@ -354,9 +370,14 @@ class RoomsUI:
         self.btn_rp_kick.config(state="normal" if owner else "disabled")
         self.btn_rp_invite.config(state="normal" if owner and len(r["members"]) < r["max"] else "disabled")
         missing = self.rm_needs_retro(r) and not retro.installed(self.data)
-        no_med = is_dance(ch) and not med.installed(self.data)
+        no_med = is_dance(ch) and not med.installed(self.data) and (r.get("mode") != "host" or owner)
+        host_note = ""
+        if r.get("mode") == "host":
+            host_note = ("Modo Anfitrión: tú corres el juego y el otro jugador lo ve y juega por transmisión (usa su teclado o su mando Xbox). Pulsa INICIAR cuando esté dentro."
+                         if owner else "Modo Anfitrión: verás el juego del creador. Tus controles: flechas, Z X A S (✕ ○ □ △), Q W E R (L1 R1 L2 R2), Enter (Start), Retroceso (Select) "
+                                       "o tu mando Xbox; la ventana de la transmisión debe tener el foco.")
         self.rp_note.config(text="Falta RetroArch: vuelve a ejecutar el instalador (revisa que tu antivirus no lo haya borrado)." if missing else
-                            "Falta Mednafen: vuelve a ejecutar el instalador (revisa que tu antivirus no lo haya borrado)." if no_med else "")
+                            "Falta Mednafen: vuelve a ejecutar el instalador (revisa que tu antivirus no lo haya borrado)." if no_med else host_note)
         self.rm_cand_tab_set(self.rm_cand_tab)
 
     # candidatos a invitar
@@ -427,6 +448,7 @@ class RoomsUI:
             return
         name = "".join(c for c in str(m.get("from_user_name", "")) if c.isprintable())[:12]
         self.rm_invites[rid] = (name, ch, time.time() + INVITE_TTL)
+        self.rm_invite_mode[rid] = m.get("mode")
         self._rm_show_invite()
 
     def _rm_current_invite(self):
@@ -455,7 +477,10 @@ class RoomsUI:
         rid, (name, ch, _) = cur
         if self.match:
             return self.rm_bar_lbl.config(text="Ya estás en una partida.")
-        if not self.rom_exists(ch):
+        if self.rm_invite_mode.get(rid) == "host":          # Modo Anfitrión: sin juego, solo las herramientas
+            if not self.stream_need_pack():
+                return self.rm_bar_lbl.config(text="Faltan las herramientas del Modo Anfitrión.\nCuando terminen de descargarse, pulsa UNIRME.")
+        elif not self.rom_exists(ch):
             self.rm_bar_lbl.config(text=f"Falta el juego de {name}: descargando…\nCuando termine, pulsa UNIRME.")
             return self.download_roms(ch)
         self.rm_invites.pop(rid, None)

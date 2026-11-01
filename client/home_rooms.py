@@ -114,4 +114,4 @@ class HomeRooms:
         if r["count"] >= r["max"] or r["playing"]:
             return self.hr_note.config(text="Esa sala está llena o ya está jugando.", fg=th.ERR)
         self.hr_note.config(fg=th.MUTED)
-        self.rm_join(r["id"], r["channel"])
+        self.rm_join(r["id"], r["channel"], r.get("mode"))

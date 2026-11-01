@@ -29,6 +29,10 @@ HELP = (
           "los siguientes puertos al conectarse."),
     ("b", "Zona Baile: los juegos de baile (Bust a Groove 1 y 2) se juegan aquí, con Mednafen. Elige el juego, pulsa BUSCAR PARTIDA (amistosa, 2 jugadores) "
           "o crea una sala con CREAR SALA; las salas abiertas aparecen en la lista con UNIRSE."),
+    ("b", "Modo Anfitrión (Zona Baile): al crear la sala puedes elegirlo. Tú corres el juego en tu PC y el otro jugador lo ve en una ventana y juega por transmisión, "
+          "sin tener el juego: no hay desincronización y el único retraso es el de su conexión contigo. La primera vez se descargan unas herramientas (unos 120 MB). "
+          "El invitado juega con las flechas, Z X A S (✕ ○ □ △), Q W E R (L1 R1 L2 R2), Enter (Start) y Retroceso (Select), o con su mando Xbox, con la ventana de la "
+          "transmisión en primer plano."),
     ("b", "Ranked: elige un juego en Juegos y pulsa BUSCAR PARTIDA (debajo de la lista de jugadores). El ranked solo se juega buscando partida, "
           "no con invitaciones ni salas, y solo en los juegos donde el emulador detecta el resultado."),
     ("b", "Amigos: agrega a otros jugadores por su nombre de usuario (ellos aceptan la solicitud), mira quién está en línea, invítalos a una partida amistosa o escríbeles un mensaje privado. Haz clic derecho sobre un jugador de la lista para enviarle una invitación de amistad. Los mensajes privados solo se pueden enviar entre amigos y no se guardan: se borran al cerrar la app."),

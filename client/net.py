@@ -142,6 +142,11 @@ class Net:
             time.sleep(0.1)
         return self.peer_rtt
 
+    def udp_detach(self):
+        """Entrega el socket UDP a otra parte de la app (Modo Anfitrion) sin cerrarlo: el cliente deja de leerlo hasta que se vuelva a abrir con udp_open."""
+        s, self.udp = self.udp, None
+        return s
+
     def udp_close(self):
         s, self.udp = self.udp, None
         if s:
