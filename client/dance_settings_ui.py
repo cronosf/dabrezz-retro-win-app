@@ -8,6 +8,7 @@ import client.theme as th
 MBPS = (2, 3, 4, 6, 8, 10, 12, 14, 16, 18, 20, 30, 40, 50)
 LABELS = {2: "2 Mbps · conexión lenta", 3: "3 Mbps", 4: "4 Mbps · recomendado", 6: "6 Mbps", 8: "8 Mbps", 10: "10 Mbps", 12: "12 Mbps", 14: "14 Mbps", 16: "16 Mbps", 18: "18 Mbps", 20: "20 Mbps",
           30: "30 Mbps · solo fibra", 40: "40 Mbps · solo fibra", 50: "50 Mbps · solo fibra (máxima imagen)"}
+RUNAHEAD_LABELS = {0: "0 · sin run-ahead (el que menos gasta)", 1: "1 fotograma (≈ 16 ms menos)", 2: "2 fotogramas (≈ 33 ms menos)", 3: "3 fotogramas (≈ 50 ms menos) · recomendado"}
 FEC_EXTRA, AUDIO_MBPS = 1.2, 0.77                  # 20 % de paridad en el video; el audio va comprimido a 8 bits (48 kHz estereo)
 
 
@@ -18,7 +19,7 @@ def upload_estimate(mbps):
 
 class DanceSettingsUI:
     def stream_settings(self):
-        return {"mbps": 4, "video_delay_ms": 0, **(self.cfg.get("stream") or {})}
+        return {"mbps": 4, "video_delay_ms": 0, "runahead": 3, **(self.cfg.get("stream") or {})}
 
     def dance_stream_settings(self):
         cur = self.stream_settings()
@@ -27,7 +28,7 @@ class DanceSettingsUI:
         th.set_icon(win)
         win.transient(self)
         sw, sh = win.winfo_screenwidth(), win.winfo_screenheight()
-        hgt = min(560, sh - 120)
+        hgt = min(680, sh - 100)
         win.geometry(f"520x{hgt}+{max((sw - 520) // 2, 0)}+{max((sh - hgt) // 2 - 20, 0)}")
         win.minsize(460, 400)
         pad = tk.Frame(win, bg=th.BG, padx=20, pady=16)
@@ -56,6 +57,12 @@ class DanceSettingsUI:
         v_mbps.trace_add("write", refresh)
         refresh()
 
+        tk.Label(pad, text="Menos retraso del juego (PS1 de 3 a 4 jugadores, cuando eres el anfitrión)", font=(th.BODY, 11, "bold"), fg="#ffffff", bg=th.BG).pack(anchor="w", pady=(18, 0))
+        wrap("DuckStation adelanta unos fotogramas para que el juego responda antes (run-ahead). Medido: de 200 ms a 149 ms desde que se pulsa un botón hasta que se ve, con 3. "
+             "Cada fotograma gasta más procesador del anfitrión; si tu PC va justa y el juego se ve lento, baja este valor.")
+        v_run = tk.StringVar(value=RUNAHEAD_LABELS.get(int(cur.get("runahead", 3)), RUNAHEAD_LABELS[3]))
+        ttk.Combobox(pad, textvariable=v_run, values=[RUNAHEAD_LABELS[k] for k in sorted(RUNAHEAD_LABELS)], state="readonly", width=42).pack(anchor="w", pady=(8, 0))
+
         tk.Label(pad, text="Sincronía imagen y sonido (cuando eres el invitado)", font=(th.BODY, 11, "bold"), fg="#ffffff", bg=th.BG).pack(anchor="w", pady=(18, 0))
         wrap("El sonido suele llegar unos 20 ms detrás de la imagen. Si notas la música atrasada respecto a los pasos, retrasa un poco la imagen para alinearla. "
              "Ojo: cada milisegundo que agregas también retrasa lo que ves al pulsar un botón.")
@@ -70,7 +77,8 @@ class DanceSettingsUI:
 
         def save():
             m = next((k for k, t in LABELS.items() if t == v_mbps.get()), 4)
-            self.cfg["stream"] = {"mbps": m, "video_delay_ms": int(v_delay.get())}
+            run = next((k for k, t in RUNAHEAD_LABELS.items() if t == v_run.get()), 3)
+            self.cfg["stream"] = {"mbps": m, "video_delay_ms": int(v_delay.get()), "runahead": run}
             self.save_cfg()
             win.destroy()
             if hasattr(self, "dance_say"):

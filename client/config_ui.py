@@ -10,6 +10,7 @@ from tkinter import ttk
 import client.controls as controls
 import client.ctl_backends as cb
 import client.dance_pad as dp
+import client.ds_host as ds_host
 import client.stream as st
 import client.theme as th
 from shared.capabilities import is_dance, is_party, system_of
@@ -94,6 +95,35 @@ class MedBackend(Backend):
         if owner:
             return None, f"«{cb.key_label(n)}» la usa el invitado del puerto {owner}. Elige otra."
         return n, None
+
+
+class DsHostBackend(Backend):
+    """Teclas del anfitrion en el Modo Anfitrion con DuckStation (Pad1): no pueden ser las de los invitados (client/ds_host.py) ni los atajos de DuckStation."""
+    cfg_key = "ds_host_controls"
+    buttons = cb.PS1_BUTTONS
+    title = "Como anfitrión"
+    emulator = "DuckStation"
+    note = ("Estas son TUS teclas en el juego que corre en tu PC (DuckStation, mando 1). Se aplican solas al abrir la partida. Los invitados juegan por su cuenta con las "
+            "suyas (pestaña «Como invitado») y sus teclas no se pueden usar aquí.")
+
+    def __init__(self, app, players):
+        super().__init__(app)
+        self.reserved = ds_host.guest_key_names(players)
+
+    def key_from_event(self, e, kb, bid):
+        n = cb.key_name(e.keysym, e.keycode)
+        qt = cb.to_qt(n) if n else None
+        if not qt:
+            return None, "Esa tecla no está soportada aquí (usa letras, números, flechas, Enter o Retroceso)."
+        if n in ("tab", "space"):
+            return None, f"«{cb.key_label(n)}» es un atajo de DuckStation (avance rápido / pausa). Elige otra."
+        owner = self.reserved.get(qt.lower())
+        if owner:
+            return None, f"«{cb.key_label(n)}» la usa el invitado del puerto {owner}. Elige otra."
+        return n, None
+
+    def default_label(self, bid):
+        return cb.key_label(ds_host.HOST_DEFAULT[bid]) + " (auto)"
 
 
 class DsBackend(Backend):
@@ -247,6 +277,8 @@ def config_tabs(app, channel, mode, room_max=2):
     sysname = system_of(channel)
     if is_dance(channel) or is_party(channel):                         # PS1 con Mednafen
         if mode == "host":
+            if is_party(channel) and ds_host.usable(app.data):         # PS1 de 3-4 jugadores: el anfitrion corre DuckStation (menos retraso)
+                return [("dsh", DsHostBackend(app, room_max)), ("guest", GuestBackend(app))]
             reserved = range(2, min(int(room_max), 4) + 1)             # puertos que usan los invitados (sus teclas no pueden ser las del anfitrion)
             return [("med", MedBackend(app, True, reserved)), ("guest", GuestBackend(app))]
         return [("med", MedBackend(app, False))]

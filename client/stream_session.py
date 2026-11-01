@@ -14,12 +14,14 @@ import threading
 import time
 
 import client.dance_pad as dance_pad
+import client.ds_host as ds_host
 import client.med as med
 import client.med_cheats as med_cheats
 import client.stream as st
 import client.stream_pack as pack
 import client.upnp as upnp
 import client.winbrand as winbrand
+from shared.capabilities import is_party
 
 DIRECT_WAIT_S = 7
 RELAY_WAIT_S = 40
@@ -74,7 +76,10 @@ class StreamSession:
         self.logf = None                                 # stream_view_log.txt (invitado) o stream_host_log.txt (anfitrion): todo lo que pasa, para diagnosticar
         self.profile = profile                           # () -> perfil de controles del invitado (cfg["dance_controls"])
         self.settings = settings or (lambda: None)       # () -> {"mbps": 4, "video_delay_ms": 0} (cfg["stream"])
-        self.host_controls = lambda: None                # () -> cfg["med_controls"]: las teclas del anfitrion (CONFIGURAR)
+        self.host_controls = lambda: None                # () -> cfg["med_controls"]: las teclas del anfitrion con Mednafen (CONFIGURAR)
+        self.host_ds_controls = lambda: None             # () -> cfg["ds_host_controls"]: las teclas del anfitrion con DuckStation (CONFIGURAR)
+        self.extra_ds = None                             # solo pruebas: {(seccion, clave): valor} extra en el settings.ini de DuckStation
+        self.use_ds = False                              # el anfitrion corre DuckStation (PS1 de 3-4 jugadores) en vez de Mednafen
         self.pad_port = None                             # solo pruebas: fuerza el puerto de PSX que controla el invitado 1
         self.extra_args = []                             # solo pruebas: argumentos extra de Mednafen
         self.cheats_on = lambda: False                   # () -> bool: truques de la funcion en prueba (un solo emulador: no hay desincronizacion)
@@ -145,16 +150,27 @@ class StreamSession:
             cue = self.rom_for(self.channel)
             if not cue:
                 return self._fail("Falta el juego: descárgalo con DESCARGAR ROM.")
-            if not med.installed(self.data):
-                return self._fail("Falta Mednafen: vuelve a ejecutar el instalador (revisa que tu antivirus no lo haya borrado).")
-            med_cheats.apply(med.folder(self.data), self.channel, self.cheats_on())
-            pads = st.mednafen_pad_args(self.pad_port) if self.pad_port else st.mednafen_party_args(self.players)
-            cmd = med.command(self.data, cue, players=self.players, controls=self.host_controls())      # con 3 o 4: sin tarjetas de memoria en los puertos 3 y 4 (si no, sale "Memcard 4 save error")
-            cmd = cmd[:-1] + ["-psx.xscale", "2", "-psx.yscale", "2", *pads, *self.extra_args] + cmd[-1:]
-            try:
-                self.med = subprocess.Popen(cmd, cwd=med.folder(self.data))
-            except OSError as e:
-                return self._fail(f"No se pudo abrir Mednafen: {e}")
+            self.use_ds = (is_party(self.channel) and self.pad_port is None and not self.extra_args and ds_host.usable(self.data)
+                           and os.environ.get("DZ_HOST_EMU", "") != "mednafen")
+            if self.use_ds:                                  # DuckStation: menos retraso (run-ahead) y multitap de 4 (client/ds_host.py)
+                runahead = int((self.settings() or {}).get("runahead", ds_host.RUNAHEAD_DEFAULT))
+                try:
+                    self.med = ds_host.launch(self.data, cue, self.players, (self.host_ds_controls() or {}).get("kb"), runahead, self.extra_ds)
+                except OSError as e:
+                    return self._fail(f"No se pudo abrir DuckStation: {e}")
+                self.flog(f"Emulador del anfitrión: DuckStation (run-ahead {runahead})")
+            else:
+                if not med.installed(self.data):
+                    return self._fail("Falta Mednafen: vuelve a ejecutar el instalador (revisa que tu antivirus no lo haya borrado).")
+                med_cheats.apply(med.folder(self.data), self.channel, self.cheats_on())
+                pads = st.mednafen_pad_args(self.pad_port) if self.pad_port else st.mednafen_party_args(self.players)
+                cmd = med.command(self.data, cue, players=self.players, controls=self.host_controls())      # con 3 o 4: sin tarjetas de memoria en los puertos 3 y 4 (si no, sale "Memcard 4 save error")
+                cmd = cmd[:-1] + ["-psx.xscale", "2", "-psx.yscale", "2", *pads, *self.extra_args] + cmd[-1:]
+                try:
+                    self.med = subprocess.Popen(cmd, cwd=med.folder(self.data))
+                except OSError as e:
+                    return self._fail(f"No se pudo abrir Mednafen: {e}")
+                self.flog("Emulador del anfitrión: Mednafen")
             if self.title_for:
                 winbrand.watch(self.med, self.title_for(self.channel))
             threading.Thread(target=self._watch_med, args=(self.med, self.token), daemon=True).start()
@@ -427,6 +443,7 @@ class StreamSession:
             if self.host is None:
                 kbps = self._per_guest_kbps()
                 self.host = st.StreamHost(pack.ffmpeg_exe(self.data), self.med.pid, native_pyd=pack.native_pyd(self.data), log=self.log, kbps=kbps)
+                self.host.keymap = ds_host.GUEST_KEYS if self.use_ds else None
                 self.host.err_file = self.logf
                 self.host.attach(slot, t)
                 if self.players > 2:
@@ -467,7 +484,7 @@ class StreamSession:
 
     def _watch_med(self, proc, token):
         proc.wait()
-        self.flog(f"Mednafen terminó (código {proc.returncode})")
+        self.flog(f"El emulador terminó (código {proc.returncode})")
         if self.running and self.token == token:
             self.log("Se cerró el juego: termina la transmisión.")
             self.send(t="ra_leave")

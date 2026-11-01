@@ -983,6 +983,7 @@ class App(Views, LoginPages, LobbyPages, FriendsUI, DmUI, RoomsUI, DanceUI, Home
                                          profile=lambda: self.cfg.get("dance_controls"), settings=lambda: self.cfg.get("stream"))
         self._stream.cheats_on = lambda: self.feature(med_cheats.FEATURE)
         self._stream.host_controls = lambda: self.cfg.get("med_controls")
+        self._stream.host_ds_controls = lambda: self.cfg.get("ds_host_controls")
         return self._stream
 
     def apply_ds_controls(self, reset_if_empty=False):

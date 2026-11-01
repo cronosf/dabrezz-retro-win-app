@@ -315,9 +315,9 @@ def find_window(pid, min_width=200):
     return found[0] if found else None
 
 
-def post_key(hwnd, button, down, port=2):
-    """Pulsa o suelta la tecla del invitado del puerto `port` asignada a `button` en la ventana `hwnd` sin darle el foco."""
-    _, vk, scan, _, ext = PORT_KEYS[port][button]
+def post_key(hwnd, button, down, port=2, keymap=None):
+    """Pulsa o suelta la tecla del invitado del puerto `port` asignada a `button` en la ventana `hwnd` sin darle el foco (`keymap`: otra tabla de teclas, p. ej. la de DuckStation)."""
+    _, vk, scan, _, ext = (keymap or PORT_KEYS)[port][button]
     lp = 1 | (scan << 16) | ((1 << 24) if ext else 0)               # las teclas "extendidas" (flechas, Insert, Inicio...) deben llevar el bit para que SDL no las tome por el teclado numerico
     if down:
         user32.PostMessageW(hwnd, 0x100, vk, lp)
@@ -739,6 +739,7 @@ class StreamHost:
         self.hwnd = self.size = None
         self.proc = self.sock = self.vsock = None
         self.err_file = None                                                # archivo (abierto) donde ffmpeg escribe sus mensajes: stream_host_log.txt
+        self.keymap = None                                                  # tabla de teclas de los invitados (None = la de Mednafen, st.PORT_KEYS)
         self.peers = {}
         self.running = False
         self.multi = tunnel is not None or video_to is None                 # por Tunnel (uno o varios invitados)
@@ -909,7 +910,7 @@ class StreamHost:
         port = peer.slot + 1
         for b in BUTTONS:
             if changed & BIT[b]:
-                post_key(self.hwnd, b, bool(mask & BIT[b]), port)
+                post_key(self.hwnd, b, bool(mask & BIT[b]), port, self.keymap)
         peer.mask = mask
 
     def _on_input(self, peer, data):
