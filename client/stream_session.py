@@ -93,7 +93,7 @@ class StreamSession:
                 return self._fail("Falta Mednafen: vuelve a ejecutar el instalador (revisa que tu antivirus no lo haya borrado).")
             med_cheats.apply(med.folder(self.data), self.channel, self.cheats_on())
             pads = st.mednafen_pad_args(self.pad_port) if self.pad_port else st.mednafen_party_args(self.players)
-            cmd = med.command(self.data, cue)
+            cmd = med.command(self.data, cue, players=self.players)      # con 3 o 4: sin tarjetas de memoria en los puertos 3 y 4 (si no, sale "Memcard 4 save error")
             cmd = cmd[:-1] + ["-psx.xscale", "2", "-psx.yscale", "2", *pads, *self.extra_args] + cmd[-1:]
             try:
                 self.med = subprocess.Popen(cmd, cwd=med.folder(self.data))
