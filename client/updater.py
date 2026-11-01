@@ -36,15 +36,36 @@ def signed_message(version, sha256_hex):
     return f"dabrezz-retro|{version}|{sha256_hex}".encode()
 
 
+_CA_MODE = [0]           # 0 = certificados de Windows, 1 = certificados propios de la app (certifi)
+
+
+def _ssl_context(mode):
+    if mode == 0:
+        return None
+    import ssl
+    import certifi
+    return ssl.create_default_context(cafile=certifi.where())
+
+
 def _open(url, timeout=20):
+    """Abre una URL https. Algunos Windows (sin los certificados raiz al dia) no reconocen el certificado de GitHub y salia CERTIFICATE_VERIFY_FAILED: entonces se reintenta con los
+    certificados que trae la app (certifi). El certificado SIEMPRE se verifica."""
+    import ssl
     u = urllib.parse.urlparse(url)
     if not (u.scheme == "https" or (u.scheme == "http" and u.hostname in LOCAL)):
         raise UpdateError("URL no segura: " + url[:80])
     req = urllib.request.Request(url, headers={"User-Agent": "DabrezzRetro-Updater", "Accept": "application/vnd.github+json"})
-    try:
-        return urllib.request.urlopen(req, timeout=timeout)
-    except OSError as e:
-        raise UpdateError(f"No se pudo consultar {url[:60]}: {getattr(e, 'reason', e)}") from None
+    last = None
+    for mode in range(_CA_MODE[0], 2 if u.scheme == "https" else 1):
+        try:
+            r = urllib.request.urlopen(req, timeout=timeout, context=_ssl_context(mode))
+            _CA_MODE[0] = mode
+            return r
+        except (OSError, ImportError) as e:
+            last = e
+            if isinstance(e, OSError) and not isinstance(getattr(e, "reason", e), ssl.SSLError):
+                break
+    raise UpdateError(f"No se pudo consultar {url[:60]}: {getattr(last, 'reason', last)}") from None
 
 
 WEB_LATEST = f"https://github.com/{REPO}/releases/latest"
