@@ -30,6 +30,17 @@ class UpdateUI:
     def updates_enabled(self):
         return bool(getattr(sys, "frozen", False) or os.environ.get("DABREZZ_UPDATE_TEST"))
 
+    @staticmethod
+    def update_log(text):
+        """Motivo de los fallos al actualizar, para pedirlo al usuario: %TEMP%\DabrezzRetro-update.log (fuera de la carpeta que se limpia)."""
+        try:
+            import time
+            with open(os.path.join(tempfile.gettempdir(), "DabrezzRetro-update.log"), "a", encoding="utf-8") as f:
+                f.write(time.strftime("%Y-%m-%d %H:%M:%S ") + f"v{VERSION} {text}
+")
+        except OSError:
+            pass
+
     def update_dir(self):
         """Carpeta temporal del instalador descargado: no deja nada permanente en el disco (el instalador la borra al terminar y
         la app limpia restos en el siguiente arranque)."""
@@ -61,8 +72,9 @@ class UpdateUI:
         def work():
             try:
                 info = updater.check(VERSION)
-            except (updater.UpdateError, OSError):
+            except (updater.UpdateError, OSError) as e:
                 info = None                                     # sin red o sin API: se reintenta en el proximo arranque
+                self.update_log(f"no se pudo consultar la version nueva: {e}")
             self.net.events.put({"t": "_update", "info": info} if info else {"t": "_updnone"})
         threading.Thread(target=work, daemon=True).start()
 
@@ -118,6 +130,7 @@ class UpdateUI:
         """Si falla, se cierra la ventanita y la app sigue con la version actual (reintenta en el proximo arranque)."""
         self.close_update()
         print("actualizacion fallida:", msg, file=sys.stderr)
+        self.update_log("actualizacion fallida: " + msg)
         self.finish_boot()
         self.deiconify()
         if hasattr(self, "lbl_status") and self.lbl_status.winfo_exists():

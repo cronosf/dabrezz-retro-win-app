@@ -47,8 +47,34 @@ def _open(url, timeout=20):
         raise UpdateError(f"No se pudo consultar {url[:60]}: {getattr(e, 'reason', e)}") from None
 
 
+WEB_LATEST = f"https://github.com/{REPO}/releases/latest"
+
+
+def _check_web(current, asset_prefix=ASSET_PREFIX):
+    """Plan B sin la API de GitHub (que limita a 60 consultas por hora y por IP, y algunas redes/antivirus la bloquean): la pagina /releases/latest redirige a la etiqueta de la ultima
+    version y los archivos tienen direcciones fijas. La FIRMA sigue siendo obligatoria, asi que no se pierde seguridad."""
+    cur = parse_version(current)
+    with _open(WEB_LATEST, 15) as r:
+        final = r.geturl()
+    ver = parse_version(final.rstrip("/").rsplit("/", 1)[-1])
+    if ver is None or cur is None or ver <= cur:
+        return None
+    tag = "v" + ".".join(map(str, ver))
+    base = f"{asset_prefix}{tag}/"
+    return {"version": ".".join(map(str, ver)), "notes": "", "url": base + INSTALLER, "sig_url": base + SIGNATURE, "size": 0}
+
+
 def check(current, api_url=API, asset_prefix=ASSET_PREFIX):
-    """Si hay una version mas nueva con instalador y firma, devuelve sus datos; si no, None. Nunca baja nada."""
+    """Si hay una version mas nueva con instalador y firma, devuelve sus datos; si no, None. Nunca baja nada. Si la API falla, usa la pagina web de la Release."""
+    try:
+        return _check_api(current, api_url, asset_prefix)
+    except UpdateError:
+        if api_url != API:                                  # (pruebas con un servidor local: sin plan B)
+            raise
+        return _check_web(current, asset_prefix)
+
+
+def _check_api(current, api_url=API, asset_prefix=ASSET_PREFIX):
     cur = parse_version(current)
     with _open(api_url, 15) as r:
         raw = r.read(1 << 20)
@@ -92,18 +118,19 @@ def download(info, dest_dir, progress=None, public_key_hex=None):
     h, got = hashlib.sha256(), 0
     try:
         with _open(info["url"], 30) as r, open(tmp, "wb") as out:
+            total = int(r.headers.get("Content-Length") or 0) or max(info["size"], 1)
             while True:
                 chunk = r.read(1 << 16)
                 if not chunk:
                     break
                 got += len(chunk)
-                if got > info["size"]:
+                if info["size"] and got > info["size"]:
                     raise UpdateError("El instalador es mas grande de lo anunciado")
                 h.update(chunk)
                 out.write(chunk)
                 if progress:
-                    progress(got, info["size"])
-        if got != info["size"]:
+                    progress(got, info["size"] or total)
+        if (info["size"] and got != info["size"]) or got < 1_000_000 or got > MAX_INSTALLER:
             raise UpdateError("Descarga incompleta")
         with _open(info["sig_url"], 20) as r:
             sig = r.read(257)
