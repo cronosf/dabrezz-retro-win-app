@@ -41,6 +41,10 @@ def command(data, cue, nick="Jugador", host=None, port=None, key=None, players=2
            "-psx.input.port1.memcard", "0", "-psx.input.port2.memcard", "0", "-video.fs", "0"]
     if players > 2:                                      # PS1 de 3-4 jugadores: multitap (igual en todos los jugadores, o se desincroniza) y sin tarjetas de memoria
         cmd += ["-psx.input.pport1.multitap", "1"] + [a for n in range(3, 9) for a in (f"-psx.input.port{n}.memcard", "0")]
+    else:                                                # SIEMPRE se fija: Mednafen guarda sus ajustes y un multitap que quedo activo de otra partida hace que el 2.o mando sea el 1B del multitap y el juego no lo lea
+        cmd += ["-psx.input.pport1.multitap", "0", "-psx.input.pport2.multitap", "0"]
+    for port in (1, 2):                                  # sin autodisparo (rapid_*): un Alt+Shift+N en una partida anterior los deja con la misma tecla que el boton normal
+        cmd += [a for b in ("cross", "circle", "square", "triangle") for a in (f"-psx.input.port{port}.gamepad.rapid_{b}", "")]
     if controls and controls.get("kb"):                  # teclas elegidas en CONFIGURAR (puerto 1)
         import client.ctl_backends as cb
         cmd += cb.med_args(controls["kb"])
