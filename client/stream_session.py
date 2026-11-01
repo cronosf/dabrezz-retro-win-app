@@ -59,6 +59,14 @@ class GuestPad:
         return dance_pad.pressed_buttons(prof, tokens, xi, dj, down)
 
 
+def ip_of(host):
+    """IP de un nombre (o la misma IP). Lo que llega por UDP trae la IP de origen, no el nombre: el Tunnel compara por IP y descartaba todo lo que volvia del relay si se le daba el nombre del servidor."""
+    try:
+        return socket.getaddrinfo(host, None, socket.AF_INET, socket.SOCK_DGRAM)[0][4][0]
+    except (OSError, IndexError):
+        return host
+
+
 class StreamSession:
     def __init__(self, data, send, net, rom_for, log=print, on_end=None, title_for=None, profile=None, settings=None):
         self.data, self.send, self.net, self.rom_for, self.log_ui, self.on_end, self.title_for = data, send, net, rom_for, log, on_end, title_for
@@ -306,7 +314,7 @@ class StreamSession:
         """`stream_relay`: el servidor abrio su relay UDP para una pareja; el anfitrion cambia el tunel de ese invitado y el invitado el suyo."""
         if not self.running:
             return
-        host, port, slot = str(m.get("host", "")) or self.net.host, m.get("port"), int(m.get("slot", 1) or 1)       # host vacio = el servidor de siempre (--public-host sin definir)
+        host, port, slot = ip_of(str(m.get("host", "")) or self.net.host), m.get("port"), int(m.get("slot", 1) or 1)       # host vacio = el servidor de siempre (--public-host sin definir)
         t = self.tunnels.get(slot) if self.role == "host" else self.tunnel
         self.flog(f"El servidor abrió el relay: {host}:{port} (jugador {slot + 1})")
         if not host or not isinstance(port, int) or not 1 <= port <= 65535:
