@@ -6,10 +6,11 @@ import zipfile
 
 import client.romman as romman
 
-PACK = {"name": "dz-stream.zip", "url": "https://retro.dabrezzstore.com/roms-dabrezz/stream/dz-stream.zip", "sha256": "fa3b0dc2d8019c01196ad2b6908e5d39458fb16e1bbce74d1ac59ed2e7ba6ddf",
-        "size": 128293639}
+PACK = {"name": "dz-stream.zip", "url": "https://retro.dabrezzstore.com/roms-dabrezz/stream/dz-stream.zip", "sha256": "28664bd330ee1bed210f1c2787263cf6e8d4e823814afedcde64e92ef56d29ac",
+        "size": 132750514}
 NATIVE = "_native.cp313-win_amd64.pyd"
-NEEDED = ("ffmpeg.exe", "ffplay.exe", NATIVE)
+NEEDED = ("ffmpeg.exe", "ffplay.exe", NATIVE, "SDL2.dll", "libsamplerate-0.dll")
+MARK = ".pack-sha256"                                   # huella del paquete instalado: si la app trae un paquete nuevo, se vuelve a descargar
 
 
 def folder(data):
@@ -28,8 +29,17 @@ def native_pyd(data):
     return os.path.join(folder(data), NATIVE)
 
 
+def sdl_dll(data):
+    return os.path.join(folder(data), "SDL2.dll")
+
+
 def installed(data):
-    return all(os.path.isfile(os.path.join(folder(data), f)) for f in NEEDED)
+    if not all(os.path.isfile(os.path.join(folder(data), f)) for f in NEEDED):
+        return False
+    try:
+        return open(os.path.join(folder(data), MARK), encoding="utf-8").read().strip() == PACK["sha256"]
+    except OSError:
+        return False
 
 
 def install(data, progress=None):
@@ -51,5 +61,7 @@ def install(data, progress=None):
             os.remove(entry["path"])
         except OSError:
             pass
+    with open(os.path.join(dest, MARK), "w", encoding="utf-8") as f:
+        f.write(PACK["sha256"])
     if not installed(data):
         raise romman.RomError("El paquete descargado está incompleto")

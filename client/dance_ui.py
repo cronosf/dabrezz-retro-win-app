@@ -50,7 +50,7 @@ class DanceUI:
         tk.Label(head, image=th.image("ico_dance.png"), bg=th.BG).pack(side="left")
         tk.Label(head, text="Zona Baile", font=(th.DISPLAY, 16), fg="#ffffff", bg=th.BG).pack(side="left", padx=10)
         ttk.Button(head, text=" CONFIGURAR", image=th.image("ico_pad.png"), compound="left", command=self.dance_config_help).pack(side="left", padx=(8, 0))
-        ttk.Button(head, text="CONTROLES DE INVITADO", command=self.dance_controls_dialog).pack(side="left", padx=(8, 0))
+        ttk.Button(head, text="AJUSTES", command=self.dance_stream_settings).pack(side="left", padx=(8, 0))
         ttk.Button(head, text="CREAR SALA  ＋", style="Accent.TButton", command=self.dance_create).pack(side="right")
         tk.Label(v, text="Juegos de baile con Mednafen. Elige un juego, busca partida o crea una sala (2 jugadores, amistoso).", fg=th.MUTED, bg=th.BG,
                  font=(th.BODY, 9), anchor="w", justify="left", wraplength=640).pack(fill="x", pady=(4, 0))

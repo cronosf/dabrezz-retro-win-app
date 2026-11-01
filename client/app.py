@@ -31,6 +31,7 @@ from client.retro_session import RetroSession  # noqa: E402
 from client.stream_session import StreamSession  # noqa: E402
 from client.controls_ui import ControlsUI  # noqa: E402
 from client.dance_controls_ui import DanceControlsUI  # noqa: E402
+from client.dance_settings_ui import DanceSettingsUI  # noqa: E402
 from client.dance_ui import DanceUI  # noqa: E402
 from client.home_rooms import HomeRooms  # noqa: E402
 from client.rooms_ui import RoomsUI  # noqa: E402
@@ -170,7 +171,7 @@ def detect_emulator(data):
     return p if os.path.exists(p) else ""
 
 
-class App(Views, LoginPages, LobbyPages, FriendsUI, DmUI, RoomsUI, DanceUI, HomeRooms, ControlsUI, DanceControlsUI, AdminUI, HelpUI, UpdateUI, tk.Tk):
+class App(Views, LoginPages, LobbyPages, FriendsUI, DmUI, RoomsUI, DanceUI, HomeRooms, ControlsUI, DanceControlsUI, DanceSettingsUI, AdminUI, HelpUI, UpdateUI, tk.Tk):
     auto_session = False
     kick_msg = ""           # motivo con el que el servidor expulso al jugador (se muestra al cerrarse la conexion)
     rom_busy = False
@@ -973,7 +974,7 @@ class App(Views, LoginPages, LobbyPages, FriendsUI, DmUI, RoomsUI, DanceUI, Home
             put = self.net.events.put
             self._stream = StreamSession(self.data, self.net.send, self.net, self.rom_file, log=lambda text: put({"t": "_log", "text": text}),
                                          on_end=lambda: put({"t": "_raend"}), title_for=self.window_title,
-                                         profile=lambda: self.cfg.get("dance_controls"))
+                                         profile=lambda: self.cfg.get("dance_controls"), settings=lambda: self.cfg.get("stream"))
         self._stream.cheats_on = lambda: self.feature(med_cheats.FEATURE)
         return self._stream
 

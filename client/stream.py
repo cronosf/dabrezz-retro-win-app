@@ -7,8 +7,8 @@
     Mednafen (no roban el foco), asignadas al puerto 2 con `-psx.input.port2.gamepad.<boton> "keyboard <SDLK>"` (teclas poco usadas: [ ] ; ' \\ , . / - = ` F13-F15).
     Si el invitado deja de mandar paquetes, se sueltan todos los botones.
   * Audio: SOLO el de Mednafen (WASAPI Process Loopback de Windows 10 20H1 o mas nuevo, con la extension nativa de ProcTap, MIT: no se mezcla Discord ni otros programas).
-    Se manda como PCM de 16 bits, 48 kHz, estereo, en paquetes UDP de 5 ms (~1,5 Mbps), sin compresion para no sumar retraso. El invitado lo reproduce con waveOut
-    (buffers pequenos, descarta lo que se acumula y rellena con silencio si falta).
+    Se manda como PCM de 48 kHz estereo comprimido a 8 bits (mu-law, ~0,77 Mbps) en paquetes UDP de 5 ms, sin compresion pesada para no sumar retraso. El invitado lo reproduce con
+    waveOut (buffers pequenos, descarta lo que se acumula y rellena con silencio si falta; un colchon opcional ajusta el sonido respecto a la imagen).
   * Red: un solo socket UDP (`Tunnel`) lleva video (V), audio (A) y botones (I) hacia la direccion del otro jugador, directa o por el relay del servidor; los dos lados se
     mandan "hola" (P) hasta oirse para abrir sus NAT.
 Este modulo no usa Tk ni conoce al servidor: recibe las direcciones UDP ya resueltas y sirve tambien para las pruebas de test/."""
@@ -32,7 +32,7 @@ KEYS = {"up": ("[", 0xDB, 0x1A, 91), "down": ("]", 0xDD, 0x1B, 93), "left": (";"
         "start": ("F14", 0x7D, 0x65, 295), "select": ("F15", 0x7E, 0x66, 296)}
 MAGIC = b"DZI1"
 PACKET = struct.Struct("<4sHI")                  # marca, numero de secuencia, mascara de botones
-AUDIO_MAGIC = b"DZA1"
+AUDIO_MAGIC = b"DZA2"                            # DZA2: PCM mu-law de 8 bits (la mitad que PCM16)
 AUDIO_HDR = struct.Struct("<4sHH")               # marca, numero de secuencia, cuadros de audio del paquete
 AUDIO_RATE, AUDIO_FRAMES = 48000, 240            # 240 cuadros = 5 ms por paquete (960 bytes de PCM estereo de 16 bits)
 REORDER_PACKETS = 8                              # si falta un paquete de audio se espera hasta que lleguen 8 mas (40 ms) antes de darlo por perdido
@@ -48,6 +48,39 @@ def load_native(path):
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
+
+
+def _build_ulaw():
+    """Tablas G.711 mu-law: PCM16 -> byte (indexado por muestra + 32768) y byte -> PCM16."""
+    enc = bytearray(65536)
+    for i in range(65536):
+        sample = i - 32768
+        sign = 0x80 if sample < 0 else 0
+        v = min(abs(sample), 32635) + 0x84
+        exp, mask = 7, 0x4000
+        while exp > 0 and not v & mask:
+            exp -= 1
+            mask >>= 1
+        enc[i] = ~(sign | (exp << 4) | ((v >> (exp + 3)) & 0x0F)) & 0xFF
+    dec = array.array("h", [0] * 256)
+    for u in range(256):
+        c = ~u & 0xFF
+        smp = (((c & 0x0F) << 3) + 0x84) << ((c >> 4) & 7)
+        smp -= 0x84
+        dec[u] = -smp if c & 0x80 else smp
+    return bytes(enc), dec
+
+
+_ULAW_ENC, _ULAW_DEC = _build_ulaw()
+
+
+def pcm16_to_ulaw(pcm):
+    """PCM16 little-endian (bytes) -> mu-law de 8 bits (bytes), la mitad de tamano."""
+    return bytes([_ULAW_ENC[x + 32768] for x in array.array("h", pcm)])
+
+
+def ulaw_to_pcm16(data):
+    return array.array("h", [_ULAW_DEC[b] for b in data]).tobytes()
 
 
 def float_to_pcm16(raw):
@@ -103,9 +136,11 @@ class _WaveHdr(ctypes.Structure):
 class AudioPlayer:
     """Reproduce PCM16 de 48 kHz estereo con waveOut: `buffers` bloques de `buffer_ms` ms (latencia propia ~ buffers x buffer_ms) y una cola que no pasa de `max_queue_ms`."""
 
-    def __init__(self, buffers=5, buffer_ms=10, max_queue_ms=80):
+    def __init__(self, buffers=3, buffer_ms=10, max_queue_ms=60, delay_ms=0):
         self.nbuf, self.size = buffers, AUDIO_RATE * buffer_ms // 1000 * 4
-        self.max_queue = AUDIO_RATE * max_queue_ms // 1000 * 4
+        self.delay = AUDIO_RATE * max(0, min(int(delay_ms), 300)) // 1000 * 4         # colchon: el sonido se retrasa esto para alinearlo con la imagen
+        self.primed = self.delay == 0
+        self.max_queue = AUDIO_RATE * (max_queue_ms + max(0, min(int(delay_ms), 300))) // 1000 * 4
         self.pending = bytearray()
         self.lock = threading.Lock()
         self.running = False
@@ -136,7 +171,9 @@ class AudioPlayer:
 
     def _fill(self, i):
         with self.lock:
-            take = bytes(self.pending[: self.size])
+            if not self.primed and len(self.pending) >= self.delay:
+                self.primed = True
+            take = bytes(self.pending[: self.size]) if self.primed else b""
             del self.pending[: len(take)]
         if len(take) < self.size:
             self.underruns += 1
@@ -162,6 +199,65 @@ class AudioPlayer:
         for h in self.hdrs:
             self.winmm.waveOutUnprepareHeader(self.hwo, ctypes.byref(h), ctypes.sizeof(h))
         self.winmm.waveOutClose(self.hwo)
+
+
+class _SdlSpec(ctypes.Structure):
+    _fields_ = [("freq", ctypes.c_int), ("format", ctypes.c_uint16), ("channels", ctypes.c_uint8), ("silence", ctypes.c_uint8), ("samples", ctypes.c_uint16),
+                ("padding", ctypes.c_uint16), ("size", ctypes.c_uint32), ("callback", ctypes.c_void_p), ("userdata", ctypes.c_void_p)]
+
+
+class SdlAudioPlayer:
+    """Reproduce PCM16 de 48 kHz estereo con SDL2 (WASAPI): mucha menos latencia que waveOut. `dll` es la ruta de SDL2.dll. Mismo uso que AudioPlayer."""
+
+    def __init__(self, dll, device_samples=256, max_queue_ms=40, delay_ms=0):
+        self.sdl = ctypes.CDLL(dll)
+        sdl = self.sdl
+        sdl.SDL_GetError.restype = ctypes.c_char_p
+        sdl.SDL_OpenAudioDevice.restype = ctypes.c_uint32
+        sdl.SDL_OpenAudioDevice.argtypes = [ctypes.c_char_p, ctypes.c_int, ctypes.POINTER(_SdlSpec), ctypes.POINTER(_SdlSpec), ctypes.c_int]
+        sdl.SDL_QueueAudio.argtypes = [ctypes.c_uint32, ctypes.c_void_p, ctypes.c_uint32]
+        sdl.SDL_GetQueuedAudioSize.argtypes = [ctypes.c_uint32]
+        sdl.SDL_GetQueuedAudioSize.restype = ctypes.c_uint32
+        sdl.SDL_ClearQueuedAudio.argtypes = [ctypes.c_uint32]
+        sdl.SDL_PauseAudioDevice.argtypes = [ctypes.c_uint32, ctypes.c_int]
+        sdl.SDL_CloseAudioDevice.argtypes = [ctypes.c_uint32]
+        if sdl.SDL_Init(0x10) != 0:                                          # SDL_INIT_AUDIO
+            raise RuntimeError("SDL: " + (sdl.SDL_GetError() or b"").decode("utf-8", "replace"))
+        want, have = _SdlSpec(AUDIO_RATE, 0x8010, 2, 0, device_samples, 0, 0, None, None), _SdlSpec()      # 0x8010 = S16 little-endian; sin callback = cola
+        self.dev = sdl.SDL_OpenAudioDevice(None, 0, ctypes.byref(want), ctypes.byref(have), 0)
+        if not self.dev:
+            raise RuntimeError("SDL: " + (sdl.SDL_GetError() or b"").decode("utf-8", "replace"))
+        self.delay = AUDIO_RATE * max(0, min(int(delay_ms), 300)) // 1000 * 4
+        self.max_queue = AUDIO_RATE * (max_queue_ms + max(0, min(int(delay_ms), 300))) // 1000 * 4
+        self.underruns = self.dropped = self.played = 0
+        self.running = False
+
+    def start(self):
+        self.running = True
+        if self.delay:
+            silence = b"\x00" * self.delay                                    # colchon fijo: el sonido va esto detras
+            self.sdl.SDL_QueueAudio(self.dev, silence, len(silence))
+        self.sdl.SDL_PauseAudioDevice(self.dev, 0)
+
+    def feed(self, pcm):
+        if not self.running:
+            return
+        queued = self.sdl.SDL_GetQueuedAudioSize(self.dev)
+        if queued == 0:
+            self.underruns += 1
+        elif queued > self.max_queue:                                        # el reloj del anfitrion corre un poco mas rapido: se vacia y se sigue
+            self.sdl.SDL_ClearQueuedAudio(self.dev)
+            self.dropped += queued // 4
+        self.sdl.SDL_QueueAudio(self.dev, pcm, len(pcm))
+        self.played += len(pcm) // 4
+
+    def stop(self):
+        self.running = False
+        try:
+            self.sdl.SDL_PauseAudioDevice(self.dev, 1)
+            self.sdl.SDL_CloseAudioDevice(self.dev)
+        except Exception:  # noqa: BLE001
+            pass
 
 
 def mednafen_pad_args(port=2):
@@ -357,7 +453,7 @@ class StreamHost:
     """Anfitrion: captura la ventana del proceso `pid` y aplica los botones del invitado. Dos modos: directo (`video_to`, `input_port`, `audio_to`: sockets UDP propios,
     para pruebas) o por `tunnel` (un Tunnel ya creado hacia el invitado)."""
 
-    def __init__(self, ffmpeg_exe, pid, video_to=None, input_port=None, fps=60, kbps=6000, log=print, audio_to=None, native_pyd=None, tunnel=None):
+    def __init__(self, ffmpeg_exe, pid, video_to=None, input_port=None, fps=60, kbps=4000, log=print, audio_to=None, native_pyd=None, tunnel=None):
         self.ffmpeg_exe, self.pid, self.video_to, self.input_port = ffmpeg_exe, pid, video_to, (int(input_port) if input_port else None)
         self.fps, self.kbps, self.log = fps, kbps, log
         self.audio_to, self.native_pyd, self.tunnel = audio_to, native_pyd, tunnel
@@ -438,7 +534,7 @@ class StreamHost:
                     continue
                 for pcm in blocks:
                     seq = (seq + 1) & 0xFFFF
-                    pkt = AUDIO_HDR.pack(AUDIO_MAGIC, seq, AUDIO_FRAMES) + pcm
+                    pkt = AUDIO_HDR.pack(AUDIO_MAGIC, seq, AUDIO_FRAMES) + pcm16_to_ulaw(pcm)
                     if self.tunnel:
                         self.tunnel.send(AUDIO, pkt)
                     else:
@@ -499,7 +595,10 @@ class StreamGuest:
     (`host_addr`, `audio_port`) o por `tunnel`."""
 
     def __init__(self, ffplay_exe, video_port, host_addr=None, read_mask=None, title="Dabrezz Play", size=(640, 480), pos=None, log=print, audio_port=None, with_video=True,
-                 tunnel=None):
+                 tunnel=None, audio_delay_ms=0, sdl_dll=None, video_delay_ms=0):
+        self.video_delay_ms = max(0, min(int(video_delay_ms), 200))     # retrasa la imagen para alinearla con el sonido (el sonido suele ir ~20 ms detras)
+        self.vq, self.vq_lock = [], threading.Lock()
+        self.audio_delay_ms, self.sdl_dll = audio_delay_ms, sdl_dll          # sdl_dll: ruta de SDL2.dll (audio de baja latencia); sin ella, waveOut
         self.with_video, self.tunnel = with_video, tunnel               # with_video=False: solo audio (pruebas)
         self.ffplay_exe, self.video_port, self.host_addr, self.read_mask = ffplay_exe, int(video_port), host_addr, read_mask
         self.audio_port, self.player, self.audio_packets, self.audio_gaps, self.audio_sock = audio_port, None, 0, 0, None
@@ -509,14 +608,15 @@ class StreamGuest:
         self.proc = self.sock = self.vout = None
         self.mask, self.seq, self.video_packets = 0, 0, 0
         self.vfec = None
+        self.extra = []                                       # flags extra de ffplay (experimentos)
         self.running = False
 
     def play_command(self):
         cmd = [self.ffplay_exe, "-hide_banner", "-loglevel", "warning", "-fflags", "nobuffer", "-flags", "low_delay", "-framedrop", "-probesize", "32",
-               "-analyzeduration", "0", "-sync", "ext", "-f", "h264", "-window_title", self.title, "-x", str(self.size[0]), "-y", str(self.size[1])]
+               "-analyzeduration", "0", "-sync", "ext", "-f", "h264", "-framerate", "60", "-window_title", self.title, "-x", str(self.size[0]), "-y", str(self.size[1])]
         if self.pos:
             cmd += ["-left", str(self.pos[0]), "-top", str(self.pos[1])]
-        return cmd + [f"udp://127.0.0.1:{self.video_port}?fifo_size=0&overrun_nonfatal=1"]
+        return cmd + list(self.extra) + [f"udp://127.0.0.1:{self.video_port}?fifo_size=0&overrun_nonfatal=1"]
 
     def start(self):
         self.running = True
@@ -527,11 +627,20 @@ class StreamGuest:
             self.tunnel.on_video, self.tunnel.on_fec, self.tunnel.on_audio = self.vfec.on_video, self.vfec.on_fec, self._on_audio
         else:
             self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        if self.video_delay_ms and self.tunnel:
+            threading.Thread(target=self._video_delay_loop, daemon=True).start()
         if self.with_video:
             self.proc = subprocess.Popen(self.play_command(), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, creationflags=0x08000000)
         threading.Thread(target=self._send_loop, daemon=True).start()
         if self.audio_port or self.tunnel:
-            self.player = AudioPlayer()
+            self.player = None
+            if self.sdl_dll and os.path.isfile(self.sdl_dll):
+                try:
+                    self.player = SdlAudioPlayer(self.sdl_dll, delay_ms=self.audio_delay_ms)
+                except (OSError, RuntimeError) as e:
+                    self.log(f"Audio SDL2 no disponible ({e}): se usa el de Windows.")
+            if self.player is None:
+                self.player = AudioPlayer(delay_ms=self.audio_delay_ms)
             self.player.start()
         if self.audio_port and not self.tunnel:
             self.audio_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -541,10 +650,28 @@ class StreamGuest:
 
     def _on_video(self, data):
         self.video_packets += 1
+        if self.video_delay_ms:
+            with self.vq_lock:
+                self.vq.append((time.perf_counter() + self.video_delay_ms / 1000, data))
+            return
+        self._video_out(data)
+
+    def _video_out(self, data):
         try:
             self.vout.sendto(data, ("127.0.0.1", self.video_port))
         except OSError:
             pass
+
+    def _video_delay_loop(self):
+        while self.running:
+            now = time.perf_counter()
+            with self.vq_lock:
+                due = []
+                while self.vq and self.vq[0][0] <= now:
+                    due.append(self.vq.pop(0)[1])
+            for d in due:
+                self._video_out(d)
+            time.sleep(0.001)
 
     def _audio_loop(self):
         while self.running:
@@ -562,9 +689,9 @@ class StreamGuest:
         if len(data) <= AUDIO_HDR.size:
             return
         magic, seq, frames = AUDIO_HDR.unpack_from(data)
-        if magic != AUDIO_MAGIC or len(data) - AUDIO_HDR.size != frames * 4:
+        if magic != AUDIO_MAGIC or len(data) - AUDIO_HDR.size != frames * 2:
             return
-        pcm = data[AUDIO_HDR.size:]
+        pcm = ulaw_to_pcm16(data[AUDIO_HDR.size:])
         if self.next_audio is None:
             self.next_audio = seq
         ahead = (seq - self.next_audio) & 0xFFFF

@@ -33,7 +33,8 @@ HELP = (
           "sin tener el juego: no hay desincronización y el único retraso es el de su conexión contigo. La primera vez se descargan unas herramientas (unos 120 MB). "
           "El invitado juega con I K J L (arriba, abajo, izquierda, derecha), Z X D E (✕ ○ □ △), U O Y H (L1 R1 L2 R2), Enter (Start) y Retroceso (Select), o con su mando "
           "(Xbox o genérico, como un control de PS1 con adaptador USB), con la ventana de la transmisión en primer plano. Puede cambiarlos en CONTROLES (en la sala o en la Zona Baile), "
-          "con una prueba en vivo de lo que reconoce la app."),
+          "con una prueba en vivo de lo que reconoce la app. En AJUSTES (Zona Baile) el anfitrión elige la calidad del video en Mbps (lo que sube su conexión; por defecto 4 Mbps de video, unos "
+          "5,6 Mbps en total con la recuperación de pérdidas y el audio) y el invitado puede alinear la imagen con el sonido."),
     ("b", "Ranked: elige un juego en Juegos y pulsa BUSCAR PARTIDA (debajo de la lista de jugadores). El ranked solo se juega buscando partida, "
           "no con invitaciones ni salas, y solo en los juegos donde el emulador detecta el resultado."),
     ("b", "Amigos: agrega a otros jugadores por su nombre de usuario (ellos aceptan la solicitud), mira quién está en línea, invítalos a una partida amistosa o escríbeles un mensaje privado. Haz clic derecho sobre un jugador de la lista para enviarle una invitación de amistad. Los mensajes privados solo se pueden enviar entre amigos y no se guardan: se borran al cerrar la app."),

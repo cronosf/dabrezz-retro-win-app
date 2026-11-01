@@ -58,9 +58,10 @@ class GuestPad:
 
 
 class StreamSession:
-    def __init__(self, data, send, net, rom_for, log=print, on_end=None, title_for=None, profile=None):
+    def __init__(self, data, send, net, rom_for, log=print, on_end=None, title_for=None, profile=None, settings=None):
         self.data, self.send, self.net, self.rom_for, self.log, self.on_end, self.title_for = data, send, net, rom_for, log, on_end, title_for
         self.profile = profile                           # () -> perfil de controles del invitado (cfg["dance_controls"])
+        self.settings = settings or (lambda: None)       # () -> {"mbps": 4, "video_delay_ms": 0} (cfg["stream"])
         self.pad_port = 2                                # puerto de PSX que controla el invitado (las pruebas usan el 1)
         self.cheats_on = lambda: False                   # () -> bool: truques de la funcion en prueba (un solo emulador: no hay desincronizacion)
         self.role = self.channel = None
@@ -165,13 +166,14 @@ class StreamSession:
 
     def _start_media(self):
         if self.role == "host":
-            self.host = st.StreamHost(pack.ffmpeg_exe(self.data), self.med.pid, tunnel=self.tunnel, native_pyd=pack.native_pyd(self.data), log=self.log)
+            mbps = max(1, min(int((self.settings() or {}).get("mbps", 4)), 20))
+            self.host = st.StreamHost(pack.ffmpeg_exe(self.data), self.med.pid, tunnel=self.tunnel, native_pyd=pack.native_pyd(self.data), log=self.log, kbps=mbps * 1000)
             threading.Thread(target=self._start_host, args=(self.token,), daemon=True).start()
         else:
             port = free_udp_port()
             title = f"Dabrezz Play · {self.title_for(self.channel) if self.title_for else self.channel} (anfitrión: {self.host_name})"
             self.guest = st.StreamGuest(pack.ffplay_exe(self.data), port, title=title.replace("Dabrezz Play · Dabrezz Play · ", "Dabrezz Play · "), tunnel=self.tunnel,
-                                        log=self.log)
+                                        log=self.log, sdl_dll=pack.sdl_dll(self.data), video_delay_ms=int((self.settings() or {}).get("video_delay_ms", 0)))
             self.guest.start()
             self.guest.read_mask = GuestPad(self.guest.proc.pid, self.profile).read
             threading.Thread(target=self._watch_viewer, args=(self.guest.proc, self.token), daemon=True).start()
