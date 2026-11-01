@@ -5,6 +5,7 @@ import time
 import tkinter as tk
 from tkinter import messagebox, ttk
 
+import client.emote_ui as emote_ui
 import client.theme as th
 
 MAX_LEN = 300
@@ -98,6 +99,7 @@ class DmUI:
         txt.tag_config("err", foreground=th.ERR)
         entry = ttk.Entry(inp)
         entry.pack(side="left", fill="x", expand=True, ipady=4)
+        emote_ui.attach(inp, entry, top, bottom=True)                    # boton de emoticonos, como en el chat de los juegos
         win = {"top": top, "txt": txt, "entry": entry, "lbl": lbl, "name": name}
         self.dm_wins[uid] = win
         entry.bind("<Return>", send)
@@ -118,7 +120,8 @@ class DmUI:
         txt.config(state="normal")
         txt.insert("end", time.strftime("%H:%M ", time.localtime(when)), "time")
         txt.insert("end", ("Tú" if who == "me" else win["name"]) + ": ", "me" if who == "me" else "them")
-        txt.insert("end", text + "\n")
+        emote_ui.insert_rich(txt, text)
+        txt.insert("end", "\n")
         txt.config(state="disabled")
         txt.see("end")
 

@@ -5,6 +5,7 @@ from tkinter import ttk
 
 import client.colorlist as colorlist
 import client.theme as th
+import client.emote_ui as emote_ui
 from client.emotes import split_text
 from shared.capabilities import is_dance
 from shared.protocol import CHANNEL_LABELS
@@ -100,6 +101,7 @@ class DanceUI:
         e = ttk.Entry(inp, textvariable=self.v_dance_msg)
         e.pack(side="left", fill="x", expand=True)
         e.bind("<Return>", lambda ev: self.dance_send_chat())
+        emote_ui.attach(inp, e, cbox, bottom=True)                       # boton de emoticonos, como en el chat de los juegos
         self.dance_chat = th.textbox(cbox, state="disabled", height=3)
         self.dance_chat.pack(fill="both", expand=True)
         self.dance_chat.tag_config("name", foreground=th.LINK)

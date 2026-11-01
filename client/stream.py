@@ -363,7 +363,7 @@ def norm6(ip):
 
 
 PORT_SPAN = 24                                    # puertos vecinos (a cada lado) que se prueban si el otro NAT cambia el puerto
-HELLO, VIDEO, AUDIO, INPUT, FEC, PONG = b"P", b"V", b"A", b"I", b"F", b"O"        # primer byte de cada datagrama del Tunnel
+HELLO, VIDEO, AUDIO, INPUT, FEC, PONG, REPORT = b"P", b"V", b"A", b"I", b"F", b"O", b"R"        # primer byte de cada datagrama del Tunnel
 FEC_K = 5                                         # un paquete de paridad (XOR) por cada 5 de video: recupera 1 perdido por grupo (20% mas de datos)
 FEC_MAX = 1316 + 2                                # un paquete de video tiene a lo sumo 1316 bytes; la paridad lleva ademas su longitud (2 bytes)
 
@@ -520,6 +520,7 @@ class Tunnel:
         self.sock, self.peer, self.log, self.hub = sock, peer, log, hub
         self.tag = tag                                  # numero de invitado (1..3): cada saludo lo lleva y cada tunel solo acepta los suyos (dos invitados pueden compartir IP)
         self.on_video, self.on_audio, self.on_input, self.on_fec = on_video, on_audio, on_input, on_fec
+        self.on_report = None                           # (cuerpo) informe de calidad del invitado (paquetes recibidos/perdidos): el anfitrion adapta el bitrate
         self.connected = threading.Event()
         self.running = False
         self.sent = self.received = 0
@@ -533,6 +534,8 @@ class Tunnel:
         self.on_lan = None                              # () cuando se pasa a la red local
         self.sock6, self.alt6, self.on_v6, self.v6 = None, None, None, False       # IPv6 del otro jugador: se prueba siempre y, si contesta y es mas rapida, se usa (sin NAT)
         self.tx = sock                                  # socket por el que se envia (el IPv4, o el IPv6 si se paso a el)
+        self.peer4 = None                               # direccion IPv4 que se usaba antes de pasar a IPv6 (para volver si IPv6 deja de responder)
+        self.t0 = time.time()
         self._probe = 0
 
     def use_relay(self, addr, keep_direct=True):
@@ -570,6 +573,10 @@ class Tunnel:
 
     def _hello_loop(self):
         while self.running:
+            if self.v6 and self.last_rx and time.time() - self.last_rx > 5.0 and self.peer4:        # IPv6 dejo de responder: se vuelve a IPv4 (y se sigue probando IPv6)
+                self.v6, self.tx, self.peer = False, self.sock, self.peer4
+                self.direct, self._rtts, self.rtt = self.peer4, [], None
+                self.log("IPv6 sin respuesta: se vuelve a IPv4.")
             hello = HELLO + struct.pack("<dB", time.time(), self.tag)
             sends = [(self.tx, self.peer)]
             if not self.v6:
@@ -639,8 +646,10 @@ class Tunnel:
             elif kind == PONG and len(body) >= 8:
                 ms = (time.time() - struct.unpack("<d", body[:8])[0]) * 1000
                 if self.alt6 and addr == self.alt6 and rx is self.sock6 and not self.v6 and 0 <= ms < 5000:
-                    if self.relay or self.rtt is None or ms < self.rtt * 0.8:       # IPv6 comprobada de ida y vuelta: se usa si no habia nada mejor o es claramente mas rapida
+                    # IPv6 comprobada de ida y vuelta: se usa si no habia nada, si el IPv4 no contesto en los primeros 2 s o si es claramente mas rapida (no se elige por llegar antes)
+                    if self.relay or (self.rtt is None and time.time() - self.t0 > 2.0) or (self.rtt is not None and ms < self.rtt * 0.8):
                         was_relay = bool(self.relay)
+                        self.peer4 = self.peer if not self.relay else self.direct
                         self.v6, self.tx = True, self.sock6
                         self.peer = self.direct = self.alt6
                         self.relay, self.alt = None, None
@@ -676,6 +685,8 @@ class Tunnel:
                 self.on_audio(body)
             elif kind == INPUT and self.on_input:
                 self.on_input(body)
+            elif kind == REPORT and self.on_report:
+                self.on_report(body)
         except Exception as e:  # noqa: BLE001 - un paquete malo o un reproductor a medio crear no debe matar el hilo que recibe de todos los invitados
             self.errors = getattr(self, "errors", 0) + 1
             if self.errors <= 3:
@@ -705,6 +716,7 @@ class _Peer:
         self.slot, self.tunnel, self.fec = slot, tunnel, None
         self.mask, self.last_seq, self.last_rx = 0, -1, 0.0
         self.packets = 0
+        self.rep = None                                  # (hora, recibidos, perdidos, recompuestos) del ultimo informe del invitado
 
 
 class StreamHost:
@@ -715,6 +727,10 @@ class StreamHost:
         self.ffmpeg_exe, self.pid, self.video_to, self.input_port = ffmpeg_exe, pid, video_to, (int(input_port) if input_port else None)
         self.fps, self.kbps, self.log = fps, kbps, log
         self.audio_to, self.native_pyd = audio_to, native_pyd
+        self.max_kbps = kbps                                                # el tope lo pone el usuario (AJUSTES); la calidad real baja y sube sola segun la conexion
+        self.adaptive = os.environ.get("DZ_ABR", "1") != "0"
+        self.abr_tick, self.abr_down_s, self.abr_up_s = 1.0, 8.0, 20.0         # cada cuanto se mira, espera tras bajar y espera sin perdidas para subir (las pruebas lo acortan)
+        self._out, self._last_change, self._good_since, self._bad = None, 0.0, time.time(), 0
         self.audio_packets = 0
         self.audio_peak = 0.0
         self.video_packets = 0
@@ -767,8 +783,64 @@ class StreamHost:
         threading.Thread(target=self._watchdog, daemon=True).start()
         if self.native_pyd and (self.audio_to or self.multi):
             threading.Thread(target=self._audio_loop, daemon=True).start()
-        self.proc = subprocess.Popen(self.capture_command(out), stdout=subprocess.DEVNULL, stderr=self.err_file or subprocess.DEVNULL, creationflags=0x08000000)
+        self._out = out
+        self.proc = self._launch()
+        if self.multi and self.adaptive:
+            threading.Thread(target=self._adapt_loop, daemon=True).start()
         self.log(f"Transmitiendo la ventana {self.size[0]}x{self.size[1]}")
+
+    def _launch(self):
+        return subprocess.Popen(self.capture_command(self._out), stdout=subprocess.DEVNULL, stderr=self.err_file or subprocess.DEVNULL, creationflags=0x08000000)
+
+    def _on_report(self, peer, body):
+        if len(body) >= 6:
+            rx, lost, rec = struct.unpack("<HHH", body[:6])
+            peer.rep = (time.time(), rx, lost, rec)
+
+    def set_bitrate(self, kbps):
+        """Cambia la calidad del video: se reinicia el codificador (x264 por linea de comandos no admite cambiar el bitrate en caliente); el visor sigue y se recompone con el siguiente
+        fotograma completo (hay uno cada segundo)."""
+        kbps = int(max(1000, min(kbps, self.max_kbps)))
+        if kbps == self.kbps or not self.running:
+            return
+        self.kbps = kbps
+        self._last_change = time.time()
+        old = self.proc
+        if old and old.poll() is None:
+            old.kill()
+        if self.running:
+            self.proc = self._launch()
+
+    def _adapt_loop(self):
+        """Parsec baja la calidad en cuanto hay congestion y la sube despacio cuando todo va bien. Aqui: si el peor invitado pierde mas del 4 % durante 2 s seguidos, baja un 35 %
+        (minimo 1,5 Mbps); si pasan 20 s sin perdidas, sube un 20 % hasta el tope elegido."""
+        while self.running:
+            time.sleep(self.abr_tick)
+            now = time.time()
+            loss = None
+            for p in list(self.peers.values()):
+                rep = getattr(p, "rep", None)
+                if rep and now - rep[0] < 3.0 and rep[1] + rep[2] >= 30:
+                    l = (rep[2] + 0.5 * rep[3]) / (rep[1] + rep[2])
+                    loss = l if loss is None else max(loss, l)
+            if loss is None:
+                continue
+            if loss > 0.04:
+                self._bad += 1
+                self._good_since = now
+            else:
+                self._bad = 0
+                if loss > 0.005:
+                    self._good_since = now
+            if self._bad >= 2 and now - self._last_change > self.abr_down_s and self.kbps > 1500:
+                new = max(1500, int(self.kbps * 0.65))
+                self.log(f"Calidad de video: {new / 1000:.1f} Mbps (la conexión de un invitado pierde {loss * 100:.0f} % de los paquetes).")
+                self._bad = 0
+                self.set_bitrate(new)
+            elif now - self._good_since > self.abr_up_s and now - self._last_change > self.abr_up_s and self.kbps < self.max_kbps:
+                new = min(self.max_kbps, int(self.kbps * 1.2) + 100)
+                self.log(f"Calidad de video: {new / 1000:.1f} Mbps (la conexión va bien).")
+                self.set_bitrate(new)
 
     def attach(self, slot, tunnel):
         """Agrega un invitado (su Tunnel ya creado). Si el anfitrion ya esta transmitiendo, empieza a recibir de inmediato."""
@@ -779,6 +851,7 @@ class StreamHost:
     def _wire(self, peer):
         peer.fec = VideoFecSender(peer.tunnel.send)
         peer.tunnel.on_input = lambda data, p=peer: self._on_input(p, data)
+        peer.tunnel.on_report = lambda data, p=peer: self._on_report(p, data)
 
     def capture_command(self, out):
         host, port = out
@@ -919,6 +992,8 @@ class StreamGuest:
             self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         if self.video_delay_ms and self.tunnel:
             threading.Thread(target=self._video_delay_loop, daemon=True).start()
+        if self.tunnel:
+            threading.Thread(target=self._report_loop, daemon=True).start()
         if self.with_video:
             self.proc = subprocess.Popen(self.play_command(), stdout=subprocess.DEVNULL, stderr=self.err_file or subprocess.DEVNULL, creationflags=0x08000000)
         threading.Thread(target=self._send_loop, daemon=True).start()
@@ -937,6 +1012,20 @@ class StreamGuest:
             self.audio_sock.bind(("0.0.0.0", int(self.audio_port)))
             self.audio_sock.settimeout(0.2)
             threading.Thread(target=self._audio_loop, daemon=True).start()
+
+    def _report_loop(self):
+        """Cada segundo le dice al anfitrion cuantos paquetes de video recibio, perdio y recompuso: con eso el anfitrion baja o sube la calidad (como Parsec)."""
+        last = (0, 0, 0)
+        while self.running:
+            time.sleep(1.0)
+            f = self.vfec
+            cur = (self.video_packets, f.lost if f else 0, f.recovered if f else 0)
+            d = tuple(max(0, min(a - b, 65535)) for a, b in zip(cur, last))
+            last = cur
+            try:
+                self.tunnel.send(REPORT, struct.pack("<HHH", *d))
+            except Exception:  # noqa: BLE001
+                pass
 
     def _on_video(self, data):
         self.video_packets += 1

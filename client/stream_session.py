@@ -18,6 +18,7 @@ import client.med as med
 import client.med_cheats as med_cheats
 import client.stream as st
 import client.stream_pack as pack
+import client.upnp as upnp
 import client.winbrand as winbrand
 
 DIRECT_WAIT_S = 7
@@ -79,6 +80,7 @@ class StreamSession:
         self.role = self.channel = None
         self.sock = self.hub = self.tunnel = self.host = self.guest = self.med = None
         self.sock6, self.ip6 = None, None                  # IPv6 (conexion directa sin NAT)
+        self.upnp = None                                   # upnp.Mapping: puerto abierto en el router del anfitrion
         self.tunnels = {}                                # anfitrion: numero de invitado -> Tunnel
         self.players, self.slot = 2, 0
         self.running = False
@@ -163,7 +165,11 @@ class StreamSession:
             self.hub = st.UdpHub(self.sock)
             if self.sock6 is not None:
                 self.hub.add_sock6(self.sock6)
-        self.send(t="udp_ready", lan_ip=self.net.lan_ip(), lan_port=self.sock.getsockname()[1], ip6=self.ip6 or "", port6=self.sock6.getsockname()[1] if self.sock6 else 0)
+        ready = dict(lan_ip=self.net.lan_ip(), lan_port=self.sock.getsockname()[1], ip6=self.ip6 or "", port6=self.sock6.getsockname()[1] if self.sock6 else 0)
+        if self.role == "host":
+            threading.Thread(target=self._ready_host, args=(self.token, ready), daemon=True).start()          # primero se intenta abrir el puerto en el router (UPnP)
+        else:
+            self.send(t="udp_ready", **ready)
         threading.Thread(target=self._hello_server, args=(self.sock, self.token), daemon=True).start()
         threading.Thread(target=self._stats_loop, args=(self.token,), daemon=True).start()
         threading.Thread(target=self._detail_loop, args=(self.token,), daemon=True).start()
@@ -249,6 +255,23 @@ class StreamSession:
                         age, "sigue abierto" if alive else f"terminó (código {h.proc.returncode if h.proc else '?'})",
                         "mira sus mensajes de error arriba en este archivo (captura de ventana)" if not alive else "la captura de la ventana del juego no entrega fotogramas"))
                     self.log("El anfitrión no está produciendo video. Detalle en stream_host_log.txt")
+
+    def _ready_host(self, token, ready):
+        """Anfitrion: abre un puerto UDP en su router por UPnP (si lo permite) para que los invitados entren directo aunque su NAT sea estricto; despues avisa al servidor."""
+        try:
+            m = upnp.Mapping(ready["lan_ip"], self.flog)
+            r = m.open(self.sock.getsockname()[1]) if self.sock is not None else None
+            if r and self.running and self.token == token:
+                self.upnp = m
+                ready.update(upnp_ip=r[0], upnp_port=r[1])
+                self.log(f"UPnP: puerto {r[1]} abierto en tu router: los invitados entran directo.")
+            else:
+                self.flog("UPnP: tu router no lo permite (o está desactivado); se usa la conexión directa normal")
+        except Exception as e:  # noqa: BLE001 - UPnP es opcional: nunca debe impedir la partida
+            self.flog(f"UPnP: error {e}")
+        finally:
+            if self.running and self.token == token:
+                self.send(t="udp_ready", **ready)
 
     def _new_socket(self):
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -484,6 +507,9 @@ class StreamSession:
 
     def _release(self):
         """Devuelve el cliente a su estado normal: socket UDP propio con el servidor."""
+        m, self.upnp = self.upnp, None
+        if m is not None:
+            threading.Thread(target=m.close).start()                    # cierra el puerto del router (si no, caduca solo a las 4 h)
         s6, self.sock6 = self.sock6, None
         if s6 is not None:
             try:

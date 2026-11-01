@@ -7,6 +7,7 @@ import tkinter as tk
 from tkinter import messagebox, ttk
 
 import client.colorlist as colorlist
+import client.emote_ui as emote_ui
 import client.med as med
 import client.retro as retro
 import client.theme as th
@@ -116,6 +117,7 @@ class RoomsUI:
         e = ttk.Entry(inp, textvariable=self.v_rp_msg)
         e.pack(side="left", fill="x", expand=True)
         e.bind("<Return>", lambda ev: self.rm_send_chat())
+        emote_ui.attach(inp, e, left, before=inp)                       # boton de emoticonos, como en el chat de los juegos
         # derecha: invitar
         right = tk.Frame(p, bg=th.PANEL, padx=12, pady=10)
         right.grid(row=1, column=1, sticky="nsew", padx=(10, 0))
@@ -428,7 +430,7 @@ class RoomsUI:
             for f in (self.friends_data or {}).get("friends", []):
                 if f["online"] and f["id"] not in inside:
                     role = f.get("role") if f.get("role") in th.ROLE_LABEL else "customer"
-                    rows.append({"iid": str(f["id"]), "flag": None, "color": th.ROLE_COLOR.get(role), "text": f["user_name"],
+                    rows.append({"iid": str(f["id"]), "flag": th.flag(f.get("country")), "color": th.ROLE_COLOR.get(role), "text": f["user_name"],
                                  "cells": (th.ROLE_LABEL[role], "jugando" if f["busy"] else "en línea")})
             self.lbl_rp_inv.config(text="" if rows else "Ningún amigo en línea disponible.", fg=th.MUTED)
         else:
@@ -455,7 +457,8 @@ class RoomsUI:
             if flag:
                 c.image_create("end", image=flag, padx=3)
             c.insert("end", name + ": ", "name_" + role if role in th.ROLE_COLOR else "name")
-            c.insert("end", text + "\n")
+            emote_ui.insert_rich(c, text)
+            c.insert("end", "\n")
         else:
             c.insert("end", text + "\n", "sys")
         c.config(state="disabled")
