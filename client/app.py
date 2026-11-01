@@ -864,7 +864,7 @@ class App(Views, LoginPages, LobbyPages, FriendsUI, DmUI, RoomsUI, DanceUI, Home
             if getattr(self, "_stream", None) is not None:
                 self._stream.handle_end(m)
         elif t == "_raend":
-            self.rm_say("La partida con RetroArch terminó.", True)
+            self.rm_say("Se cerró el emulador o terminó la sesión.", True)      # lo usan RetroArch, Mednafen y el Modo Anfitrión
         elif t == "_romsdone":
             self.rom_busy = False
             self.render_channels()
