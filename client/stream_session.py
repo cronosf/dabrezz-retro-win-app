@@ -79,6 +79,7 @@ class StreamSession:
         self.host_controls = lambda: None                # () -> cfg["med_controls"]: las teclas del anfitrion con Mednafen (CONFIGURAR)
         self.host_ds_controls = lambda: None             # () -> cfg["ds_host_controls"]: las teclas del anfitrion con DuckStation (CONFIGURAR)
         self.extra_ds = None                             # solo pruebas: {(seccion, clave): valor} extra en el settings.ini de DuckStation
+        self.hostpad = None                              # ds_host.HostPad: el mando del anfitrion hacia las teclas del mando 1 de DuckStation
         self.use_ds = False                              # el anfitrion corre DuckStation (PS1 de 3-4 jugadores) en vez de Mednafen
         self.pad_port = None                             # solo pruebas: fuerza el puerto de PSX que controla el invitado 1
         self.extra_args = []                             # solo pruebas: argumentos extra de Mednafen
@@ -477,6 +478,11 @@ class StreamSession:
     def _start_host(self, token):
         try:
             self.host.start()
+            if self.use_ds and self.running and self.token == token and self.hostpad is None:
+                get = lambda: self.host_ds_controls() or {}                                           # noqa: E731
+                self.hostpad = ds_host.HostPad(lambda: self.host.hwnd if self.host else None, lambda: get().get("pad"), lambda: get().get("kb"), self.flog)
+                self.hostpad.start()
+                self.flog("Mando del anfitrión activo (Xbox o genérico: sus botones van al mando 1 de DuckStation)")
         except Exception as e:  # noqa: BLE001
             if self.token == token and self.running:
                 self.log(f"No se pudo transmitir: {e}")
@@ -504,6 +510,9 @@ class StreamSession:
     def stop(self):
         was = self.running
         self.running = False
+        hp, self.hostpad = self.hostpad, None
+        if hp is not None:
+            hp.stop()
         for part in (self.host, self.guest):
             if part is not None:
                 part.stop()

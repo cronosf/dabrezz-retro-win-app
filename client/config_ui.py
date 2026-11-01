@@ -103,12 +103,24 @@ class DsHostBackend(Backend):
     buttons = cb.PS1_BUTTONS
     title = "Como anfitrión"
     emulator = "DuckStation"
-    note = ("Estas son TUS teclas en el juego que corre en tu PC (DuckStation, mando 1). Se aplican solas al abrir la partida. Los invitados juegan por su cuenta con las "
-            "suyas (pestaña «Como invitado») y sus teclas no se pueden usar aquí.")
+    has_pad = True
+    note = ("Estas son TUS teclas y los botones de TU mando en el juego que corre en tu PC (DuckStation, mando 1). Tu mando (Xbox o genérico, como un control de PS1 con adaptador "
+            "USB) funciona solo; aquí puedes cambiar sus botones. Se aplican solos al abrir la partida. Los invitados juegan por su cuenta (pestaña «Como invitado») y sus teclas "
+            "no se pueden usar aquí.")
 
     def __init__(self, app, players):
         super().__init__(app)
         self.reserved = ds_host.guest_key_names(players)
+        self.reader = dp.PadReader()
+        self.base = set()
+
+    def live(self, kb, pad):
+        tokens, xc, gc = self.reader.snapshot()
+        mask = dp.pressed_buttons({"pad": pad}, tokens, xc, gc, set())
+        names = dict(self.buttons)
+        pressed = [names[b] for b, _ in self.buttons if mask & st.BIT[b]]
+        dev = "mando Xbox" if xc else "mando genérico" if gc else "sin mando"
+        return f"Prueba en vivo ({dev}):  " + ("  ".join(pressed) if pressed else "pulsa tus botones…")
 
     def key_from_event(self, e, kb, bid):
         n = cb.key_name(e.keysym, e.keycode)
@@ -260,6 +272,10 @@ class GuestBackend(Backend):
         pressed = [b for b, _ in self.buttons if mask & st.BIT[b]]
         dev = "mando Xbox" if xc else "mando genérico" if gc else "sin mando"
         return f"Prueba en vivo ({dev}):  " + ("  ".join(pressed) if pressed else "pulsa tus botones…")
+
+
+# el mando del anfitrion se lee igual que el del invitado (client/dance_pad.py)
+DsHostBackend.pad_label, DsHostBackend.pad_begin, DsHostBackend.pad_poll = GuestBackend.pad_label, GuestBackend.pad_begin, GuestBackend.pad_poll
 
 
 class InfoBackend(Backend):

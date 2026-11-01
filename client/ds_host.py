@@ -9,11 +9,15 @@ teclas en la ventana del emulador (client/stream.py: post_key) sin darle el foco
 
 Nombres de tecla: DuckStation usa los de Qt (Keyboard/Insert, Keyboard/PageUp, Keyboard/F13...). Se probaron en el laboratorio las que dependen de la tecla fisica y no de la
 distribucion del teclado: letras, F13-F24, Comma, Period, flechas, Insert, Delete, Home, End, PageUp, PageDown. Los signos [ ] ; ' - = / NO sirven (cambian con la distribucion)."""
+import ctypes
 import os
 import shutil
 import subprocess
+import threading
+import time
 
 import client.ctl_backends as cb
+import client.dance_pad as dp
 import client.ps1 as ps1
 import client.stream as st
 
@@ -55,6 +59,66 @@ def guest_key_names(players):
         for b, (name, *_rest) in GUEST_KEYS[port].items():
             out[name.lower()] = port
     return out
+
+
+def effective_host_keys(host_kb=None):
+    """Teclas del mando 1 (anfitrion): las de fabrica y, encima, las que eligio en CONFIGURAR (solo las que DuckStation entiende)."""
+    return {**HOST_DEFAULT, **{b: n for b, n in (host_kb or {}).items() if b in HOST_DEFAULT and cb.to_qt(str(n))}}
+
+
+_VK = {"up": (0x26, True), "down": (0x28, True), "left": (0x25, True), "right": (0x27, True), "return": (0x0D, False), "backspace": (0x08, False), "space": (0x20, False),
+       "tab": (0x09, False)}
+
+
+def host_keymap(host_kb=None):
+    """{1: {boton: (nombre, VK, scancode, 0, extendida)}}: lo que necesita st.post_key para pulsar las teclas del anfitrion en la ventana de DuckStation."""
+    out = {}
+    for b, n in effective_host_keys(host_kb).items():
+        vk, ext = _VK.get(n) or (ord(n.upper()), False)
+        out[b] = (n, vk, ctypes.windll.user32.MapVirtualKeyW(vk, 0), 0, ext)
+    return {1: out}
+
+
+class HostPad:
+    """El mando del anfitrion (Xbox o generico, como un control de PS1 con adaptador USB) -> las teclas del mando 1 de DuckStation. La app lee el mando (client/dance_pad.py: lo mismo
+    que usa el invitado) y pulsa esas teclas en la ventana del emulador sin darle el foco, asi funciona sin configurar nada en DuckStation. Los botones se pueden cambiar en CONFIGURAR."""
+
+    def __init__(self, hwnd_of, pad_of, host_kb_of, log=print):
+        self.hwnd_of, self.pad_of, self.host_kb_of, self.log = hwnd_of, pad_of, host_kb_of, log
+        self.running = False
+        self.mask = 0
+
+    def start(self):
+        self.running = True
+        threading.Thread(target=self._run, daemon=True).start()
+
+    def stop(self):
+        self.running = False
+
+    def _run(self):
+        reader = dp.PadReader()
+        keymap = host_keymap(self.host_kb_of())
+        hwnd = None
+        while self.running:
+            try:
+                hwnd = self.hwnd_of()
+                if hwnd:
+                    tokens, xc, gc = reader.snapshot()
+                    mask = dp.pressed_buttons({"pad": self.pad_of() or {}}, tokens, xc, gc, set())
+                    changed = mask ^ self.mask
+                    for b in st.BUTTONS:
+                        if changed & st.BIT[b]:
+                            st.post_key(hwnd, b, bool(mask & st.BIT[b]), 1, keymap)
+                    self.mask = mask
+            except Exception as e:  # noqa: BLE001 - un fallo leyendo el mando no debe tumbar la partida
+                self.log(f"Mando del anfitrión: {e}")
+                time.sleep(1.0)
+            time.sleep(0.008)
+        if hwnd and self.mask:                                                            # al terminar no se queda ningun boton pulsado
+            for b in st.BUTTONS:
+                if self.mask & st.BIT[b]:
+                    st.post_key(hwnd, b, False, 1, keymap)
+            self.mask = 0
 
 
 def _qt(name):
