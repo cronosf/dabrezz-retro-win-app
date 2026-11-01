@@ -206,7 +206,7 @@ class StreamSession:
                     continue
                 fec = getattr(g, "vfec", None) if g else None
                 win = st.find_window(g.proc.pid, 100) if g is not None and g.proc is not None and g.proc.poll() is None else None
-                self.flog(f"[{age}s] túnel: conectado={t.connected.is_set()} recibidos={t.received} ({t.bytes_rx // 1024} KB) último hace {time.time() - t.last_rx:.1f}s ping={t.rtt and round(t.rtt)} · "
+                self.flog(f"[{age}s] túnel: conectado={t.connected.is_set()} recibidos={t.received} ({t.bytes_rx // 1024} KB) último hace {f"{time.time() - t.last_rx:.1f}s" if t.last_rx else "—"} ping={t.rtt and round(t.rtt)} · "
                           f"video={g.video_packets if g else 0} (recuperados {fec.recovered if fec else 0}, perdidos {fec.lost if fec else 0}) audio={g.audio_packets if g else 0} · "
                           f"ffplay vivo={bool(g and g.proc and g.proc.poll() is None)} ventana={'sí' if win else 'no'}")
                 if age >= 15 and not told and g is not None and g.video_packets == 0:
@@ -290,8 +290,9 @@ class StreamSession:
         """`stream_relay`: el servidor abrio su relay UDP para una pareja; el anfitrion cambia el tunel de ese invitado y el invitado el suyo."""
         if not self.running:
             return
-        host, port, slot = str(m.get("host", "")), m.get("port"), int(m.get("slot", 1) or 1)
+        host, port, slot = str(m.get("host", "")) or self.net.host, m.get("port"), int(m.get("slot", 1) or 1)       # host vacio = el servidor de siempre (--public-host sin definir)
         t = self.tunnels.get(slot) if self.role == "host" else self.tunnel
+        self.flog(f"El servidor abrió el relay: {host}:{port} (jugador {slot + 1})")
         if not host or not isinstance(port, int) or not 1 <= port <= 65535:
             return
         if t is None:                                    # el servidor no recibio nuestra direccion UDP (o la del otro): va directo por relay
