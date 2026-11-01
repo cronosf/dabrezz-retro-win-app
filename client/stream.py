@@ -496,16 +496,21 @@ class Tunnel:
         self.received += 1
         self.last_rx = time.time()
         kind, body = data[:1], data[1:]
-        if kind == HELLO:
-            self.connected.set()
-        elif kind == VIDEO and self.on_video:
-            self.on_video(body)
-        elif kind == FEC and self.on_fec:
-            self.on_fec(body)
-        elif kind == AUDIO and self.on_audio:
-            self.on_audio(body)
-        elif kind == INPUT and self.on_input:
-            self.on_input(body)
+        try:
+            if kind == HELLO:
+                self.connected.set()
+            elif kind == VIDEO and self.on_video:
+                self.on_video(body)
+            elif kind == FEC and self.on_fec:
+                self.on_fec(body)
+            elif kind == AUDIO and self.on_audio:
+                self.on_audio(body)
+            elif kind == INPUT and self.on_input:
+                self.on_input(body)
+        except Exception as e:  # noqa: BLE001 - un paquete malo o un reproductor a medio crear no debe matar el hilo que recibe de todos los invitados
+            self.errors = getattr(self, "errors", 0) + 1
+            if self.errors <= 3:
+                self.log(f"Paquete ignorado: {e}")
 
     def send(self, kind, body):
         try:
@@ -579,7 +584,7 @@ class StreamHost:
             self.vsock.bind(("127.0.0.1", 0))
             self.vsock.settimeout(0.2)
             out = ("127.0.0.1", self.vsock.getsockname()[1])
-            for peer in self.peers.values():
+            for peer in list(self.peers.values()):                          # (otro hilo puede estar agregando un invitado: no iterar el dict vivo)
                 self._wire(peer)
             threading.Thread(target=self._video_forward, daemon=True).start()
         else:
@@ -799,7 +804,7 @@ class StreamGuest:
     def _on_audio(self, data):
         """Pone en orden los paquetes de audio (la red los puede cruzar) y los pasa al reproductor. Sin perdidas no suma retraso; si falta uno, espera
         REORDER_PACKETS paquetes mas y entonces rellena su hueco con silencio."""
-        if len(data) <= AUDIO_HDR.size:
+        if len(data) <= AUDIO_HDR.size or self.player is None:                 # (el tunel ya recibe antes de que el reproductor este listo)
             return
         magic, seq, frames = AUDIO_HDR.unpack_from(data)
         if magic != AUDIO_MAGIC or len(data) - AUDIO_HDR.size != frames * 2:

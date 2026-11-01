@@ -19,7 +19,7 @@ import client.stream as st
 import client.stream_pack as pack
 import client.winbrand as winbrand
 
-DIRECT_WAIT_S = 5
+DIRECT_WAIT_S = 7
 RELAY_WAIT_S = 10
 
 user32 = ctypes.WinDLL("user32", use_last_error=True)
@@ -143,19 +143,23 @@ class StreamSession:
         host, port, slot = str(m.get("host", "")), m.get("port"), int(m.get("slot", 1) or 1)
         if not host or not isinstance(port, int) or not 1 <= port <= 65535:
             return
+        self._open_tunnel(host, port, slot)
+
+    def _open_tunnel(self, host, port, slot):
         if self.role == "host":
             if slot in self.tunnels or not 1 <= slot <= 3:
-                return
+                return None
             t = self.tunnels[slot] = st.Tunnel(self.sock, (host, port), log=self.log, hub=self.hub)
+            t.start()                                    # primero el tunel (empieza a abrir el NAT ya) y despues el video, que tarda
             self._start_media(slot, t)
-            t.start()
         else:
             if self.tunnel is not None:
-                return
+                return None
             t = self.tunnel = st.Tunnel(self.sock, (host, port), log=self.log)
-            self._start_media(0, t)
             t.start()
+            self._start_media(0, t)
         threading.Thread(target=self._watch_connection, args=(self.token, t, slot), daemon=True).start()
+        return t
 
     def on_relay(self, m):
         """`stream_relay`: el servidor abrio su relay UDP para una pareja; el anfitrion cambia el tunel de ese invitado y el invitado el suyo."""
@@ -163,10 +167,16 @@ class StreamSession:
             return
         host, port, slot = str(m.get("host", "")), m.get("port"), int(m.get("slot", 1) or 1)
         t = self.tunnels.get(slot) if self.role == "host" else self.tunnel
-        if t is not None and host and isinstance(port, int) and 1 <= port <= 65535:
+        if not host or not isinstance(port, int) or not 1 <= port <= 65535:
+            return
+        if t is None:                                    # el servidor no recibio nuestra direccion UDP (o la del otro): va directo por relay
             self.relayed.add(slot)
-            t.peer = (host, port)
-            self.log("Conexión por relay del servidor" + (f" (jugador {slot + 1})." if self.role == "host" else "."))
+            if self._open_tunnel(host, port, slot) is not None:
+                self.log("Conexión por relay del servidor" + (f" (jugador {slot + 1})." if self.role == "host" else "."))
+            return
+        self.relayed.add(slot)
+        t.peer = (host, port)
+        self.log("Conexión por relay del servidor" + (f" (jugador {slot + 1})." if self.role == "host" else "."))
 
     def _watch_connection(self, token, t, slot):
         end = time.time() + DIRECT_WAIT_S
