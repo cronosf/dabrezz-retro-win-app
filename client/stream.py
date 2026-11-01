@@ -25,11 +25,28 @@ from ctypes import wintypes
 
 BUTTONS = ("up", "down", "left", "right", "cross", "circle", "square", "triangle", "l1", "r1", "l2", "r2", "start", "select")
 BIT = {b: 1 << i for i, b in enumerate(BUTTONS)}
-# boton -> (nombre en pantalla, VK, scancode, SDLK de SDL 1.2 que usa Mednafen en su configuracion)
-KEYS = {"up": ("[", 0xDB, 0x1A, 91), "down": ("]", 0xDD, 0x1B, 93), "left": (";", 0xBA, 0x27, 59), "right": ("'", 0xDE, 0x28, 39),
-        "cross": ("\\", 0xDC, 0x2B, 92), "circle": (",", 0xBC, 0x33, 44), "square": (".", 0xBE, 0x34, 46), "triangle": ("/", 0xBF, 0x35, 47),
-        "l1": ("-", 0xBD, 0x0C, 45), "r1": ("=", 0xBB, 0x0D, 61), "l2": ("`", 0xC0, 0x29, 96), "r2": ("F13", 0x7C, 0x64, 294),
-        "start": ("F14", 0x7D, 0x65, 295), "select": ("F15", 0x7E, 0x66, 296)}
+# Teclas reservadas por puerto de PSX (el anfitrion juega en el puerto 1 con las de siempre: WASD, Tab, Enter y el teclado numerico). NO pueden ser teclas de comando de Mednafen: ` (avance rapido),
+# \ (camara lenta), Retroceso (rebobinar), Pausa, F1-F12 ni los digitos (ranura de estado). Cada invitado tiene su juego de 14 teclas que SOLO
+# se envian a la ventana de Mednafen con PostMessage (el anfitrion no las pulsa de verdad). boton -> (nombre, VK de Windows, scancode, SDLK de SDL 1.2 que usa Mednafen, extendida)
+def _k(name, vk, scan, sdlk, ext=False):
+    return (name, vk, scan, sdlk, ext)
+
+
+PORT_KEYS = {
+    2: {"up": _k("[", 0xDB, 0x1A, 91), "down": _k("]", 0xDD, 0x1B, 93), "left": _k(";", 0xBA, 0x27, 59), "right": _k("'", 0xDE, 0x28, 39),
+        "cross": _k("Q", 0x51, 0x10, 113), "circle": _k(",", 0xBC, 0x33, 44), "square": _k(".", 0xBE, 0x34, 46), "triangle": _k("/", 0xBF, 0x35, 47),
+        "l1": _k("-", 0xBD, 0x0C, 45), "r1": _k("=", 0xBB, 0x0D, 61), "l2": _k("E", 0x45, 0x12, 101), "r2": _k("F13", 0x7C, 0x64, 294),
+        "start": _k("F14", 0x7D, 0x65, 295), "select": _k("F15", 0x7E, 0x66, 296)},
+    3: {"up": _k("I", 0x49, 0x17, 105), "down": _k("K", 0x4B, 0x25, 107), "left": _k("J", 0x4A, 0x24, 106), "right": _k("L", 0x4C, 0x26, 108),
+        "cross": _k("Z", 0x5A, 0x2C, 122), "circle": _k("X", 0x58, 0x2D, 120), "square": _k("C", 0x43, 0x2E, 99), "triangle": _k("V", 0x56, 0x2F, 118),
+        "l1": _k("B", 0x42, 0x30, 98), "r1": _k("N", 0x4E, 0x31, 110), "l2": _k("M", 0x4D, 0x32, 109), "r2": _k("Y", 0x59, 0x15, 121),
+        "start": _k("U", 0x55, 0x16, 117), "select": _k("O", 0x4F, 0x18, 111)},
+    4: {"up": _k("Flecha ↑", 0x26, 0x48, 273, True), "down": _k("Flecha ↓", 0x28, 0x50, 274, True), "left": _k("Flecha ←", 0x25, 0x4B, 276, True),
+        "right": _k("Flecha →", 0x27, 0x4D, 275, True), "cross": _k("Insert", 0x2D, 0x52, 277, True), "circle": _k("Supr", 0x2E, 0x53, 127, True),
+        "square": _k("Inicio", 0x24, 0x47, 278, True), "triangle": _k("Fin", 0x23, 0x4F, 279, True), "l1": _k("Re Pág", 0x21, 0x49, 280, True),
+        "r1": _k("Av Pág", 0x22, 0x51, 281, True), "l2": _k("T", 0x54, 0x14, 116), "r2": _k("G", 0x47, 0x22, 103), "start": _k("H", 0x48, 0x23, 104),
+        "select": _k("F", 0x46, 0x21, 102)}}
+KEYS = PORT_KEYS[2]                                  # compatibilidad: el puerto 2 es el del invitado de siempre
 MAGIC = b"DZI1"
 PACKET = struct.Struct("<4sHI")                  # marca, numero de secuencia, mascara de botones
 AUDIO_MAGIC = b"DZA2"                            # DZA2: PCM mu-law de 8 bits (la mitad que PCM16)
@@ -260,9 +277,23 @@ class SdlAudioPlayer:
             pass
 
 
-def mednafen_pad_args(port=2):
-    """Argumentos de Mednafen que asignan los 14 botones del puerto `port` a las teclas reservadas para el invitado."""
-    return [a for b in BUTTONS for a in (f"-psx.input.port{int(port)}.gamepad.{b}", f"keyboard {KEYS[b][3]}")]
+def mednafen_pad_args(port=2, keys_port=None):
+    """Argumentos de Mednafen que asignan los 14 botones del puerto `port` a las teclas reservadas del invitado (por defecto las del mismo numero de puerto)."""
+    keys = PORT_KEYS[keys_port or (port if port in PORT_KEYS else 2)]
+    return [a for b in BUTTONS for a in (f"-psx.input.port{int(port)}.gamepad.{b}", f"keyboard {keys[b][3]}")]
+
+
+def mednafen_party_args(players):
+    """Argumentos de Mednafen para una partida de `players` (2 a 4) en Modo Anfitrion: puertos 2.. con las teclas de cada invitado, sin tarjetas de memoria y, de 3 en adelante,
+    el multitap en el puerto 1 de la consola (asi hay 4 mandos)."""
+    args = []
+    if players > 2:
+        args += ["-psx.input.pport1.multitap", "1"]
+    for port in range(2, min(players, 4) + 1):
+        args += mednafen_pad_args(port)
+    for port in range(1, 5):
+        args += [f"-psx.input.port{port}.memcard", "0"]
+    return args
 
 
 def find_window(pid, min_width=200):
@@ -283,10 +314,10 @@ def find_window(pid, min_width=200):
     return found[0] if found else None
 
 
-def post_key(hwnd, button, down):
-    """Pulsa o suelta la tecla asignada a `button` en la ventana `hwnd` sin darle el foco."""
-    _, vk, scan, _ = KEYS[button]
-    lp = 1 | (scan << 16)
+def post_key(hwnd, button, down, port=2):
+    """Pulsa o suelta la tecla del invitado del puerto `port` asignada a `button` en la ventana `hwnd` sin darle el foco."""
+    _, vk, scan, _, ext = PORT_KEYS[port][button]
+    lp = 1 | (scan << 16) | ((1 << 24) if ext else 0)               # las teclas "extendidas" (flechas, Insert, Inicio...) deben llevar el bit para que SDL no las tome por el teclado numerico
     if down:
         user32.PostMessageW(hwnd, 0x100, vk, lp)
     else:
@@ -385,11 +416,45 @@ class VideoFecReceiver:
             del self.parity[g]
 
 
-class Tunnel:
-    """Un socket UDP hacia el otro jugador. Reparte lo que llega por tipo (video, audio, botones) y manda "hola" hasta que el otro contesta (abre los NAT)."""
+class UdpHub:
+    """Un solo socket UDP para varios Tunnel (el anfitrion habla con cada invitado desde el mismo socket, el que le dio su direccion publica al servidor): un hilo lee y reparte
+    cada datagrama al Tunnel que corresponde por la direccion de origen."""
 
-    def __init__(self, sock, peer, on_video=None, on_audio=None, on_input=None, log=print, on_fec=None):
-        self.sock, self.peer, self.log = sock, peer, log
+    def __init__(self, sock):
+        self.sock, self.tunnels, self.running = sock, [], False
+
+    def add(self, tunnel):
+        self.tunnels.append(tunnel)
+        if not self.running:
+            self.running = True
+            self.sock.settimeout(0.2)
+            threading.Thread(target=self._run, daemon=True).start()
+
+    def _run(self):
+        while self.running:
+            try:
+                data, addr = self.sock.recvfrom(2048)
+            except socket.timeout:
+                continue
+            except OSError:
+                break
+            target = next((t for t in self.tunnels if t.peer == addr), None)
+            if target is None:                                           # su puerto puede ser otro si el NAT lo cambio: solo si es el unico con esa IP
+                same = [t for t in self.tunnels if t.peer[0] == addr[0]]
+                target = same[0] if len(same) == 1 else None
+            if target is not None:
+                target.handle(data, addr)
+
+    def stop(self):
+        self.running = False
+
+
+class Tunnel:
+    """Un socket UDP hacia el otro jugador. Reparte lo que llega por tipo (video, audio, botones) y manda "hola" hasta que el otro contesta (abre los NAT). Con `hub` comparte el
+    socket con otros Tunnel (anfitrion con varios invitados)."""
+
+    def __init__(self, sock, peer, on_video=None, on_audio=None, on_input=None, log=print, on_fec=None, hub=None):
+        self.sock, self.peer, self.log, self.hub = sock, peer, log, hub
         self.on_video, self.on_audio, self.on_input, self.on_fec = on_video, on_audio, on_input, on_fec
         self.connected = threading.Event()
         self.running = False
@@ -398,8 +463,11 @@ class Tunnel:
 
     def start(self):
         self.running = True
-        self.sock.settimeout(0.2)
-        threading.Thread(target=self._recv_loop, daemon=True).start()
+        if self.hub:
+            self.hub.add(self)
+        else:
+            self.sock.settimeout(0.2)
+            threading.Thread(target=self._recv_loop, daemon=True).start()
         threading.Thread(target=self._hello_loop, daemon=True).start()
 
     def _hello_loop(self):
@@ -418,21 +486,26 @@ class Tunnel:
                 continue
             except OSError:
                 break
-            if addr[0] != self.peer[0] or not data:                     # solo se escucha al otro jugador
+            if addr[0] != self.peer[0]:                                 # solo se escucha al otro jugador
                 continue
-            self.received += 1
-            self.last_rx = time.time()
-            kind, body = data[:1], data[1:]
-            if kind == HELLO:
-                self.connected.set()
-            elif kind == VIDEO and self.on_video:
-                self.on_video(body)
-            elif kind == FEC and self.on_fec:
-                self.on_fec(body)
-            elif kind == AUDIO and self.on_audio:
-                self.on_audio(body)
-            elif kind == INPUT and self.on_input:
-                self.on_input(body)
+            self.handle(data, addr)
+
+    def handle(self, data, addr):
+        if not data:
+            return
+        self.received += 1
+        self.last_rx = time.time()
+        kind, body = data[:1], data[1:]
+        if kind == HELLO:
+            self.connected.set()
+        elif kind == VIDEO and self.on_video:
+            self.on_video(body)
+        elif kind == FEC and self.on_fec:
+            self.on_fec(body)
+        elif kind == AUDIO and self.on_audio:
+            self.on_audio(body)
+        elif kind == INPUT and self.on_input:
+            self.on_input(body)
 
     def send(self, kind, body):
         try:
@@ -443,30 +516,51 @@ class Tunnel:
 
     def stop(self):
         self.running = False
-        try:
-            self.sock.close()
-        except OSError:
-            pass
+        if not self.hub:
+            try:
+                self.sock.close()
+            except OSError:
+                pass
+
+
+class _Peer:
+    """Un invitado del anfitrion: su tunel, su numerador de paridad de video y los botones que tiene pulsados."""
+
+    def __init__(self, slot, tunnel=None):
+        self.slot, self.tunnel, self.fec = slot, tunnel, None
+        self.mask, self.last_seq, self.last_rx = 0, -1, 0.0
+        self.packets = 0
 
 
 class StreamHost:
-    """Anfitrion: captura la ventana del proceso `pid` y aplica los botones del invitado. Dos modos: directo (`video_to`, `input_port`, `audio_to`: sockets UDP propios,
-    para pruebas) o por `tunnel` (un Tunnel ya creado hacia el invitado)."""
+    """Anfitrion: captura la ventana del proceso `pid`, la manda a cada invitado y aplica sus botones (el invitado `slot` controla el puerto `slot + 1`). Dos modos: directo (`video_to`,
+    `input_port`, `audio_to`: sockets UDP propios, un solo invitado, para pruebas) o por Tunnel (`attach(slot, tunnel)` por cada invitado, tambien despues de empezar)."""
 
     def __init__(self, ffmpeg_exe, pid, video_to=None, input_port=None, fps=60, kbps=4000, log=print, audio_to=None, native_pyd=None, tunnel=None):
         self.ffmpeg_exe, self.pid, self.video_to, self.input_port = ffmpeg_exe, pid, video_to, (int(input_port) if input_port else None)
         self.fps, self.kbps, self.log = fps, kbps, log
-        self.audio_to, self.native_pyd, self.tunnel = audio_to, native_pyd, tunnel
+        self.audio_to, self.native_pyd = audio_to, native_pyd
         self.audio_packets = 0
         self.audio_peak = 0.0
         self.video_packets = 0
-        # un fotograma completo (IDR) cada segundo: si se pierde un paquete de video, la imagen se recompone sola en menos de 1 s
+        # un fotograma completo (IDR) cada segundo: si se pierde un paquete de video, la imagen se recompone sola en menos de 1 s (y un invitado que entra tarde la ve en <1 s)
         self.x264_params = os.environ.get("DZ_X264", f"keyint={fps}:min-keyint={fps}:scenecut=0:repeat-headers=1")
         self.hwnd = self.size = None
-        self.proc = self.sock = self.vsock = self.fec = None
-        self.mask, self.last_seq, self.last_rx = 0, -1, 0.0
+        self.proc = self.sock = self.vsock = None
+        self.peers = {}
         self.running = False
-        self.packets = 0
+        self.multi = tunnel is not None or video_to is None                 # por Tunnel (uno o varios invitados)
+        if tunnel is not None:
+            self.peers[1] = _Peer(1, tunnel)
+
+    # compatibilidad con las pruebas de un solo invitado
+    @property
+    def mask(self):
+        return self.peers[1].mask if 1 in self.peers else 0
+
+    @property
+    def packets(self):
+        return sum(p.packets for p in self.peers.values())
 
     def start(self, wait_s=30):
         end = time.time() + wait_s
@@ -480,24 +574,35 @@ class StreamHost:
             raise RuntimeError("No aparece la ventana del juego")
         self.running = True
         out = self.video_to
-        if self.tunnel:
-            self.tunnel.on_input = self._on_input
-            self.vsock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)           # ffmpeg escribe aqui y se reenvia por el tunel
+        if self.multi:
+            self.vsock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)           # ffmpeg escribe aqui y se reenvia a cada invitado por su tunel
             self.vsock.bind(("127.0.0.1", 0))
             self.vsock.settimeout(0.2)
             out = ("127.0.0.1", self.vsock.getsockname()[1])
-            self.fec = VideoFecSender(self.tunnel.send)
+            for peer in self.peers.values():
+                self._wire(peer)
             threading.Thread(target=self._video_forward, daemon=True).start()
         else:
+            self.peers[1] = _Peer(1)
             self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             self.sock.bind(("0.0.0.0", self.input_port))
             self.sock.settimeout(0.2)
             threading.Thread(target=self._input_loop, daemon=True).start()
         threading.Thread(target=self._watchdog, daemon=True).start()
-        if self.native_pyd and (self.audio_to or self.tunnel):
+        if self.native_pyd and (self.audio_to or self.multi):
             threading.Thread(target=self._audio_loop, daemon=True).start()
         self.proc = subprocess.Popen(self.capture_command(out), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, creationflags=0x08000000)
         self.log(f"Transmitiendo la ventana {self.size[0]}x{self.size[1]}")
+
+    def attach(self, slot, tunnel):
+        """Agrega un invitado (su Tunnel ya creado). Si el anfitrion ya esta transmitiendo, empieza a recibir de inmediato."""
+        peer = self.peers[slot] = _Peer(slot, tunnel)
+        if self.running:
+            self._wire(peer)
+
+    def _wire(self, peer):
+        peer.fec = VideoFecSender(peer.tunnel.send)
+        peer.tunnel.on_input = lambda data, p=peer: self._on_input(p, data)
 
     def capture_command(self, out):
         host, port = out
@@ -515,7 +620,9 @@ class StreamHost:
             except OSError:
                 break
             self.video_packets += 1
-            self.fec.push(data)
+            for peer in list(self.peers.values()):
+                if peer.fec is not None:
+                    peer.fec.push(data)
 
     def _audio_loop(self):
         try:
@@ -524,7 +631,7 @@ class StreamHost:
         except Exception as e:  # noqa: BLE001 - sin audio la transmision sigue
             self.log(f"Sin audio: {e}")
             return
-        out = None if self.tunnel else socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        out = None if self.multi else socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         seq = 0
         try:
             while self.running:
@@ -535,8 +642,10 @@ class StreamHost:
                 for pcm in blocks:
                     seq = (seq + 1) & 0xFFFF
                     pkt = AUDIO_HDR.pack(AUDIO_MAGIC, seq, AUDIO_FRAMES) + pcm16_to_ulaw(pcm)
-                    if self.tunnel:
-                        self.tunnel.send(AUDIO, pkt)
+                    if self.multi:
+                        for peer in list(self.peers.values()):
+                            if peer.tunnel is not None:
+                                peer.tunnel.send(AUDIO, pkt)
                     else:
                         out.sendto(pkt, self.audio_to)
                     self.audio_packets += 1
@@ -546,23 +655,25 @@ class StreamHost:
             if out:
                 out.close()
 
-    def _apply(self, mask):
-        changed = mask ^ self.mask
+    def _apply(self, peer, mask):
+        changed = mask ^ peer.mask
+        port = peer.slot + 1
         for b in BUTTONS:
             if changed & BIT[b]:
-                post_key(self.hwnd, b, bool(mask & BIT[b]))
-        self.mask = mask
+                post_key(self.hwnd, b, bool(mask & BIT[b]), port)
+        peer.mask = mask
 
-    def _on_input(self, data):
+    def _on_input(self, peer, data):
         if len(data) != PACKET.size:
             return
         magic, seq, mask = PACKET.unpack(data)
-        if magic == MAGIC and seq != self.last_seq and ((seq - self.last_seq) & 0xFFFF) < 0x8000:       # solo paquetes mas nuevos (con vuelta de 16 bits)
-            self.last_seq, self.last_rx = seq, time.time()
-            self.packets += 1
-            self._apply(mask & ((1 << len(BUTTONS)) - 1))
+        if magic == MAGIC and seq != peer.last_seq and ((seq - peer.last_seq) & 0xFFFF) < 0x8000:       # solo paquetes mas nuevos (con vuelta de 16 bits)
+            peer.last_seq, peer.last_rx = seq, time.time()
+            peer.packets += 1
+            self._apply(peer, mask & ((1 << len(BUTTONS)) - 1))
 
     def _input_loop(self):
+        peer = self.peers[1]
         while self.running:
             try:
                 data, _addr = self.sock.recvfrom(64)
@@ -570,19 +681,21 @@ class StreamHost:
                 continue
             except OSError:
                 break
-            self._on_input(data)
+            self._on_input(peer, data)
 
     def _watchdog(self):
         while self.running:
             time.sleep(0.2)
-            if self.mask and time.time() - self.last_rx > SILENCE_S:            # el invitado dejo de mandar: nada se queda pulsado
-                self._apply(0)
-                self.log("El invitado no manda botones: se sueltan todos")
+            for peer in list(self.peers.values()):
+                if peer.mask and time.time() - peer.last_rx > SILENCE_S:            # ese invitado dejo de mandar: nada se queda pulsado
+                    self._apply(peer, 0)
+                    self.log(f"El invitado {peer.slot} no manda botones: se sueltan todos")
 
     def stop(self):
         self.running = False
-        if self.hwnd and self.mask:
-            self._apply(0)
+        for peer in list(self.peers.values()):
+            if self.hwnd and peer.mask:
+                self._apply(peer, 0)
         if self.proc and self.proc.poll() is None:
             self.proc.kill()
         for sk in (self.sock, self.vsock):

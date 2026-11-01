@@ -10,6 +10,7 @@ emulador solo sincroniza 2, no se puede jugar de 5 por internet.
   * Mednafen (psxm_*, Bust a Groove 1 y 2): su propio netplay con Mednafen-Server, 2 jugadores.
 """
 NETPLAY_MAX = {"fbneo": 2, "snes9x": 2, "duckstation": 2, "n64": 0, "mednafen": 2}
+PARTY_MAX = 4                                # jugadores de una sala de PS1 en Modo Anfitrion (el anfitrion + 3 invitados, con el multitap)
 RETRO_MAX = {"snes": 5}          # jugadores que admite el netplay de RetroArch (Super Multitap)
 
 # Jugadores que admite el propio juego (los que no aparecen aqui: 2). Super Bomberman 2: 4 con Super Multitap; 3, 4 y 5: hasta 5
@@ -34,11 +35,13 @@ def retro_system(channel):
 
 
 def game_max(channel):
-    return GAME_MAX.get(channel, 2)
+    return GAME_MAX.get(channel, 4 if is_party(channel) else 2)
 
 
 def netplay_max(channel):
     rs = retro_system(channel)
+    if is_party(channel):                      # PS1 de 3 a 4 jugadores: Modo Anfitrion (Mednafen con multitap, el anfitrion transmite)
+        return PARTY_MAX
     return RETRO_MAX[rs] if rs else NETPLAY_MAX[system_of(channel)]
 
 
@@ -53,7 +56,13 @@ def uses_mednafen(channel):
 
 def is_dance(channel):
     """Zona Baile: los juegos de baile (hoy Bust a Groove 1 y 2, con Mednafen). Tienen su propia pantalla y su busqueda de partida amistosa."""
-    return uses_mednafen(channel)
+    return uses_mednafen(channel) and channel.startswith("psxm_bust_")
+
+
+def is_party(channel):
+    """Juegos de PS1 de 3 a 4 jugadores (Crash Team Racing, Crash Bash...): discos .cue/.bin `psxm_*` que no son de baile. Se juegan SIEMPRE en Modo Anfitrion con Mednafen y su
+    multitap; los de 2 jugadores van con DuckStation (`ps1_*`)."""
+    return uses_mednafen(channel) and not is_dance(channel)
 
 
 def uses_session(channel, players):

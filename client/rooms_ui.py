@@ -11,7 +11,7 @@ import client.med as med
 import client.retro as retro
 import client.theme as th
 from client.views import PLATFORMS, initials, platform_of
-from shared.capabilities import is_dance, retro_system, system_of
+from shared.capabilities import is_dance, is_party, retro_system, room_capacity, system_of
 from shared.protocol import CHANNEL_LABELS
 
 EMU_NAMES = {"fbneo": "FBNeo", "snes9x": "Snes9x", "duckstation": "DuckStation", "mednafen": "Mednafen"}
@@ -250,12 +250,21 @@ class RoomsUI:
         win.title(title)
         th.set_icon(win)
         win.transient(self)
-        win.geometry("380x600" if modes else "380x520")
+        win.geometry("380x600" if modes else "380x590" if games is None else "380x520")
         pad = tk.Frame(win, bg=th.BG, padx=22, pady=18)
         pad.pack(fill="both", expand=True)
         tk.Label(pad, text=title, font=(th.DISPLAY, 14), fg="#ffffff", bg=th.BG).pack(anchor="w")
-        tk.Label(pad, text="Elige el juego. Otros jugadores podrán unirse desde la lista o con tu invitación.", fg=th.MUTED, bg=th.BG,
+        tk.Label(pad, text="Elige cuántos jugadores y el juego. Otros jugadores podrán unirse desde la lista o con tu invitación.", fg=th.MUTED, bg=th.BG,
                  font=(th.BODY, 9), wraplength=330, justify="left").pack(anchor="w", pady=(4, 8))
+        v_players = tk.StringVar(value="2")
+        prow = tk.Frame(pad, bg=th.BG)
+        if games is None:                                  # Multijugador: primero cuantos jugadores; asi se sabe que emulador corre cada juego
+            prow.pack(fill="x", pady=(0, 6))
+            for val, text in (("2", "2 jugadores"), ("4", "3 a 4 jugadores")):
+                tk.Radiobutton(prow, text=text, value=val, variable=v_players, fg=th.TEXT, bg=th.BG, selectcolor=th.FIELD, activebackground=th.BG, activeforeground=th.TEXT,
+                               bd=0, highlightthickness=0, font=(th.BODY, 10, "bold"), cursor="hand2").pack(side="left", padx=(0, 18))
+        info_players = tk.Label(pad, text="", fg=th.MUTED, bg=th.BG, font=(th.BODY, 8), wraplength=330, justify="left", anchor="w")
+        info_players.pack(fill="x", pady=(0, 6))
         q = tk.StringVar()
         ttk.Entry(pad, textvariable=q).pack(fill="x", pady=(0, 8))
         # el boton y el aviso se empaquetan primero (abajo): en una ventana baja la lista se encoge y el boton siempre se ve
@@ -273,20 +282,34 @@ class RoomsUI:
                                bd=0, highlightthickness=0, font=(th.BODY, 9), justify="left", anchor="w", wraplength=330).pack(fill="x", anchor="w")
         lst = colorlist.ColorList(pad, (("nick", 200, "JUEGO"), ("plat", 100, "")), height=8)
         lst.pack(fill="both", expand=True)
-        games = sorted(games if games is not None else [g for g in self.game_list() if not is_dance(g)], key=lambda g: CHANNEL_LABELS.get(g, g).lower())
+        fixed = games
+        all_games = sorted(fixed if fixed is not None else [g for g in self.game_list() if not is_dance(g)], key=lambda g: CHANNEL_LABELS.get(g, g).lower())
+
+        def visible():
+            """Con 2 jugadores: todos menos los de PS1 de 3-4 (que se juegan con Mednafen); con 3 a 4: solo los que admiten al menos 3 (SNES con multitap y PS1 con Mednafen)."""
+            if fixed is not None:
+                return all_games
+            if v_players.get() == "2":
+                return [g for g in all_games if not is_party(g)]
+            return [g for g in all_games if room_capacity(g) >= 3]
 
         def fill(*_):
             t = q.get().strip().lower()
-            lst.set_rows([{"iid": g, "flag": None, "text": CHANNEL_LABELS.get(g, g), "cells": (platform_of(g),)}
-                          for g in games if t in CHANNEL_LABELS.get(g, g).lower() or t in platform_of(g).lower()])
+            if fixed is None:
+                info_players.config(text="1 contra 1: los juegos de PS1 corren con DuckStation." if v_players.get() == "2" else
+                                    "De 3 a 4 jugadores: los de PS1 (Crash Team Racing, Crash Bash…) corren con Mednafen en Modo Anfitrión (tú corres el juego y los demás lo ven y "
+                                    "juegan); los de SNES, con RetroArch.")
+            lst.set_rows([{"iid": g, "flag": None, "text": CHANNEL_LABELS.get(g, g), "cells": (platform_of(g) + (" · Anfitrión" if is_party(g) else ""),)}
+                          for g in visible() if t in CHANNEL_LABELS.get(g, g).lower() or t in platform_of(g).lower()])
         q.trace_add("write", fill)
+        v_players.trace_add("write", fill)
         fill()
 
         def go(_=None):
             sel = lst.selection()
             if not sel:
                 return lbl.config(text="Selecciona un juego de la lista.")
-            mode = v_mode.get() if modes else "netplay"
+            mode = "host" if is_party(sel[0]) else v_mode.get() if modes else "netplay"
             win.destroy()
             if mode == "host" and not self.stream_need_pack():
                 return
@@ -370,10 +393,10 @@ class RoomsUI:
         self.btn_rp_kick.config(state="normal" if owner else "disabled")
         self.btn_rp_invite.config(state="normal" if owner and len(r["members"]) < r["max"] else "disabled")
         missing = self.rm_needs_retro(r) and not retro.installed(self.data)
-        no_med = is_dance(ch) and not med.installed(self.data) and (r.get("mode") != "host" or owner)
+        no_med = (is_dance(ch) or is_party(ch)) and not med.installed(self.data) and (r.get("mode") != "host" or owner)
         host_note = ""
         if r.get("mode") == "host":
-            host_note = ("Modo Anfitrión: tú corres el juego y el otro jugador lo ve y juega por transmisión (usa su teclado o su mando Xbox). Pulsa INICIAR cuando esté dentro."
+            host_note = ("Modo Anfitrión: tú corres el juego y el otro jugador lo ve y juega por transmisión (usa su teclado o su mando Xbox). Pulsa INICIAR cuando estén dentro (de 2 a 4 jugadores)."
                          if owner else "Modo Anfitrión: verás el juego del creador. Controles: I K J L (arriba, abajo, izquierda, derecha), Z X D E (✕ ○ □ △), U O Y H (L1 R1 L2 R2), "
                                        "Enter (Start), Retroceso (Select) o tu mando (Xbox o genérico). Cámbialos en CONTROLES; la ventana de la transmisión debe tener el foco.")
         self.rp_note.config(text="Falta RetroArch: vuelve a ejecutar el instalador (revisa que tu antivirus no lo haya borrado)." if missing else

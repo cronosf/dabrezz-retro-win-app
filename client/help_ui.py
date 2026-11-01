@@ -24,6 +24,9 @@ HELP = (
     ("b", "Multijugador: crea una sala de un juego (CREAR SALA) o únete a la de otro desde Salas Públicas, Mis Salas o Amigos. El creador invita a "
           "amigos o a jugadores del juego y inicia la partida. Las partidas de 2 jugadores usan el emulador de cada juego; las de SNES de 3 a 5 "
           "(Super Bomberman 3, 4 y 5 con Super Multitap) usan RetroArch, que viene con el instalador."),
+    ("b", "PS1 de 3 a 4 jugadores (Crash Team Racing, Crash Bash…): al crear una sala en Multijugador elige primero «2 jugadores» o «3 a 4 jugadores». Con 2, los juegos de PS1 "
+          "corren con DuckStation. Con 3 a 4 se juegan en Modo Anfitrión con Mednafen y su multitap: el creador corre el juego y transmite a los demás (hasta 3 invitados, cada uno "
+          "en su propio mando); los invitados no necesitan el juego. Sus controles se cambian en CONTROLES, dentro de la sala."),
     ("b", "Controles: el botón CONTROLES (en Multijugador y dentro de la sala) te deja elegir tus teclas y los botones de tu mando Xbox para los juegos de SNES de 3 a 5 "
           "jugadores (RetroArch). Se guardan y se aplican solos al empezar cada partida; cada jugador usa los suyos. El que crea la sala es el jugador 1 y los demás ocupan "
           "los siguientes puertos al conectarse."),

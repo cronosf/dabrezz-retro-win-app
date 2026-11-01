@@ -7,7 +7,7 @@ from tkinter import ttk
 import client.dance_pad as dp
 import client.stream as st
 import client.theme as th
-from shared.capabilities import is_dance
+from shared.capabilities import is_dance, is_party
 
 NAMES = {"up": "Arriba", "down": "Abajo", "left": "Izquierda", "right": "Derecha", "cross": "✕  Cruz", "circle": "○  Círculo", "square": "□  Cuadrado", "triangle": "△  Triángulo",
          "l1": "L1", "r1": "R1", "l2": "L2", "r2": "R2", "start": "Start", "select": "Select"}
@@ -19,7 +19,7 @@ WAIT_MS, POLL_MS = 8000, 40
 class DanceControlsUI:
     def room_controls(self):
         """CONTROLES de la sala: en la Zona Baile son los del Modo Anfitrion; en el resto, los de RetroArch."""
-        if self.room and is_dance(self.room["channel"]):
+        if self.room and (is_dance(self.room["channel"]) or is_party(self.room["channel"])):          # Modo Anfitrion: los controles del invitado
             return self.dance_controls_dialog()
         self.controls_dialog()
 
