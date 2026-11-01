@@ -856,10 +856,15 @@ class StreamHost:
 
     def capture_command(self, out):
         host, port = out
-        return [self.ffmpeg_exe, "-hide_banner", "-loglevel", "warning" if self.err_file else "error", "-f", "lavfi", "-i", f"gfxcapture=hwnd={self.hwnd}:capture_cursor=0:max_framerate={self.fps}",
-                "-vf", "hwdownload,format=bgra,format=yuv420p", "-c:v", "libx264", "-preset", "ultrafast", "-tune", "zerolatency", "-bf", "0",
-                "-x264-params", self.x264_params, "-b:v", f"{self.kbps}k", "-maxrate", f"{self.kbps}k",
-                "-bufsize", f"{max(self.kbps // self.fps * 2, 100)}k", "-f", "h264", "-flush_packets", "1", f"udp://{host}:{port}?pkt_size=1316"]
+        cap = int(os.environ.get("DZ_CAPFPS", self.fps))                                  # solo pruebas: la captura pide fotogramas mas a menudo que el juego los produce
+        venc = os.environ.get("DZ_VENC")                                                  # solo pruebas: otro codificador (p. ej. NVENC) en vez de x264
+        if venc:
+            codec = ["-vf", os.environ.get("DZ_VF", "hwdownload,format=bgra,format=nv12"), *venc.replace("{kbps}", str(self.kbps)).split()]
+        else:
+            codec = ["-vf", "hwdownload,format=bgra,format=yuv420p", "-c:v", "libx264", "-preset", "ultrafast", "-tune", "zerolatency", "-bf", "0",
+                     "-x264-params", self.x264_params, "-b:v", f"{self.kbps}k", "-maxrate", f"{self.kbps}k", "-bufsize", f"{max(self.kbps // self.fps * 2, 100)}k"]
+        return [self.ffmpeg_exe, "-hide_banner", "-loglevel", "warning" if self.err_file else "error", "-f", "lavfi", "-i", f"gfxcapture=hwnd={self.hwnd}:capture_cursor=0:max_framerate={cap}",
+                *codec, "-f", "h264", "-flush_packets", "1", f"udp://{host}:{port}?pkt_size=1316"]
 
     def _video_forward(self):
         while self.running:
@@ -977,7 +982,7 @@ class StreamGuest:
 
     def play_command(self):
         cmd = [self.ffplay_exe, "-hide_banner", "-loglevel", "info" if self.err_file else "warning", "-nostats", "-fflags", "nobuffer", "-flags", "low_delay", "-framedrop", "-probesize", "32",
-               "-analyzeduration", "0", "-sync", "ext", "-f", "h264", "-framerate", "60", "-window_title", self.title, "-x", str(self.size[0]), "-y", str(self.size[1])]
+               "-analyzeduration", "0", "-sync", "ext", "-vf", "setpts=0", "-f", "h264", "-framerate", "60", "-window_title", self.title, "-x", str(self.size[0]), "-y", str(self.size[1])]
         if self.pos:
             cmd += ["-left", str(self.pos[0]), "-top", str(self.pos[1])]
         return cmd + list(self.extra) + [f"udp://127.0.0.1:{self.video_port}?fifo_size=0&overrun_nonfatal=1"]
