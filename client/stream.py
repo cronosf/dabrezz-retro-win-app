@@ -441,7 +441,7 @@ class UdpHub:
                 continue
             except OSError:
                 break
-            target = next((t for t in self.tunnels if t.peer == addr or t.direct == addr), None)
+            target = next((t for t in self.tunnels if t.peer == addr or t.direct == addr or t.alt == addr), None)
             if target is None:                                           # su puerto puede ser otro si el NAT lo cambio: solo si es el unico con esa IP
                 same = [t for t in self.tunnels if t.peer[0] == addr[0]]
                 target = same[0] if len(same) == 1 else None
@@ -469,6 +469,8 @@ class Tunnel:
         self.direct = peer                              # direccion directa del otro jugador (la que dio el servidor); None si solo se conoce el relay
         self.relay = None                               # direccion del relay mientras se usa; la directa se sigue probando y, si responde, se sale del relay
         self.on_direct = None                           # () cuando se logra la conexion directa estando en el relay
+        self.alt = None                                 # direccion de la red local del otro jugador (si esta en nuestra misma red): se prueba siempre y, si contesta, se usa (0,5 ms en vez de pasar por internet)
+        self.on_lan = None                              # () cuando se pasa a la red local
         self._probe = 0
 
     def use_relay(self, addr, keep_direct=True):
@@ -504,8 +506,10 @@ class Tunnel:
         while self.running:
             hello = HELLO + struct.pack("<dB", time.time(), self.tag)
             targets = [self.peer]
-            if (self.relay or not self.connected.is_set()) and self.direct:
+            if (self.relay or not self.connected.is_set()) and self.direct and self.peer != self.alt:
                 targets += self._probe_addrs()                           # sin conexion o en relay: probar la directa (y puertos vecinos)
+            if self.alt and self.peer != self.alt:
+                targets.append(self.alt)                                 # red local del otro jugador
             for a in targets:
                 try:
                     self.sock.sendto(hello, a)
@@ -523,12 +527,17 @@ class Tunnel:
                 continue
             except OSError:
                 break
-            if addr[0] != self.peer[0] and not (self.direct and addr[0] == self.direct[0]):      # solo se escucha al otro jugador
+            if addr[0] != self.peer[0] and not (self.direct and addr[0] == self.direct[0]) and not (self.alt and addr[0] == self.alt[0]):      # solo se escucha al otro jugador
                 continue
             self.handle(data, addr)
 
     def handle(self, data, addr):
-        if not data:
+        if not data or not self.running:
+            return
+        try:
+            if addr[0].startswith("127.") and addr[1] == self.sock.getsockname()[1]:      # un saludo a un puerto vecino que resulto ser el nuestro (solo pasa con todo en una misma PC)
+                return
+        except OSError:
             return
         self.received += 1
         self.bytes_rx += len(data)
@@ -544,6 +553,15 @@ class Tunnel:
                 if len(body) >= 8:
                     self.sock.sendto(PONG + body[:9], addr)               # se contesta a quien saludo (puede ser la direccion directa estando en relay)
             elif kind == PONG and len(body) >= 8:
+                if self.alt and addr == self.alt and self.peer != self.alt:
+                    was_relay = bool(self.relay)
+                    self.peer = self.direct = self.alt                   # ida y vuelta comprobada por la red local: es lo mas rapido
+                    self.relay = None
+                    self.connected.set()
+                    if self.on_lan:
+                        self.on_lan()
+                    if was_relay and self.on_direct:
+                        self.on_direct()
                 if self.relay and self.direct and addr[0] == self.direct[0] and addr != self.relay:
                     self.peer = self.direct = addr                       # ida y vuelta directa comprobada: se sale del relay
                     self.relay = None
