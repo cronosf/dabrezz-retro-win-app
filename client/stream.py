@@ -324,7 +324,7 @@ def post_key(hwnd, button, down, port=2):
         user32.PostMessageW(hwnd, 0x101, vk, lp | (1 << 30) | (1 << 31))
 
 
-HELLO, VIDEO, AUDIO, INPUT, FEC = b"P", b"V", b"A", b"I", b"F"        # primer byte de cada datagrama del Tunnel
+HELLO, VIDEO, AUDIO, INPUT, FEC, PONG = b"P", b"V", b"A", b"I", b"F", b"O"        # primer byte de cada datagrama del Tunnel
 FEC_K = 5                                         # un paquete de paridad (XOR) por cada 5 de video: recupera 1 perdido por grupo (20% mas de datos)
 FEC_MAX = 1316 + 2                                # un paquete de video tiene a lo sumo 1316 bytes; la paridad lleva ademas su longitud (2 bytes)
 
@@ -459,6 +459,8 @@ class Tunnel:
         self.connected = threading.Event()
         self.running = False
         self.sent = self.received = 0
+        self.bytes_tx = self.bytes_rx = 0
+        self.rtt = None                                 # ms, mediana: el otro devuelve cada "hola" (PONG con la misma hora)
         self.last_rx = 0.0
 
     def start(self):
@@ -494,11 +496,19 @@ class Tunnel:
         if not data:
             return
         self.received += 1
+        self.bytes_rx += len(data)
         self.last_rx = time.time()
         kind, body = data[:1], data[1:]
         try:
             if kind == HELLO:
                 self.connected.set()
+                if len(body) >= 8:
+                    self.sock.sendto(PONG + body[:8], self.peer)
+            elif kind == PONG and len(body) >= 8:
+                ms = (time.time() - struct.unpack("<d", body[:8])[0]) * 1000
+                if 0 <= ms < 5000:
+                    self._rtts = (getattr(self, "_rtts", []) + [ms])[-8:]                   # mediana de las ultimas 8: las primeras (arranque del otro lado) salen infladas
+                    self.rtt = sorted(self._rtts)[len(self._rtts) // 2]
             elif kind == VIDEO and self.on_video:
                 self.on_video(body)
             elif kind == FEC and self.on_fec:
@@ -516,6 +526,7 @@ class Tunnel:
         try:
             self.sock.sendto(kind + body, self.peer)
             self.sent += 1
+            self.bytes_tx += len(body) + 1
         except OSError:
             pass
 

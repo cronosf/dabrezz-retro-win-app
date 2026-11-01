@@ -107,9 +107,45 @@ class StreamSession:
             self.hub = st.UdpHub(self.sock)
         self.send(t="udp_ready", lan_ip=self.net.lan_ip(), lan_port=self.sock.getsockname()[1])
         threading.Thread(target=self._hello_server, args=(self.sock, self.token), daemon=True).start()
+        threading.Thread(target=self._stats_loop, args=(self.token,), daemon=True).start()
         self.log("Modo Anfitrión: conectando con el otro jugador…" if self.role == "guest" else
                  f"Modo Anfitrión: abriendo el juego y esperando a {self.players - 1} jugador{'es' if self.players > 2 else ''}…")
         return True
+
+    def _stats_loop(self, token):
+        """Diagnostico en vivo: cada 5 s una linea por conexion (directa o por relay, ping, Mbps). Sale en el registro de la app y se guarda en stream-diag.log (para pegarlo al pedir ayuda)."""
+        last = {}
+        path = os.path.join(self.data, "stream-diag.log")
+        try:
+            if os.path.isfile(path) and os.path.getsize(path) > 200_000:
+                os.remove(path)
+        except OSError:
+            pass
+        while self.running and self.token == token:
+            time.sleep(5)
+            if not (self.running and self.token == token):
+                break
+            ts = [(f"jugador {s + 1}", s, t) for s, t in sorted(self.tunnels.items())] if self.role == "host" else                  ([("anfitrión", 0, self.tunnel)] if self.tunnel is not None else [])
+            lines = []
+            for name, slot, t in ts:
+                prev = last.get(slot, (time.time() - 5, t.bytes_tx, t.bytes_rx))
+                dt = max(time.time() - prev[0], 0.1)
+                tx, rx = (t.bytes_tx - prev[1]) * 8 / dt / 1e6, (t.bytes_rx - prev[2]) * 8 / dt / 1e6
+                last[slot] = (time.time(), t.bytes_tx, t.bytes_rx)
+                if not t.connected.is_set():
+                    lines.append(f"{name}: sin conexión todavía")
+                    continue
+                via = "por RELAY del servidor" if slot in self.relayed else "directa"
+                ping = f"{t.rtt:.0f} ms" if t.rtt is not None else "?"
+                lines.append(f"{name}: {via} · ping {ping} · " + (f"envías {tx:.1f} Mbps" if self.role == "host" else f"recibes {rx:.1f} Mbps"))
+            if lines:
+                text = "Conexión: " + " | ".join(lines)
+                self.log(text)
+                try:
+                    with open(path, "a", encoding="utf-8") as f:
+                        f.write(time.strftime("%H:%M:%S ") + f"[{self.role}] {self.channel} " + text + "\n")
+                except OSError:
+                    pass
 
     def _new_socket(self):
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
