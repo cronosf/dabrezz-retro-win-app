@@ -57,7 +57,7 @@ class DanceSettingsUI:
         v_mbps.trace_add("write", refresh)
         refresh()
 
-        tk.Label(pad, text="Menos retraso del juego (PS1 de 3 a 4 jugadores, cuando eres el anfitrión)", font=(th.BODY, 11, "bold"), fg="#ffffff", bg=th.BG).pack(anchor="w", pady=(18, 0))
+        tk.Label(pad, text="Menos retraso (anfitrión, PS1 de 3 a 4 jugadores)", font=(th.BODY, 11, "bold"), fg="#ffffff", bg=th.BG).pack(anchor="w", pady=(18, 0))
         wrap("DuckStation adelanta unos fotogramas para que el juego responda antes (run-ahead). Medido: de 200 ms a 149 ms desde que se pulsa un botón hasta que se ve, con 3. "
              "Cada fotograma gasta más procesador del anfitrión; si tu PC va justa y el juego se ve lento, baja este valor.")
         v_run = tk.StringVar(value=RUNAHEAD_LABELS.get(int(cur.get("runahead", 3)), RUNAHEAD_LABELS[3]))
