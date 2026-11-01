@@ -5,8 +5,9 @@ from tkinter import ttk
 
 import client.theme as th
 
-MBPS = (2, 3, 4, 6, 8)
-LABELS = {2: "2 Mbps · conexión lenta", 3: "3 Mbps", 4: "4 Mbps · recomendado", 6: "6 Mbps", 8: "8 Mbps · mejor imagen"}
+MBPS = (2, 3, 4, 6, 8, 10, 12, 14, 16, 18, 20, 30, 40, 50)
+LABELS = {2: "2 Mbps · conexión lenta", 3: "3 Mbps", 4: "4 Mbps · recomendado", 6: "6 Mbps", 8: "8 Mbps", 10: "10 Mbps", 12: "12 Mbps", 14: "14 Mbps", 16: "16 Mbps", 18: "18 Mbps", 20: "20 Mbps",
+          30: "30 Mbps · solo fibra", 40: "40 Mbps · solo fibra", 50: "50 Mbps · solo fibra (máxima imagen)"}
 FEC_EXTRA, AUDIO_MBPS = 1.2, 0.77                  # 20 % de paridad en el video; el audio va comprimido a 8 bits (48 kHz estereo)
 
 
@@ -42,7 +43,7 @@ class DanceSettingsUI:
             return lb
 
         tk.Label(pad, text="Calidad del video (cuando eres el anfitrión)", font=(th.BODY, 11, "bold"), fg="#ffffff", bg=th.BG).pack(anchor="w", pady=(14, 0))
-        wrap("Es lo que tu conexión sube hacia el otro jugador. Más Mbps = mejor imagen; menos = más fluido en una conexión justa. Como en Parsec, lo normal son unos 5 Mbps en total.")
+        wrap("Es lo que tu conexión sube hacia el otro jugador. Más Mbps = mejor imagen; menos = más fluido en una conexión justa. Como en Parsec, lo normal son unos 5 Mbps en total; desde 20 Mbps hace falta fibra. Con varios invitados, el valor es el total de video y se reparte entre ellos.")
         v_mbps = tk.StringVar(value=LABELS.get(cur["mbps"], LABELS[4]))
         box = ttk.Combobox(pad, textvariable=v_mbps, values=[LABELS[m] for m in MBPS], state="readonly", width=30)
         box.pack(anchor="w", pady=(8, 0))

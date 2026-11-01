@@ -193,8 +193,8 @@ class StreamSession:
     def _per_guest_kbps(self):
         """Calidad de video por invitado: la del ajuste con un invitado; con varios se reparte para no pasarse de la subida (~5,5 Mbps de video en total)."""
         guests = max(1, self.players - 1)
-        mbps = max(1, min(int((self.settings() or {}).get("mbps", 4)), 20))
-        return mbps * 1000 if guests == 1 else max(1500, min(mbps * 1000, 5500 // guests))
+        mbps = max(1, min(int((self.settings() or {}).get("mbps", 4)), 50))
+        return mbps * 1000 if guests == 1 else max(1500, min(mbps * 1000, max(5500, mbps * 1000) // guests))      # con varios invitados el ajuste es el total de video (minimo 5,5 Mbps)
 
     def _start_media(self, slot, t):
         if self.role == "host":
