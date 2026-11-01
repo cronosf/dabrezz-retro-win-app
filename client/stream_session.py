@@ -60,7 +60,8 @@ class GuestPad:
 
 class StreamSession:
     def __init__(self, data, send, net, rom_for, log=print, on_end=None, title_for=None, profile=None, settings=None):
-        self.data, self.send, self.net, self.rom_for, self.log, self.on_end, self.title_for = data, send, net, rom_for, log, on_end, title_for
+        self.data, self.send, self.net, self.rom_for, self.log_ui, self.on_end, self.title_for = data, send, net, rom_for, log, on_end, title_for
+        self.logf = None                                 # stream_view_log.txt (invitado) o stream_host_log.txt (anfitrion): todo lo que pasa, para diagnosticar
         self.profile = profile                           # () -> perfil de controles del invitado (cfg["dance_controls"])
         self.settings = settings or (lambda: None)       # () -> {"mbps": 4, "video_delay_ms": 0} (cfg["stream"])
         self.pad_port = None                             # solo pruebas: fuerza el puerto de PSX que controla el invitado 1
@@ -74,6 +75,46 @@ class StreamSession:
         self.relayed = set()
         self.token = 0
 
+    # ---------- registro ----------
+    def log(self, text):
+        """Mensaje para el usuario (registro de la app) y, ademas, al archivo de diagnostico de la sesion."""
+        self.flog(text)
+        self.log_ui(text)
+
+    def flog(self, text):
+        f = self.logf
+        if f is not None:
+            try:
+                f.write(f"{time.strftime('%H:%M:%S')} {text}\n".encode("utf-8", "replace"))
+                f.flush()
+            except (OSError, ValueError):
+                pass
+
+    def _open_log(self):
+        name = "stream_view_log.txt" if self.role == "guest" else "stream_host_log.txt"
+        path = os.path.join(self.data, name)
+        try:
+            if os.path.isfile(path) and os.path.getsize(path) > 400_000:
+                os.remove(path)
+            self.logf = open(path, "ab", buffering=0)
+        except OSError:
+            self.logf = None
+            return
+        self.flog("=" * 70)
+        self.flog(f"Sesión nueva: rol={self.role} juego={self.channel} jugadores={self.players} slot={self.slot} anfitrión={getattr(self, 'host_name', '')}")
+        self.flog("Paquete: " + ", ".join(f"{n}={'sí' if ok else 'NO'}" for n, ok in (
+            ("ffmpeg", os.path.isfile(pack.ffmpeg_exe(self.data))), ("ffplay", os.path.isfile(pack.ffplay_exe(self.data))),
+            ("audio", bool(pack.native_pyd(self.data) and os.path.isfile(pack.native_pyd(self.data)))), ("SDL2", bool(pack.sdl_dll(self.data) and os.path.isfile(pack.sdl_dll(self.data)))))))
+        self.flog(f"Red: lan={self.net.lan_ip()} servidor={self.net.host}")
+
+    def _close_log(self):
+        f, self.logf = self.logf, None
+        if f is not None:
+            try:
+                f.close()
+            except OSError:
+                pass
+
     # ---------- inicio ----------
     def on_session(self, m):
         """`stream_session` del servidor. Devuelve False si no se puede (y avisa al servidor para que termine)."""
@@ -83,6 +124,8 @@ class StreamSession:
         self.token += 1
         self.role, self.channel, self.host_name = m.get("role"), m.get("channel"), str(m.get("host_name", ""))[:12]
         self.players, self.slot = max(2, min(int(m.get("players", 2) or 2), 4)), int(m.get("slot", 0) or 0)
+        self._close_log()
+        self._open_log()
         if not pack.installed(self.data):
             return self._fail("Falta descargar las herramientas del Modo Anfitrión.")
         if self.role == "host":
@@ -108,6 +151,7 @@ class StreamSession:
         self.send(t="udp_ready", lan_ip=self.net.lan_ip(), lan_port=self.sock.getsockname()[1])
         threading.Thread(target=self._hello_server, args=(self.sock, self.token), daemon=True).start()
         threading.Thread(target=self._stats_loop, args=(self.token,), daemon=True).start()
+        threading.Thread(target=self._detail_loop, args=(self.token,), daemon=True).start()
         self.log("Modo Anfitrión: conectando con el otro jugador…" if self.role == "guest" else
                  f"Modo Anfitrión: abriendo el juego y esperando a {self.players - 1} jugador{'es' if self.players > 2 else ''}…")
         return True
@@ -147,6 +191,50 @@ class StreamSession:
                 except OSError:
                     pass
 
+    def _detail_loop(self, token):
+        """Contadores cada 3 s solo en el archivo de diagnostico y, a los 15 s, un veredicto de que falta si no llega el video."""
+        t0, told = time.time(), False
+        while self.running and self.token == token:
+            time.sleep(3)
+            if not (self.running and self.token == token):
+                break
+            age = int(time.time() - t0)
+            if self.role == "guest":
+                t, g = self.tunnel, self.guest
+                if t is None:
+                    self.flog(f"[{age}s] aún sin dirección del anfitrión (el servidor no la ha dado)")
+                    continue
+                fec = getattr(g, "vfec", None) if g else None
+                win = st.find_window(g.proc.pid, 100) if g is not None and g.proc is not None and g.proc.poll() is None else None
+                self.flog(f"[{age}s] túnel: conectado={t.connected.is_set()} recibidos={t.received} ({t.bytes_rx // 1024} KB) último hace {time.time() - t.last_rx:.1f}s ping={t.rtt and round(t.rtt)} · "
+                          f"video={g.video_packets if g else 0} (recuperados {fec.recovered if fec else 0}, perdidos {fec.lost if fec else 0}) audio={g.audio_packets if g else 0} · "
+                          f"ffplay vivo={bool(g and g.proc and g.proc.poll() is None)} ventana={'sí' if win else 'no'}")
+                if age >= 15 and not told and g is not None and g.video_packets == 0:
+                    told = True
+                    why = ("no llega NADA del anfitrión (UDP bloqueado o el anfitrión no está transmitiendo: revisa su stream_host_log.txt)" if t.received == 0 else
+                           "solo llegan saludos, pero ningún paquete de video: el anfitrión no está capturando o codificando (revisa su stream_host_log.txt)" if t.bytes_rx < 5000 else
+                           "llegan datos pero ningún video completo")
+                    self.flog(f"DIAGNÓSTICO a los {age}s: {why}")
+                    self.log("Aún no llega video del anfitrión. Detalle en stream_view_log.txt")
+            else:
+                h = self.host
+                med = self.med
+                parts = [f"[{age}s] Mednafen vivo={bool(med and med.poll() is None)}"]
+                if h is not None:
+                    parts.append(f"ventana={'sí' if h.hwnd else 'no'} ffmpeg vivo={bool(h.proc and h.proc.poll() is None)} paquetes de video del codificador={h.video_packets} audio={h.audio_packets}")
+                else:
+                    parts.append("aún no hay invitados conectados")
+                for slot, t in sorted(self.tunnels.items()):
+                    parts.append(f"jugador {slot + 1}: conectado={t.connected.is_set()} enviados={t.bytes_tx // 1024} KB recibidos={t.received} ping={t.rtt and round(t.rtt)}")
+                self.flog(" · ".join(parts))
+                if age >= 15 and not told and h is not None and h.video_packets == 0:
+                    told = True
+                    alive = bool(h.proc and h.proc.poll() is None)
+                    self.flog("DIAGNÓSTICO a los %ds: el codificador (ffmpeg) %s y no ha producido video: %s" % (
+                        age, "sigue abierto" if alive else f"terminó (código {h.proc.returncode if h.proc else '?'})",
+                        "mira sus mensajes de error arriba en este archivo (captura de ventana)" if not alive else "la captura de la ventana del juego no entrega fotogramas"))
+                    self.log("El anfitrión no está produciendo video. Detalle en stream_host_log.txt")
+
     def _new_socket(self):
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         s.bind(("0.0.0.0", 0))
@@ -182,18 +270,19 @@ class StreamSession:
         self._open_tunnel(host, port, slot)
 
     def _open_tunnel(self, host, port, slot):
+        self.flog(f"Dirección del otro jugador: {host}:{port} (jugador {slot + 1})")
         if self.role == "host":
             if slot in self.tunnels or not 1 <= slot <= 3:
                 return None
             t = self.tunnels[slot] = st.Tunnel(self.sock, (host, port), log=self.log, hub=self.hub)
             t.start()                                    # primero el tunel (empieza a abrir el NAT ya) y despues el video, que tarda
-            self._start_media(slot, t)
+            self._start_media_safe(slot, t)
         else:
             if self.tunnel is not None:
                 return None
             t = self.tunnel = st.Tunnel(self.sock, (host, port), log=self.log)
             t.start()
-            self._start_media(0, t)
+            self._start_media_safe(0, t)
         threading.Thread(target=self._watch_connection, args=(self.token, t, slot), daemon=True).start()
         return t
 
@@ -242,11 +331,20 @@ class StreamSession:
         mbps = max(1, min(int((self.settings() or {}).get("mbps", 4)), 50))
         return mbps * 1000 if guests == 1 else max(1500, min(mbps * 1000, max(5500, mbps * 1000) // guests))      # con varios invitados el ajuste es el total de video (minimo 5,5 Mbps)
 
+    def _start_media_safe(self, slot, t):
+        try:
+            self._start_media(slot, t)
+        except Exception as e:  # noqa: BLE001 - se deja constancia: antes un fallo aqui dejaba al invitado sin ventana y sin explicacion
+            import traceback
+            self.flog("ERROR al iniciar el video/audio:\n" + traceback.format_exc())
+            self.log(f"No se pudo iniciar la transmisión: {e}")
+
     def _start_media(self, slot, t):
         if self.role == "host":
             if self.host is None:
                 kbps = self._per_guest_kbps()
                 self.host = st.StreamHost(pack.ffmpeg_exe(self.data), self.med.pid, native_pyd=pack.native_pyd(self.data), log=self.log, kbps=kbps)
+                self.host.err_file = self.logf
                 self.host.attach(slot, t)
                 if self.players > 2:
                     guests = self.players - 1
@@ -259,12 +357,16 @@ class StreamSession:
             title = f"Dabrezz Play · {self.title_for(self.channel) if self.title_for else self.channel} (anfitrión: {self.host_name})"
             self.guest = st.StreamGuest(pack.ffplay_exe(self.data), port, title=title.replace("Dabrezz Play · Dabrezz Play · ", "Dabrezz Play · "), tunnel=t,
                                         log=self.log, sdl_dll=pack.sdl_dll(self.data), video_delay_ms=int((self.settings() or {}).get("video_delay_ms", 0)))
+            self.guest.err_file = self.logf
+            self.flog("Abriendo el visor: " + " ".join(self.guest.play_command()))
             self.guest.start()
+            self.flog(f"Visor (ffplay) abierto, pid {self.guest.proc.pid}; esperando video del anfitrión")
             self.guest.read_mask = GuestPad(self.guest.proc.pid, self.profile).read
             threading.Thread(target=self._watch_viewer, args=(self.guest.proc, self.token), daemon=True).start()
 
     def _watch_viewer(self, proc, token):
         proc.wait()
+        self.flog(f"ffplay terminó (código {proc.returncode})")
         if self.running and self.token == token:
             self.log("Se cerró la ventana de la transmisión.")
             self.send(t="ra_leave")
@@ -282,6 +384,7 @@ class StreamSession:
 
     def _watch_med(self, proc, token):
         proc.wait()
+        self.flog(f"Mednafen terminó (código {proc.returncode})")
         if self.running and self.token == token:
             self.log("Se cerró el juego: termina la transmisión.")
             self.send(t="ra_leave")
@@ -315,6 +418,9 @@ class StreamSession:
         if proc is not None and proc.poll() is None:
             proc.terminate()
         self._release()
+        if was:
+            self.flog("Sesión terminada")
+        self._close_log()
         return was
 
     def _release(self):

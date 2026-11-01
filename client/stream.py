@@ -563,6 +563,7 @@ class StreamHost:
         self.x264_params = os.environ.get("DZ_X264", f"keyint={fps}:min-keyint={fps}:scenecut=0:repeat-headers=1")
         self.hwnd = self.size = None
         self.proc = self.sock = self.vsock = None
+        self.err_file = None                                                # archivo (abierto) donde ffmpeg escribe sus mensajes: stream_host_log.txt
         self.peers = {}
         self.running = False
         self.multi = tunnel is not None or video_to is None                 # por Tunnel (uno o varios invitados)
@@ -607,7 +608,7 @@ class StreamHost:
         threading.Thread(target=self._watchdog, daemon=True).start()
         if self.native_pyd and (self.audio_to or self.multi):
             threading.Thread(target=self._audio_loop, daemon=True).start()
-        self.proc = subprocess.Popen(self.capture_command(out), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, creationflags=0x08000000)
+        self.proc = subprocess.Popen(self.capture_command(out), stdout=subprocess.DEVNULL, stderr=self.err_file or subprocess.DEVNULL, creationflags=0x08000000)
         self.log(f"Transmitiendo la ventana {self.size[0]}x{self.size[1]}")
 
     def attach(self, slot, tunnel):
@@ -622,7 +623,7 @@ class StreamHost:
 
     def capture_command(self, out):
         host, port = out
-        return [self.ffmpeg_exe, "-hide_banner", "-loglevel", "error", "-f", "lavfi", "-i", f"gfxcapture=hwnd={self.hwnd}:capture_cursor=0:max_framerate={self.fps}",
+        return [self.ffmpeg_exe, "-hide_banner", "-loglevel", "warning" if self.err_file else "error", "-f", "lavfi", "-i", f"gfxcapture=hwnd={self.hwnd}:capture_cursor=0:max_framerate={self.fps}",
                 "-vf", "hwdownload,format=bgra,format=yuv420p", "-c:v", "libx264", "-preset", "ultrafast", "-tune", "zerolatency", "-bf", "0",
                 "-x264-params", self.x264_params, "-b:v", f"{self.kbps}k", "-maxrate", f"{self.kbps}k",
                 "-bufsize", f"{max(self.kbps // self.fps * 2, 100)}k", "-f", "h264", "-flush_packets", "1", f"udp://{host}:{port}?pkt_size=1316"]
@@ -738,10 +739,11 @@ class StreamGuest:
         self.mask, self.seq, self.video_packets = 0, 0, 0
         self.vfec = None
         self.extra = []                                       # flags extra de ffplay (experimentos)
+        self.err_file = None                                  # archivo (abierto) donde ffplay escribe sus mensajes: stream_view_log.txt
         self.running = False
 
     def play_command(self):
-        cmd = [self.ffplay_exe, "-hide_banner", "-loglevel", "warning", "-fflags", "nobuffer", "-flags", "low_delay", "-framedrop", "-probesize", "32",
+        cmd = [self.ffplay_exe, "-hide_banner", "-loglevel", "info" if self.err_file else "warning", "-nostats", "-fflags", "nobuffer", "-flags", "low_delay", "-framedrop", "-probesize", "32",
                "-analyzeduration", "0", "-sync", "ext", "-f", "h264", "-framerate", "60", "-window_title", self.title, "-x", str(self.size[0]), "-y", str(self.size[1])]
         if self.pos:
             cmd += ["-left", str(self.pos[0]), "-top", str(self.pos[1])]
@@ -759,7 +761,7 @@ class StreamGuest:
         if self.video_delay_ms and self.tunnel:
             threading.Thread(target=self._video_delay_loop, daemon=True).start()
         if self.with_video:
-            self.proc = subprocess.Popen(self.play_command(), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, creationflags=0x08000000)
+            self.proc = subprocess.Popen(self.play_command(), stdout=subprocess.DEVNULL, stderr=self.err_file or subprocess.DEVNULL, creationflags=0x08000000)
         threading.Thread(target=self._send_loop, daemon=True).start()
         if self.audio_port or self.tunnel:
             self.player = None
