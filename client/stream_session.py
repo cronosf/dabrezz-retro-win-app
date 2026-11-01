@@ -78,6 +78,7 @@ class StreamSession:
         self.cheats_on = lambda: False                   # () -> bool: truques de la funcion en prueba (un solo emulador: no hay desincronizacion)
         self.role = self.channel = None
         self.sock = self.hub = self.tunnel = self.host = self.guest = self.med = None
+        self.sock6, self.ip6 = None, None                  # IPv6 (conexion directa sin NAT)
         self.tunnels = {}                                # anfitrion: numero de invitado -> Tunnel
         self.players, self.slot = 2, 0
         self.running = False
@@ -155,9 +156,14 @@ class StreamSession:
                 winbrand.watch(self.med, self.title_for(self.channel))
             threading.Thread(target=self._watch_med, args=(self.med, self.token), daemon=True).start()
         self.sock = self.net.udp_detach() or self._new_socket()
+        v6 = st.open_udp6()
+        self.sock6, self.ip6 = v6 if v6 else (None, None)
+        self.flog(f"IPv6: {self.ip6 or 'no disponible'}")
         if self.role == "host":
             self.hub = st.UdpHub(self.sock)
-        self.send(t="udp_ready", lan_ip=self.net.lan_ip(), lan_port=self.sock.getsockname()[1])
+            if self.sock6 is not None:
+                self.hub.add_sock6(self.sock6)
+        self.send(t="udp_ready", lan_ip=self.net.lan_ip(), lan_port=self.sock.getsockname()[1], ip6=self.ip6 or "", port6=self.sock6.getsockname()[1] if self.sock6 else 0)
         threading.Thread(target=self._hello_server, args=(self.sock, self.token), daemon=True).start()
         threading.Thread(target=self._stats_loop, args=(self.token,), daemon=True).start()
         threading.Thread(target=self._detail_loop, args=(self.token,), daemon=True).start()
@@ -188,7 +194,7 @@ class StreamSession:
                 if not t.connected.is_set():
                     lines.append(f"{name}: sin conexión todavía")
                     continue
-                via = "por RELAY del servidor" if slot in self.relayed else "por red local" if t.alt and t.peer == t.alt else "directa"
+                via = "por RELAY del servidor" if slot in self.relayed else "por IPv6" if t.v6 else "por red local" if t.alt and t.peer == t.alt else "directa"
                 ping = f"{t.rtt:.0f} ms" if t.rtt is not None else "?"
                 lines.append(f"{name}: {via} · ping {ping} · " + (f"envías {tx:.1f} Mbps" if self.role == "host" else f"recibes {rx:.1f} Mbps"))
             if lines:
@@ -276,7 +282,18 @@ class StreamSession:
         host, port, slot = str(m.get("host", "")), m.get("port"), int(m.get("slot", 1) or 1)
         if not host or not isinstance(port, int) or not 1 <= port <= 65535:
             return
-        self._open_tunnel(host, port, slot, alt=self._lan_alt(m))
+        self._open_tunnel(host, port, slot, alt=self._lan_alt(m), alt6=self._cand6(m))
+
+    def _cand6(self, m):
+        """IPv6 global del otro jugador (si los dos tienen): conexion directa sin NAT."""
+        try:
+            ip, port = ipaddress.ip_address(str(m.get("ip6_host", ""))), m.get("ip6_port")
+            if self.sock6 is not None and ip.version == 6 and ip.is_global and isinstance(port, int) and 1 <= port <= 65535:
+                self.flog(f"IPv6 del otro jugador: [{ip.compressed}]:{port}")
+                return (ip.compressed, port)
+        except ValueError:
+            pass
+        return None
 
     def _lan_alt(self, m):
         """Direccion de la red local del otro jugador, solo si esta en nuestra misma red (misma subred /24): asi se conectan sin pasar por internet aunque sus IP publicas sean distintas."""
@@ -291,13 +308,14 @@ class StreamSession:
             pass
         return None
 
-    def _open_tunnel(self, host, port, slot, alt=None):
+    def _open_tunnel(self, host, port, slot, alt=None, alt6=None):
         self.flog(f"Dirección del otro jugador: {host}:{port} (jugador {slot + 1})")
         if self.role == "host":
             if slot in self.tunnels or not 1 <= slot <= 3:
                 return None
             t = self.tunnels[slot] = st.Tunnel(self.sock, (host, port), log=self.log, hub=self.hub, tag=slot)
             t.alt, t.on_lan = alt, (lambda s=slot: self._lan_ok(s))
+            t.sock6, t.alt6, t.on_v6 = (self.sock6, alt6, (lambda s=slot: self._v6_ok(s))) if alt6 else (None, None, None)
             t.start()                                    # primero el tunel (empieza a abrir el NAT ya) y despues el video, que tarda
             self._start_media_safe(slot, t)
         else:
@@ -305,6 +323,7 @@ class StreamSession:
                 return None
             t = self.tunnel = st.Tunnel(self.sock, (host, port), log=self.log, tag=slot)
             t.alt, t.on_lan = alt, (lambda s=slot: self._lan_ok(s))
+            t.sock6, t.alt6, t.on_v6 = (self.sock6, alt6, (lambda s=slot: self._v6_ok(s))) if alt6 else (None, None, None)
             t.start()
             self._start_media_safe(0, t)
         threading.Thread(target=self._watch_connection, args=(self.token, t, slot), daemon=True).start()
@@ -330,6 +349,10 @@ class StreamSession:
         t.use_relay((host, port))                        # el relay solo arranca la partida: la directa se sigue probando y se vuelve a ella en cuanto responda
         t.on_direct = lambda s=slot: self._direct_back(s)
         self.log("Conexión por relay del servidor (se sigue intentando la directa)" + (f" (jugador {slot + 1})." if self.role == "host" else "."))
+
+    def _v6_ok(self, slot):
+        self.relayed.discard(slot)
+        self.log("Conexión por IPv6 (directa, sin NAT)" + (f" (jugador {slot + 1})." if self.role == "host" else "."))
 
     def _lan_ok(self, slot):
         self.relayed.discard(slot)
@@ -461,6 +484,12 @@ class StreamSession:
 
     def _release(self):
         """Devuelve el cliente a su estado normal: socket UDP propio con el servidor."""
+        s6, self.sock6 = self.sock6, None
+        if s6 is not None:
+            try:
+                s6.close()
+            except OSError:
+                pass
         s, self.sock = self.sock, None
         if s is not None:
             try:

@@ -15,6 +15,7 @@ Este modulo no usa Tk ni conoce al servidor: recibe las direcciones UDP ya resue
 import array
 import ctypes
 import importlib.util
+import ipaddress
 import os
 import socket
 import struct
@@ -324,6 +325,43 @@ def post_key(hwnd, button, down, port=2):
         user32.PostMessageW(hwnd, 0x101, vk, lp | (1 << 30) | (1 << 31))
 
 
+def global_ipv6():
+    """Mi direccion IPv6 global (la que usaria hacia internet) o None si no hay IPv6. No envia nada."""
+    try:
+        s = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
+    except OSError:
+        return None
+    try:
+        s.connect(("2001:4860:4860::8888", 53))
+        ip = ipaddress.ip_address(s.getsockname()[0])
+        return ip.compressed if ip.is_global else None
+    except (OSError, ValueError):
+        return None
+    finally:
+        s.close()
+
+
+def open_udp6():
+    """(socket UDP solo-IPv6, mi IPv6 global) para la conexion directa sin NAT, o None si no hay IPv6."""
+    ip = global_ipv6()
+    if not ip:
+        return None
+    try:
+        s = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
+        s.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 1)
+        s.bind(("::", 0))
+    except OSError:
+        return None
+    return s, ip
+
+
+def norm6(ip):
+    try:
+        return ipaddress.ip_address(ip.split("%")[0]).compressed
+    except ValueError:
+        return ip
+
+
 PORT_SPAN = 24                                    # puertos vecinos (a cada lado) que se prueban si el otro NAT cambia el puerto
 HELLO, VIDEO, AUDIO, INPUT, FEC, PONG = b"P", b"V", b"A", b"I", b"F", b"O"        # primer byte de cada datagrama del Tunnel
 FEC_K = 5                                         # un paquete de paridad (XOR) por cada 5 de video: recupera 1 perdido por grupo (20% mas de datos)
@@ -423,6 +461,10 @@ class UdpHub:
 
     def __init__(self, sock):
         self.sock, self.tunnels, self.running = sock, [], False
+        self.sock6 = None                                             # socket IPv6 (opcional): los invitados que tengan IPv6 tambien llegan por aqui
+
+    def add_sock6(self, sock6):
+        self.sock6 = sock6
 
     def add(self, tunnel):
         self.tunnels.append(tunnel)
@@ -430,6 +472,24 @@ class UdpHub:
             self.running = True
             self.sock.settimeout(0.2)
             threading.Thread(target=self._run, daemon=True).start()
+            if self.sock6 is not None:
+                self.sock6.settimeout(0.2)
+                threading.Thread(target=self._run6, daemon=True).start()
+
+    def _run6(self):
+        while self.running:
+            try:
+                data, addr = self.sock6.recvfrom(2048)
+            except socket.timeout:
+                continue
+            except ConnectionResetError:
+                continue
+            except OSError:
+                break
+            addr = (norm6(addr[0]), addr[1])
+            target = next((t for t in self.tunnels if t.alt6 == addr or t.peer == addr), None)
+            if target is not None:
+                target.handle(data, addr, rx=self.sock6)
 
     def _run(self):
         while self.running:
@@ -471,11 +531,14 @@ class Tunnel:
         self.on_direct = None                           # () cuando se logra la conexion directa estando en el relay
         self.alt = None                                 # direccion de la red local del otro jugador (si esta en nuestra misma red): se prueba siempre y, si contesta, se usa (0,5 ms en vez de pasar por internet)
         self.on_lan = None                              # () cuando se pasa a la red local
+        self.sock6, self.alt6, self.on_v6, self.v6 = None, None, None, False       # IPv6 del otro jugador: se prueba siempre y, si contesta y es mas rapida, se usa (sin NAT)
+        self.tx = sock                                  # socket por el que se envia (el IPv4, o el IPv6 si se paso a el)
         self._probe = 0
 
     def use_relay(self, addr, keep_direct=True):
         """Pasa por el relay del servidor. Con `keep_direct` sigue intentando la conexion directa en segundo plano (el relay solo sirve para arrancar)."""
         self.relay, self.peer = addr, addr
+        self.tx, self.v6 = self.sock, False
         if not keep_direct:
             self.direct = None
 
@@ -500,19 +563,25 @@ class Tunnel:
         else:
             self.sock.settimeout(0.2)
             threading.Thread(target=self._recv_loop, daemon=True).start()
+            if self.sock6 is not None:
+                self.sock6.settimeout(0.2)
+                threading.Thread(target=self._recv_loop6, daemon=True).start()
         threading.Thread(target=self._hello_loop, daemon=True).start()
 
     def _hello_loop(self):
         while self.running:
             hello = HELLO + struct.pack("<dB", time.time(), self.tag)
-            targets = [self.peer]
-            if (self.relay or not self.connected.is_set()) and self.direct and self.peer != self.alt:
-                targets += self._probe_addrs()                           # sin conexion o en relay: probar la directa (y puertos vecinos)
-            if self.alt and self.peer != self.alt:
-                targets.append(self.alt)                                 # red local del otro jugador
-            for a in targets:
+            sends = [(self.tx, self.peer)]
+            if not self.v6:
+                if (self.relay or not self.connected.is_set()) and self.direct and self.peer != self.alt:
+                    sends += [(self.sock, a) for a in self._probe_addrs()]       # sin conexion o en relay: probar la directa (y puertos vecinos)
+                if self.alt and self.peer != self.alt:
+                    sends.append((self.sock, self.alt))                          # red local del otro jugador
+                if self.alt6 and self.sock6 is not None:
+                    sends.append((self.sock6, self.alt6))                        # IPv6 del otro jugador
+            for sk, a in sends:
                 try:
-                    self.sock.sendto(hello, a)
+                    sk.sendto(hello, a)
                 except OSError:
                     pass
             time.sleep(0.1 if not self.connected.is_set() else 0.5 if self.relay else 1.0)
@@ -531,11 +600,26 @@ class Tunnel:
                 continue
             self.handle(data, addr)
 
-    def handle(self, data, addr):
+    def _recv_loop6(self):
+        while self.running:
+            try:
+                data, addr = self.sock6.recvfrom(2048)
+            except socket.timeout:
+                continue
+            except ConnectionResetError:
+                continue
+            except OSError:
+                break
+            addr = (norm6(addr[0]), addr[1])
+            if addr == self.alt6 or addr == self.peer:
+                self.handle(data, addr, rx=self.sock6)
+
+    def handle(self, data, addr, rx=None):
         if not data or not self.running:
             return
+        rx = rx or self.sock
         try:
-            if addr[0].startswith("127.") and addr[1] == self.sock.getsockname()[1]:      # un saludo a un puerto vecino que resulto ser el nuestro (solo pasa con todo en una misma PC)
+            if rx is self.sock and addr[0].startswith("127.") and addr[1] == self.sock.getsockname()[1]:      # un saludo a un puerto vecino que resulto ser el nuestro (solo pasa con todo en una misma PC)
                 return
         except OSError:
             return
@@ -551,9 +635,22 @@ class Tunnel:
                     self.peer = self.direct = addr                       # el otro lado salio por un puerto vecino del anunciado: se sigue con ese
                 self.connected.set()
                 if len(body) >= 8:
-                    self.sock.sendto(PONG + body[:9], addr)               # se contesta a quien saludo (puede ser la direccion directa estando en relay)
+                    rx.sendto(PONG + body[:9], addr)                      # se contesta a quien saludo, por donde llego (puede ser la directa estando en relay, o IPv6)
             elif kind == PONG and len(body) >= 8:
-                if self.alt and addr == self.alt and self.peer != self.alt:
+                ms = (time.time() - struct.unpack("<d", body[:8])[0]) * 1000
+                if self.alt6 and addr == self.alt6 and rx is self.sock6 and not self.v6 and 0 <= ms < 5000:
+                    if self.relay or self.rtt is None or ms < self.rtt * 0.8:       # IPv6 comprobada de ida y vuelta: se usa si no habia nada mejor o es claramente mas rapida
+                        was_relay = bool(self.relay)
+                        self.v6, self.tx = True, self.sock6
+                        self.peer = self.direct = self.alt6
+                        self.relay, self.alt = None, None
+                        self._rtts, self.rtt = [], None
+                        self.connected.set()
+                        if self.on_v6:
+                            self.on_v6()
+                        if was_relay and self.on_direct:
+                            self.on_direct()
+                if self.alt and addr == self.alt and self.peer != self.alt and not self.v6:
                     was_relay = bool(self.relay)
                     self.peer = self.direct = self.alt                   # ida y vuelta comprobada por la red local: es lo mas rapido
                     self.relay = None
@@ -562,14 +659,13 @@ class Tunnel:
                         self.on_lan()
                     if was_relay and self.on_direct:
                         self.on_direct()
-                if self.relay and self.direct and addr[0] == self.direct[0] and addr != self.relay:
+                if self.relay and self.direct and addr[0] == self.direct[0] and addr != self.relay and not self.v6:
                     self.peer = self.direct = addr                       # ida y vuelta directa comprobada: se sale del relay
                     self.relay = None
                     self.connected.set()
                     if self.on_direct:
                         self.on_direct()
-                ms = (time.time() - struct.unpack("<d", body[:8])[0]) * 1000
-                if 0 <= ms < 5000:
+                if 0 <= ms < 5000 and ((rx is self.sock6) == self.v6):             # solo cuentan los PONG del camino en uso
                     self._rtts = (getattr(self, "_rtts", []) + [ms])[-8:]                   # mediana de las ultimas 8: las primeras (arranque del otro lado) salen infladas
                     self.rtt = sorted(self._rtts)[len(self._rtts) // 2]
             elif kind == VIDEO and self.on_video:
@@ -587,7 +683,7 @@ class Tunnel:
 
     def send(self, kind, body):
         try:
-            self.sock.sendto(kind + body, self.peer)
+            self.tx.sendto(kind + body, self.peer)
             self.sent += 1
             self.bytes_tx += len(body) + 1
         except OSError:
