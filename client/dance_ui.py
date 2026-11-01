@@ -50,6 +50,7 @@ class DanceUI:
         tk.Label(head, image=th.image("ico_dance.png"), bg=th.BG).pack(side="left")
         tk.Label(head, text="Zona Baile", font=(th.DISPLAY, 16), fg="#ffffff", bg=th.BG).pack(side="left", padx=10)
         ttk.Button(head, text=" CONFIGURAR", image=th.image("ico_pad.png"), compound="left", command=self.dance_config_help).pack(side="left", padx=(8, 0))
+        ttk.Button(head, text="CONTROLES DE INVITADO", command=self.dance_controls_dialog).pack(side="left", padx=(8, 0))
         ttk.Button(head, text="CREAR SALA  ＋", style="Accent.TButton", command=self.dance_create).pack(side="right")
         tk.Label(v, text="Juegos de baile con Mednafen. Elige un juego, busca partida o crea una sala (2 jugadores, amistoso).", fg=th.MUTED, bg=th.BG,
                  font=(th.BODY, 9), anchor="w", justify="left", wraplength=640).pack(fill="x", pady=(4, 0))
@@ -266,6 +267,8 @@ class DanceUI:
         tk.Label(head, text="Configurar el control en Mednafen", font=(th.DISPLAY, 14), fg="#ffffff", bg=th.BG).pack(side="left", padx=10)
         row = tk.Frame(pad, bg=th.BG)
         row.pack(side="bottom", fill="x", pady=(10, 0))
+        ttk.Button(pad, text="CONTROLES PARA JUGAR COMO INVITADO (Modo Anfitrión)", command=lambda: (win.destroy(), self.dance_controls_dialog())).pack(side="bottom", fill="x",
+                                                                                                                                                            pady=(8, 0))
         ttk.Button(row, text="ABRIR EL JUEGO PARA CONFIGURAR", style="Cta.TButton",
                    command=lambda: (win.destroy(), self.test_game())).pack(side="left", fill="x", expand=True)
         ttk.Button(row, text="CERRAR", command=win.destroy).pack(side="left", padx=(8, 0))

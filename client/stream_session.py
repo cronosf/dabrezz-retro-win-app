@@ -11,7 +11,7 @@ import subprocess
 import threading
 import time
 
-import client.controls as controls
+import client.dance_pad as dance_pad
 import client.med as med
 import client.med_cheats as med_cheats
 import client.stream as st
@@ -21,13 +21,6 @@ import client.winbrand as winbrand
 DIRECT_WAIT_S = 5
 RELAY_WAIT_S = 10
 
-# teclado del invitado -> boton de PSX (VK de Windows)
-GUEST_KEYS = {"up": (0x26,), "down": (0x28,), "left": (0x25,), "right": (0x27,), "cross": (0x5A,), "circle": (0x58,), "square": (0x41,), "triangle": (0x53,),
-              "l1": (0x51,), "r1": (0x57,), "l2": (0x45,), "r2": (0x52,), "start": (0x0D,), "select": (0xA1, 0x08)}
-# mando XInput -> boton de PSX
-XI_BUTTONS = ((0x0001, "up"), (0x0002, "down"), (0x0004, "left"), (0x0008, "right"), (0x1000, "cross"), (0x2000, "circle"), (0x4000, "square"), (0x8000, "triangle"),
-              (0x0100, "l1"), (0x0200, "r1"), (0x0010, "start"), (0x0020, "select"))
-STICK_DEAD = 12000
 user32 = ctypes.WinDLL("user32", use_last_error=True)
 
 
@@ -40,11 +33,12 @@ def free_udp_port():
 
 
 class GuestPad:
-    """Botones del invitado (teclado y mando Xbox) como mascara de client.stream.BIT. Solo cuenta mientras la ventana del visor tiene el foco."""
+    """Botones del invitado (teclado, mando Xbox o generico) como mascara de client.stream.BIT, segun su perfil (client/dance_pad.py). Solo cuenta con el foco en el visor."""
 
-    def __init__(self, viewer_pid):
+    def __init__(self, viewer_pid, profile=None):
         self.pid = viewer_pid
-        self.xi = controls.XInputPad()
+        self.profile = profile or (lambda: None)
+        self.reader = dance_pad.PadReader()
 
     def focused(self):
         h = user32.GetForegroundWindow()
@@ -55,36 +49,18 @@ class GuestPad:
     def read(self):
         if not self.focused():
             return 0
-        mask = 0
-        for b, vks in GUEST_KEYS.items():
-            if any(user32.GetAsyncKeyState(vk) & 0x8000 for vk in vks):
-                mask |= st.BIT[b]
-        for i in range(4):
-            state = self.xi._read(i) if self.xi.fn else None
-            if state is None:
-                continue
-            g = state.Gamepad
-            for bit, b in XI_BUTTONS:
-                if g.wButtons & bit:
-                    mask |= st.BIT[b]
-            if g.bLeftTrigger > 160:
-                mask |= st.BIT["l2"]
-            if g.bRightTrigger > 160:
-                mask |= st.BIT["r2"]
-            if g.sThumbLX < -STICK_DEAD:
-                mask |= st.BIT["left"]
-            elif g.sThumbLX > STICK_DEAD:
-                mask |= st.BIT["right"]
-            if g.sThumbLY > STICK_DEAD:
-                mask |= st.BIT["up"]
-            elif g.sThumbLY < -STICK_DEAD:
-                mask |= st.BIT["down"]
-        return mask
+        prof = self.profile() or {}
+        kb = prof.get("kb") or {}
+        vks = {kb.get(b, dance_pad.DEFAULT_KEYS[b]) for b in st.BUTTONS}
+        down = {vk for vk in vks if user32.GetAsyncKeyState(vk) & 0x8000}
+        tokens, xi, dj = self.reader.snapshot()
+        return dance_pad.pressed_buttons(prof, tokens, xi, dj, down)
 
 
 class StreamSession:
-    def __init__(self, data, send, net, rom_for, log=print, on_end=None, title_for=None):
+    def __init__(self, data, send, net, rom_for, log=print, on_end=None, title_for=None, profile=None):
         self.data, self.send, self.net, self.rom_for, self.log, self.on_end, self.title_for = data, send, net, rom_for, log, on_end, title_for
+        self.profile = profile                           # () -> perfil de controles del invitado (cfg["dance_controls"])
         self.pad_port = 2                                # puerto de PSX que controla el invitado (las pruebas usan el 1)
         self.cheats_on = lambda: False                   # () -> bool: truques de la funcion en prueba (un solo emulador: no hay desincronizacion)
         self.role = self.channel = None
@@ -197,7 +173,17 @@ class StreamSession:
             self.guest = st.StreamGuest(pack.ffplay_exe(self.data), port, title=title.replace("Dabrezz Play · Dabrezz Play · ", "Dabrezz Play · "), tunnel=self.tunnel,
                                         log=self.log)
             self.guest.start()
-            self.guest.read_mask = GuestPad(self.guest.proc.pid).read
+            self.guest.read_mask = GuestPad(self.guest.proc.pid, self.profile).read
+            threading.Thread(target=self._watch_viewer, args=(self.guest.proc, self.token), daemon=True).start()
+
+    def _watch_viewer(self, proc, token):
+        proc.wait()
+        if self.running and self.token == token:
+            self.log("Se cerró la ventana de la transmisión.")
+            self.send(t="ra_leave")
+            self.stop()
+            if self.on_end:
+                self.on_end()
 
     def _start_host(self, token):
         try:
