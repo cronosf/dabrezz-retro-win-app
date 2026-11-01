@@ -21,7 +21,7 @@ import client.stream_pack as pack
 import client.winbrand as winbrand
 
 DIRECT_WAIT_S = 7
-RELAY_WAIT_S = 10
+RELAY_WAIT_S = 40
 
 user32 = ctypes.WinDLL("user32", use_last_error=True)
 
