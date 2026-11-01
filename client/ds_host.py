@@ -66,7 +66,8 @@ def effective_host_keys(host_kb=None):
     return {**HOST_DEFAULT, **{b: n for b, n in (host_kb or {}).items() if b in HOST_DEFAULT and cb.to_qt(str(n))}}
 
 
-_VK = {"up": (0x26, True), "down": (0x28, True), "left": (0x25, True), "right": (0x27, True), "return": (0x0D, False), "backspace": (0x08, False), "space": (0x20, False),
+_VK = {"kp_divide": (0x6F, False), "kp_multiply": (0x6A, False), "kp_subtract": (0x6D, False), "kp_add": (0x6B, False), "kp_decimal": (0x6E, False), ",": (0xBC, False),
+       ".": (0xBE, False), "up": (0x26, True), "down": (0x28, True), "left": (0x25, True), "right": (0x27, True), "return": (0x0D, False), "backspace": (0x08, False), "space": (0x20, False),
        "tab": (0x09, False)}
 
 

@@ -34,9 +34,11 @@ def _k(name, vk, scan, sdlk, ext=False):
 
 
 PORT_KEYS = {
-    2: {"up": _k("[", 0xDB, 0x1A, 91), "down": _k("]", 0xDD, 0x1B, 93), "left": _k(";", 0xBA, 0x27, 59), "right": _k("'", 0xDE, 0x28, 39),
-        "cross": _k("Q", 0x51, 0x10, 113), "circle": _k(",", 0xBC, 0x33, 44), "square": _k(".", 0xBE, 0x34, 46), "triangle": _k("/", 0xBF, 0x35, 47),
-        "l1": _k("-", 0xBD, 0x0C, 45), "r1": _k("=", 0xBB, 0x0D, 61), "l2": _k("E", 0x45, 0x12, 101), "r2": _k("F13", 0x7C, 0x64, 294),
+    # Puerto 2: teclado numerico y F13-F15, NO signos: SDL 1.2 (Mednafen) pone a las teclas de signos el caracter de la distribucion del teclado del anfitrion ([ ] ; ' - = no existen
+    # igual en un teclado latinoamericano o espanol) y los botones del invitado no llegaban. El teclado numerico y F13-F15 son iguales en todas las distribuciones.
+    2: {"up": _k("Num 8", 0x68, 0x48, 264), "down": _k("Num 5", 0x65, 0x4C, 261), "left": _k("Num 4", 0x64, 0x4B, 260), "right": _k("Num 6", 0x66, 0x4D, 262),
+        "cross": _k("Num 1", 0x61, 0x4F, 257), "circle": _k("Num 2", 0x62, 0x50, 258), "square": _k("Num 3", 0x63, 0x51, 259), "triangle": _k("Num 0", 0x60, 0x52, 256),
+        "l1": _k("Num 7", 0x67, 0x47, 263), "r1": _k("Num 9", 0x69, 0x49, 265), "l2": _k("Num +", 0x6B, 0x4E, 270), "r2": _k("F13", 0x7C, 0x64, 294),
         "start": _k("F14", 0x7D, 0x65, 295), "select": _k("F15", 0x7E, 0x66, 296)},
     3: {"up": _k("I", 0x49, 0x17, 105), "down": _k("K", 0x4B, 0x25, 107), "left": _k("J", 0x4A, 0x24, 106), "right": _k("L", 0x4C, 0x26, 108),
         "cross": _k("Z", 0x5A, 0x2C, 122), "circle": _k("X", 0x58, 0x2D, 120), "square": _k("C", 0x43, 0x2E, 99), "triangle": _k("V", 0x56, 0x2F, 118),

@@ -92,8 +92,8 @@ def to_s9x(name):
 # numerico (los digitos de arriba son atajos de Mednafen).
 MED_HOST_2P = {"up": "w", "down": "s", "left": "a", "right": "d", "cross": "k", "circle": "l", "square": "j", "triangle": "i", "l1": "r", "r1": "t", "l2": "f", "r2": "g",
                "start": "return", "select": "h"}
-MED_HOST_N = {"up": "w", "down": "s", "left": "a", "right": "d", "cross": "kp_1", "circle": "kp_2", "square": "kp_3", "triangle": "kp_4", "l1": "kp_5", "r1": "kp_6", "l2": "kp_7",
-              "r2": "kp_8", "start": "return", "select": "kp_0"}
+MED_HOST_N = {"up": "w", "down": "s", "left": "a", "right": "d", "cross": "p", "circle": "r", "square": "e", "triangle": ",", "l1": ".", "r1": "kp_divide", "l2": "kp_multiply",
+              "r2": "kp_subtract", "start": "return", "select": "kp_decimal"}
 
 
 def med_host_keys(players, kb=None):

@@ -53,12 +53,12 @@ class GuestPad:
         return p.value == self.pid
 
     def read(self):
-        if not self.focused():
-            return 0
         prof = self.profile() or {}
         kb = prof.get("kb") or {}
-        vks = {kb.get(b, dance_pad.DEFAULT_KEYS[b]) for b in st.BUTTONS}
-        down = {vk for vk in vks if user32.GetAsyncKeyState(vk) & 0x8000}
+        down = set()
+        if self.focused():                                   # el teclado solo cuenta con el foco en el visor; el mando funciona siempre (no escribe en otras ventanas)
+            vks = {kb.get(b, dance_pad.DEFAULT_KEYS[b]) for b in st.BUTTONS}
+            down = {vk for vk in vks if user32.GetAsyncKeyState(vk) & 0x8000}
         tokens, xi, dj = self.reader.snapshot()
         return dance_pad.pressed_buttons(prof, tokens, xi, dj, down)
 
