@@ -274,13 +274,13 @@ class StreamSession:
         if self.role == "host":
             if slot in self.tunnels or not 1 <= slot <= 3:
                 return None
-            t = self.tunnels[slot] = st.Tunnel(self.sock, (host, port), log=self.log, hub=self.hub)
+            t = self.tunnels[slot] = st.Tunnel(self.sock, (host, port), log=self.log, hub=self.hub, tag=slot)
             t.start()                                    # primero el tunel (empieza a abrir el NAT ya) y despues el video, que tarda
             self._start_media_safe(slot, t)
         else:
             if self.tunnel is not None:
                 return None
-            t = self.tunnel = st.Tunnel(self.sock, (host, port), log=self.log)
+            t = self.tunnel = st.Tunnel(self.sock, (host, port), log=self.log, tag=slot)
             t.start()
             self._start_media_safe(0, t)
         threading.Thread(target=self._watch_connection, args=(self.token, t, slot), daemon=True).start()
@@ -297,12 +297,19 @@ class StreamSession:
             return
         if t is None:                                    # el servidor no recibio nuestra direccion UDP (o la del otro): va directo por relay
             self.relayed.add(slot)
-            if self._open_tunnel(host, port, slot) is not None:
+            t = self._open_tunnel(host, port, slot)
+            if t is not None:
+                t.use_relay((host, port), keep_direct=False)
                 self.log("Conexión por relay del servidor" + (f" (jugador {slot + 1})." if self.role == "host" else "."))
             return
         self.relayed.add(slot)
-        t.peer = (host, port)
-        self.log("Conexión por relay del servidor" + (f" (jugador {slot + 1})." if self.role == "host" else "."))
+        t.use_relay((host, port))                        # el relay solo arranca la partida: la directa se sigue probando y se vuelve a ella en cuanto responda
+        t.on_direct = lambda s=slot: self._direct_back(s)
+        self.log("Conexión por relay del servidor (se sigue intentando la directa)" + (f" (jugador {slot + 1})." if self.role == "host" else "."))
+
+    def _direct_back(self, slot):
+        self.relayed.discard(slot)
+        self.log("Conexión directa lograda: ya no se usa el relay" + (f" (jugador {slot + 1})." if self.role == "host" else "."))
 
     def _watch_connection(self, token, t, slot):
         end = time.time() + DIRECT_WAIT_S

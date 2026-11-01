@@ -324,6 +324,7 @@ def post_key(hwnd, button, down, port=2):
         user32.PostMessageW(hwnd, 0x101, vk, lp | (1 << 30) | (1 << 31))
 
 
+PORT_SPAN = 24                                    # puertos vecinos (a cada lado) que se prueban si el otro NAT cambia el puerto
 HELLO, VIDEO, AUDIO, INPUT, FEC, PONG = b"P", b"V", b"A", b"I", b"F", b"O"        # primer byte de cada datagrama del Tunnel
 FEC_K = 5                                         # un paquete de paridad (XOR) por cada 5 de video: recupera 1 perdido por grupo (20% mas de datos)
 FEC_MAX = 1316 + 2                                # un paquete de video tiene a lo sumo 1316 bytes; la paridad lleva ademas su longitud (2 bytes)
@@ -436,9 +437,11 @@ class UdpHub:
                 data, addr = self.sock.recvfrom(2048)
             except socket.timeout:
                 continue
+            except ConnectionResetError:                                  # Windows: un puerto probado estaba cerrado (ICMP); no es un error del socket
+                continue
             except OSError:
                 break
-            target = next((t for t in self.tunnels if t.peer == addr), None)
+            target = next((t for t in self.tunnels if t.peer == addr or t.direct == addr), None)
             if target is None:                                           # su puerto puede ser otro si el NAT lo cambio: solo si es el unico con esa IP
                 same = [t for t in self.tunnels if t.peer[0] == addr[0]]
                 target = same[0] if len(same) == 1 else None
@@ -453,8 +456,9 @@ class Tunnel:
     """Un socket UDP hacia el otro jugador. Reparte lo que llega por tipo (video, audio, botones) y manda "hola" hasta que el otro contesta (abre los NAT). Con `hub` comparte el
     socket con otros Tunnel (anfitrion con varios invitados)."""
 
-    def __init__(self, sock, peer, on_video=None, on_audio=None, on_input=None, log=print, on_fec=None, hub=None):
+    def __init__(self, sock, peer, on_video=None, on_audio=None, on_input=None, log=print, on_fec=None, hub=None, tag=0):
         self.sock, self.peer, self.log, self.hub = sock, peer, log, hub
+        self.tag = tag                                  # numero de invitado (1..3): cada saludo lo lleva y cada tunel solo acepta los suyos (dos invitados pueden compartir IP)
         self.on_video, self.on_audio, self.on_input, self.on_fec = on_video, on_audio, on_input, on_fec
         self.connected = threading.Event()
         self.running = False
@@ -462,6 +466,30 @@ class Tunnel:
         self.bytes_tx = self.bytes_rx = 0
         self.rtt = None                                 # ms, mediana: el otro devuelve cada "hola" (PONG con la misma hora)
         self.last_rx = 0.0
+        self.direct = peer                              # direccion directa del otro jugador (la que dio el servidor); None si solo se conoce el relay
+        self.relay = None                               # direccion del relay mientras se usa; la directa se sigue probando y, si responde, se sale del relay
+        self.on_direct = None                           # () cuando se logra la conexion directa estando en el relay
+        self._probe = 0
+
+    def use_relay(self, addr, keep_direct=True):
+        """Pasa por el relay del servidor. Con `keep_direct` sigue intentando la conexion directa en segundo plano (el relay solo sirve para arrancar)."""
+        self.relay, self.peer = addr, addr
+        if not keep_direct:
+            self.direct = None
+
+    def _probe_addrs(self):
+        """Direccion directa y, rotando, los puertos vecinos: algunos NAT estrictos dan al otro lado un puerto distinto (casi siempre cercano) al anunciado."""
+        if not self.direct:
+            return []
+        ip, port = self.direct
+        out = [self.direct]
+        for _ in range(4):
+            i = self._probe % (2 * PORT_SPAN)
+            self._probe += 1
+            p = port + (i // 2 + 1) * (1 if i % 2 == 0 else -1)
+            if 1024 <= p <= 65535:
+                out.append((ip, p))
+        return out
 
     def start(self):
         self.running = True
@@ -474,11 +502,16 @@ class Tunnel:
 
     def _hello_loop(self):
         while self.running:
-            try:
-                self.sock.sendto(HELLO + struct.pack("<d", time.time()), self.peer)
-            except OSError:
-                pass
-            time.sleep(0.1 if not self.connected.is_set() else 1.0)
+            hello = HELLO + struct.pack("<dB", time.time(), self.tag)
+            targets = [self.peer]
+            if (self.relay or not self.connected.is_set()) and self.direct:
+                targets += self._probe_addrs()                           # sin conexion o en relay: probar la directa (y puertos vecinos)
+            for a in targets:
+                try:
+                    self.sock.sendto(hello, a)
+                except OSError:
+                    pass
+            time.sleep(0.1 if not self.connected.is_set() else 0.5 if self.relay else 1.0)
 
     def _recv_loop(self):
         while self.running:
@@ -486,9 +519,11 @@ class Tunnel:
                 data, addr = self.sock.recvfrom(2048)
             except socket.timeout:
                 continue
+            except ConnectionResetError:                                  # Windows: un puerto probado estaba cerrado (ICMP)
+                continue
             except OSError:
                 break
-            if addr[0] != self.peer[0]:                                 # solo se escucha al otro jugador
+            if addr[0] != self.peer[0] and not (self.direct and addr[0] == self.direct[0]):      # solo se escucha al otro jugador
                 continue
             self.handle(data, addr)
 
@@ -500,11 +535,21 @@ class Tunnel:
         self.last_rx = time.time()
         kind, body = data[:1], data[1:]
         try:
+            if kind in (HELLO, PONG) and len(body) >= 9 and self.tag and body[8] != self.tag:
+                return                                                   # saludo de otro invitado (misma IP): no es de este tunel
             if kind == HELLO:
+                if not self.relay and addr != self.peer and self.direct and addr[0] == self.direct[0]:
+                    self.peer = self.direct = addr                       # el otro lado salio por un puerto vecino del anunciado: se sigue con ese
                 self.connected.set()
                 if len(body) >= 8:
-                    self.sock.sendto(PONG + body[:8], self.peer)
+                    self.sock.sendto(PONG + body[:9], addr)               # se contesta a quien saludo (puede ser la direccion directa estando en relay)
             elif kind == PONG and len(body) >= 8:
+                if self.relay and self.direct and addr[0] == self.direct[0] and addr != self.relay:
+                    self.peer = self.direct = addr                       # ida y vuelta directa comprobada: se sale del relay
+                    self.relay = None
+                    self.connected.set()
+                    if self.on_direct:
+                        self.on_direct()
                 ms = (time.time() - struct.unpack("<d", body[:8])[0]) * 1000
                 if 0 <= ms < 5000:
                     self._rtts = (getattr(self, "_rtts", []) + [ms])[-8:]                   # mediana de las ultimas 8: las primeras (arranque del otro lado) salen infladas
