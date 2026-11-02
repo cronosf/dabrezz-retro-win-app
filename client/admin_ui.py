@@ -393,6 +393,9 @@ class AdminUI:
 
     # ---------- resultados del servidor ----------
     def on_admin_result(self, m):
+        if m.get("what") == "games":                                  # eliminar un juego del servidor: se avisa aunque el panel de admin no este abierto
+            (messagebox.showinfo if m.get("ok") else messagebox.showerror)("Eliminar juego", m.get("msg", ""))
+            return
         self.adm_say(m.get("msg", ""), ok=bool(m.get("ok")))
         tv = getattr(self, "adm_tv", None)
         if m.get("ok") and m.get("what") == "players" and tv is not None and tv.winfo_exists():

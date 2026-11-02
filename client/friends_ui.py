@@ -2,7 +2,7 @@
 Todo ocurre dentro de la ventana principal (sin ventanas nuevas): las invitaciones llegan como un aviso en la esquina."""
 import time
 import tkinter as tk
-from tkinter import ttk
+from tkinter import messagebox, ttk
 
 import client.theme as th
 from shared.protocol import CHANNEL_LABELS
@@ -72,12 +72,9 @@ class FriendsUI:
         self.net.send(t="friend_invite", to=uid)
 
     def friend_remove(self, uid):
-        if self._confirm_rm != uid:                # primer clic: pide confirmar (sin ventanas); el segundo quita
-            self._confirm_rm = uid
-            self.after(3000, lambda: self._reset_confirm(uid))
-            return self._render_friends(force=True)
-        self._confirm_rm = None
-        self.net.send(t="friend_remove", id=uid)
+        name = next((f["user_name"] for f in ((getattr(self, "friends_data", None) or {}).get("friends") or []) if f["id"] == uid), "este jugador")
+        if messagebox.askyesno("Quitar amigo", f"¿Quitar a {name} de tus amigos?", icon="warning", default="no"):
+            self.net.send(t="friend_remove", id=uid)
 
     def _reset_confirm(self, uid):
         if self._confirm_rm == uid:

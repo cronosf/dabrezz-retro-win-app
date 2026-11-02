@@ -3,7 +3,7 @@ y Multijugador. Es un mixin de App: usa self.cfg, self.net, self.channels, self.
 import os
 import threading
 import tkinter as tk
-from tkinter import ttk
+from tkinter import messagebox, ttk
 
 import client.colorlist as colorlist
 import client.covers as covers
@@ -452,6 +452,11 @@ class Views:
         star = tk.Label(card, text="☆", fg=th.YELLOW, bg=bottom, font=(th.BODY, 13), cursor="hand2")
         star.place(x=CARD_W - 30, y=2)
         star.bind("<Button-1>", lambda e, c=ch: (self.toggle_fav(c), "break")[1])
+        trash = tk.Label(card, text="🗑", fg="#ff7a7a", bg=th.BG, font=("Segoe UI Symbol", 13), cursor="hand2", padx=4, pady=0)      # solo staff (admin / developer): elimina el juego del servidor
+        trash.bind("<Button-1>", lambda e, c=ch: (self.delete_game(c), "break")[1])
+        trash.bind("<Enter>", lambda e, w=trash: w.config(bg=th.ERR, fg="#ffffff"))
+        trash.bind("<Leave>", lambda e, w=trash: w.config(bg=th.BG, fg="#ff7a7a"))
+        card.trash = trash
         card.dl = tk.Label(card, text="⬇  DESCARGAR ROM", fg="#ffffff", bg=th.ACCENT, font=(th.BODY, 8, "bold"), pady=5, cursor="hand2")
         card.dl.bind("<Button-1>", lambda e, c=ch: (self.download_roms(c), "break")[1])    # sin ROM: baja solo esta, sin abrir el juego
         card.dl.bind("<Enter>", lambda e, w=card.dl: w.config(bg=th.ACCENT_D))
@@ -469,6 +474,10 @@ class Views:
         has = self.rom_exists(ch)
         card.meta.config(text=f"{'✔ ROM' if has else 'sin ROM'}  ·  {'⚡ ranked' if ch in self.auto_channels else 'amistoso'}  ·  {n} en línea")
         card.star.config(text="★" if ch in self.cfg.get("favorites", []) else "☆")
+        if self.is_staff():
+            card.trash.place(x=CARD_W - 36, y=covers.SIZES[""][1] - 30)
+        else:
+            card.trash.place_forget()
         if has:
             card.dl.pack_forget()
         elif not card.dl.winfo_ismapped():
@@ -491,6 +500,19 @@ class Views:
         if self._dl_hide_job:
             self.after_cancel(self._dl_hide_job)
         self._dl_hide_job = self.after(8000 if ok else 15000, self.dl_box.pack_forget)
+
+    def is_staff(self):
+        return (getattr(self, "me", None) or {}).get("role") in ("admin", "developer")
+
+    def delete_game(self, ch):
+        """Elimina un juego del SERVIDOR (VPS) para todos: pide confirmacion. El servidor vuelve a comprobar el rol."""
+        if not self.is_staff():
+            return
+        title = CHANNEL_LABELS.get(ch, ch)
+        if messagebox.askyesno("Eliminar juego del servidor",
+                               f"¿Eliminar «{title}» del servidor?\n\nSe borran sus archivos (la ROM) del VPS y el juego desaparece para TODOS los jugadores. "
+                               "No se puede deshacer.", icon="warning", default="no"):
+            self.net.send(t="admin_game_delete", channel=ch)
 
     def toggle_fav(self, ch):
         favs = list(self.cfg.get("favorites", []))

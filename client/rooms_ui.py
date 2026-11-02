@@ -336,7 +336,9 @@ class RoomsUI:
     def rm_kick(self):
         sel = self.rp_members.selection()
         if sel and self.room and int(sel[0]) != self.me["id"]:
-            self.net.send(t="room_kick", id=int(sel[0]))
+            name = next((m.get("user_name") for m in (self.room.get("members") or []) if str(m.get("id")) == str(sel[0])), "este jugador")
+            if messagebox.askyesno("Expulsar de la sala", f"¿Expulsar a {name} de la sala?", icon="warning", default="no"):
+                self.net.send(t="room_kick", id=int(sel[0]))
 
     def rm_invite(self):
         sel = self.rp_cands.selection()

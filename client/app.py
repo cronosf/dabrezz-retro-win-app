@@ -769,6 +769,8 @@ class App(Views, LoginPages, LobbyPages, FriendsUI, DmUI, RoomsUI, DanceUI, Home
                     self.cfg.pop("session", None)
             self.me = {k: m.get(k) for k in ("id", "user_name", "role", "expires")}
             self.me.update(elo=1500, wins=0, losses=0)
+            if hasattr(self, "cards"):
+                self.after(0, self.render_channels)               # el icono de eliminar juego solo lo ve el staff
             self.first_to = m.get("first_to") or self.first_to
             self.server_rom_manifest = m.get("rom_manifest") or ""
             self.auto_channels = set(m.get("auto_channels") or [])
