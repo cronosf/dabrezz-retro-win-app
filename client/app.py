@@ -889,9 +889,10 @@ class App(Views, LoginPages, LobbyPages, FriendsUI, DmUI, RoomsUI, DanceUI, Home
             self.channels = m["channels"]
             self.render_channels()
         elif t == "joined":
-            self.channel = m["channel"]
+            before, self.channel = self.channel, m["channel"]
             self.lbl_chan.config(text=CHANNEL_LABELS.get(self.channel, self.channel))
-            self.log(f"Entraste a {self.channel}", "sys")
+            if before != self.channel and not is_dance(self.channel):      # el chat de Ranked solo avisa al cambiar de juego (y la Zona Baile no lo ensucia: tiene su propio chat)
+                self.log(f"Entraste a {CHANNEL_LABELS.get(self.channel, self.channel)}", "sys")
             self.show_roster(self.rosters.get(self.channel, []))    # el servidor manda la lista ANTES de "joined"
             self.update_ranked_ui()
             self.dance_refresh()
@@ -902,9 +903,10 @@ class App(Views, LoginPages, LobbyPages, FriendsUI, DmUI, RoomsUI, DanceUI, Home
             self.rm_cand_refresh()
             self.dance_users_refresh()
         elif t == "chat":
-            self.log(m["text"], name=m["user_name"], role=m.get("role"), country=m.get("country"))
-            if is_dance(str(m.get("channel", ""))):
+            if is_dance(str(m.get("channel", ""))):                        # los chats son independientes: lo de la Zona Baile solo sale en su chat y lo de Ranked en el de Ranked
                 self.dance_log(str(m["text"])[:300], str(m["user_name"])[:12], m.get("role"), m.get("country"))
+            else:
+                self.log(m["text"], name=m["user_name"], role=m.get("role"), country=m.get("country"))
         elif t == "challenge":
             ok = messagebox.askyesno(APP_NAME, f"{m['from_user_name']} te reta ({'ranked a ' + str(m['first_to']) if m['ranked'] else 'amistoso'}) en {m['channel']}.\n¿Aceptas?")
             self.net.send(t="accept" if ok else "decline", to=m["from"])

@@ -33,7 +33,7 @@ def attach(inp, entry, tray_parent, before=None, bottom=False, bg=None):
         if tray.winfo_ismapped():
             tray.pack_forget()
         elif bottom:
-            tray.pack(side="bottom", fill="x", pady=(6, 0))
+            tray.pack(side="bottom", fill="x", pady=(6, 0), **({"before": before} if before is not None else {}))
         else:
             tray.pack(fill="x", pady=(6, 0), before=before)
 

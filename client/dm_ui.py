@@ -100,7 +100,7 @@ class DmUI:
         txt.tag_config("err", foreground=th.ERR)
         entry = ttk.Entry(inp)
         entry.pack(side="left", fill="x", expand=True, ipady=4)
-        emote_ui.attach(inp, entry, top, bottom=True)                    # boton de emoticonos, como en el chat de los juegos
+        emote_ui.attach(inp, entry, top, before=lbl, bottom=True)                    # boton de emoticonos, como en el chat de los juegos
         win = {"top": top, "txt": txt, "entry": entry, "lbl": lbl, "name": name}
         self.dm_wins[uid] = win
         entry.bind("<Return>", send)
