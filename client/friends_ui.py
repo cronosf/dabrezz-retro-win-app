@@ -2,8 +2,9 @@
 Todo ocurre dentro de la ventana principal (sin ventanas nuevas): las invitaciones llegan como un aviso en la esquina."""
 import time
 import tkinter as tk
-from tkinter import messagebox, ttk
+from tkinter import ttk
 
+import client.dialogs as messagebox
 import client.theme as th
 from shared.protocol import CHANNEL_LABELS
 
@@ -73,7 +74,7 @@ class FriendsUI:
 
     def friend_remove(self, uid):
         name = next((f["user_name"] for f in ((getattr(self, "friends_data", None) or {}).get("friends") or []) if f["id"] == uid), "este jugador")
-        if messagebox.askyesno("Quitar amigo", f"¿Quitar a {name} de tus amigos?", icon="warning", default="no"):
+        if messagebox.askyesno("Quitar amigo", f"¿Quitar a {name} de tus amigos?", icon="warning", default="no", yes="QUITAR"):
             self.net.send(t="friend_remove", id=uid)
 
     def _reset_confirm(self, uid):

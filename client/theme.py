@@ -148,6 +148,8 @@ def apply(root: tk.Tk):
     st.map("Accent.TButton", background=[("active", ACCENT_D), ("disabled", PANEL)])
     st.configure("Cta.TButton", background=YELLOW, foreground="#1a0f00")
     st.map("Cta.TButton", background=[("active", YELLOW_D), ("disabled", PANEL)], foreground=[("disabled", MUTED)])
+    st.configure("Danger.TButton", background=ERR, foreground="#2a0010")
+    st.map("Danger.TButton", background=[("active", "#e0506f"), ("disabled", PANEL)], foreground=[("disabled", MUTED)])
     st.configure("Chip.TButton", background=PANEL, foreground=MUTED, padding=(9, 5), font=(BODY, 9, "bold"))
     st.map("Chip.TButton", background=[("active", PANEL_2)])
     st.configure("ChipOn.TButton", background=ACCENT, foreground="#ffffff", padding=(9, 5), font=(BODY, 9, "bold"))

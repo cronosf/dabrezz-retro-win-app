@@ -4,8 +4,9 @@ invitación del creador (amigos o jugadores del juego); el creador la inicia. Mi
 Capacidad de una sala = el menor entre los jugadores que admite el juego y los que sincroniza el netplay del emulador (shared/capabilities.py)."""
 import time
 import tkinter as tk
-from tkinter import messagebox, ttk
+from tkinter import ttk
 
+import client.dialogs as messagebox
 import client.colorlist as colorlist
 import client.emote_ui as emote_ui
 import client.ds_host as ds_host
@@ -337,7 +338,7 @@ class RoomsUI:
         sel = self.rp_members.selection()
         if sel and self.room and int(sel[0]) != self.me["id"]:
             name = next((m.get("user_name") for m in (self.room.get("members") or []) if str(m.get("id")) == str(sel[0])), "este jugador")
-            if messagebox.askyesno("Expulsar de la sala", f"¿Expulsar a {name} de la sala?", icon="warning", default="no"):
+            if messagebox.askyesno("Expulsar de la sala", f"¿Expulsar a {name} de la sala?", icon="warning", default="no", yes="EXPULSAR"):
                 self.net.send(t="room_kick", id=int(sel[0]))
 
     def rm_invite(self):

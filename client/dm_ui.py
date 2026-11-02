@@ -3,8 +3,9 @@ Los mensajes viajan por la conexion que ya existe con el servidor, que solo los 
 datos. La conversacion vive en memoria de esta app y se borra al cerrar sesion, al desconectarse o al cerrar la aplicacion."""
 import time
 import tkinter as tk
-from tkinter import messagebox, ttk
+from tkinter import ttk
 
+import client.dialogs as messagebox
 import client.emote_ui as emote_ui
 import client.theme as th
 

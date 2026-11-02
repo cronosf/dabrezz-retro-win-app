@@ -3,8 +3,9 @@ y Multijugador. Es un mixin de App: usa self.cfg, self.net, self.channels, self.
 import os
 import threading
 import tkinter as tk
-from tkinter import messagebox, ttk
+from tkinter import ttk
 
+import client.dialogs as messagebox
 import client.colorlist as colorlist
 import client.covers as covers
 import client.romman as romman
@@ -511,7 +512,7 @@ class Views:
         title = CHANNEL_LABELS.get(ch, ch)
         if messagebox.askyesno("Eliminar juego del servidor",
                                f"¿Eliminar «{title}» del servidor?\n\nSe borran sus archivos (la ROM) del VPS y el juego desaparece para TODOS los jugadores. "
-                               "No se puede deshacer.", icon="warning", default="no"):
+                               "No se puede deshacer.", icon="warning", default="no", yes="ELIMINAR"):
             self.net.send(t="admin_game_delete", channel=ch)
 
     def toggle_fav(self, ch):

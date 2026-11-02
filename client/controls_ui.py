@@ -2,8 +2,9 @@
 configuracion de la app (cfg["retro_controls"]) y client/retro.py lo escribe en cada partida. Mixin de App. Ver client/controls.py."""
 import subprocess
 import tkinter as tk
-from tkinter import messagebox, ttk
+from tkinter import ttk
 
+import client.dialogs as messagebox
 import client.controls as controls
 import client.retro as retro
 import client.theme as th

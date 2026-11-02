@@ -8,11 +8,12 @@ import subprocess
 import sys
 import threading
 import tkinter as tk
-from tkinter import filedialog, messagebox, ttk
+from tkinter import filedialog, ttk
 import ipaddress
 import re
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+import client.dialogs as messagebox  # noqa: E402
 import client.attest as attest  # noqa: E402
 import client.med as med  # noqa: E402
 import client.med_cheats as med_cheats  # noqa: E402

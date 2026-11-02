@@ -3,9 +3,10 @@ Se abre desde Mi perfil. Toda accion pasa por el servidor, que vuelve a comproba
 import re
 import tkinter as tk
 from datetime import datetime, timedelta
-from tkinter import messagebox, ttk
+from tkinter import ttk
 
 import shared.passrules as passrules
+import client.dialogs as messagebox
 import client.theme as th
 
 NICK_RE = re.compile(r"^[A-Za-z0-9_]{5,12}$")
@@ -291,7 +292,7 @@ class AdminUI:
     def adm_delete(self):
         p = self.adm_selected()
         if p and messagebox.askyesno("Eliminar cuenta", f"¿Eliminar la cuenta de {p['user_name']}?\nSe borran también su ranking, historial y amigos. "
-                                     "No se puede deshacer.", icon="warning"):
+                                     "No se puede deshacer.", icon="warning", default="no", yes="ELIMINAR"):
             self.net.send(t="admin_do", uid=p["uid"], action="delete")
 
     # ---------- baneos ----------
