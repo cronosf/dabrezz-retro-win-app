@@ -67,18 +67,18 @@ class LoginPages:
                   ("Repite la contraseña", "pw2", "•", ""))
         first = None
         for label, key, show, tip in fields:
-            ttk.Label(box, text=label, style="Muted.TLabel").pack(anchor="w", pady=(10, 2))
+            ttk.Label(box, text=label, style="Muted.TLabel").pack(anchor="w", pady=(6, 1))
             e = ttk.Entry(box, textvariable=v[key], show=show, width=36)
             e.pack(fill="x")
             first = first or e
             hint[key] = tk.Label(box, text=tip, fg=th.MUTED, bg=th.BG, font=(th.BODY, 8), anchor="w", justify="left", wraplength=360)
-            hint[key].pack(anchor="w", pady=(2, 0))
+            hint[key].pack(anchor="w", pady=(1, 0))
         v["nick"].trace_add("write", lambda *a: self._reg_nick_hint(hint["nick"], v["nick"].get()))
         v["pw2"].trace_add("write", lambda *a: self._reg_pw_hint(hint["pw2"], v["pw"].get(), v["pw2"].get()))
         v["pw"].trace_add("write", lambda *a: self._reg_pw_hint(hint["pw2"], v["pw"].get(), v["pw2"].get()))
         self.v_terms = tk.BooleanVar(value=False)                      # aceptacion de los terminos y la politica de privacidad (client/legal.py)
         terms = tk.Frame(box, bg=th.BG)
-        terms.pack(fill="x", pady=(14, 0))
+        terms.pack(fill="x", pady=(8, 0))
         tk.Checkbutton(terms, text="Leí y acepto los Términos y Condiciones y la Política de Privacidad de Dabrezz Play.", variable=self.v_terms, onvalue=True, offvalue=False,
                        fg=th.TEXT, bg=th.BG, selectcolor=th.FIELD, activebackground=th.BG, activeforeground=th.TEXT, bd=0, highlightthickness=0, font=(th.BODY, 9),
                        justify="left", anchor="w", wraplength=340, cursor="hand2").pack(anchor="w")
@@ -89,7 +89,7 @@ class LoginPages:
             lk.pack(side="left", padx=(0, 16))
             lk.bind("<Button-1>", lambda e, w=which: legal.show(self, w))
         self.lbl_reg = tk.Label(box, text="", fg=th.ERR, bg=th.BG, wraplength=360, justify="left", font=(th.BODY, 9))
-        self.lbl_reg.pack(anchor="w", pady=(10, 4))
+        self.lbl_reg.pack(anchor="w", pady=(6, 3))
         self.btn_reg = ttk.Button(box, text="CREAR CUENTA", style="Cta.TButton", command=self.submit_register)
         self.btn_reg.pack(fill="x")
         self.bind("<Return>", lambda e: self.submit_register())
