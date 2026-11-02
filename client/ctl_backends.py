@@ -72,7 +72,7 @@ def to_sdl(name):
     return ord(name) if len(name) == 1 else None
 
 
-MED_RESERVED = {"`", "\\", "backspace"} | set("0123456789")          # avance rapido, camara lenta, rebobinar y ranuras de estado de Mednafen
+MED_RESERVED = {"`", "\\", "backspace", "t", "-", "="} | set("0123456789")          # avance rapido, camara lenta, rebobinar, ranuras de estado y chat (T) de Mednafen
 _QT = {"up": "Up", "down": "Down", "left": "Left", "right": "Right", "return": "Return", "space": "Space", "tab": "Tab", "backspace": "Backspace"}
 _S9X = {"up": "Up", "down": "Down", "left": "Left", "right": "Right", "return": "Enter", "space": "Space", "tab": "Tab"}
 
@@ -90,7 +90,7 @@ def to_s9x(name):
 # ---------------------------------------------------------------- aplicar a cada emulador
 # Teclas del anfitrion en Mednafen (puerto 1) cuando su mando va por la app (client/ds_host.py: HostPad). Con 2 jugadores solo choca el puerto 2 del invitado; con 3-4 se usa el teclado
 # numerico (los digitos de arriba son atajos de Mednafen).
-MED_HOST_2P = {"up": "w", "down": "s", "left": "a", "right": "d", "cross": "k", "circle": "l", "square": "j", "triangle": "i", "l1": "r", "r1": "t", "l2": "f", "r2": "g",
+MED_HOST_2P = {"up": "w", "down": "s", "left": "a", "right": "d", "cross": "k", "circle": "l", "square": "j", "triangle": "i", "l1": "r", "r1": "e", "l2": "f", "r2": "g",
                "start": "return", "select": "h"}
 MED_HOST_N = {"up": "w", "down": "s", "left": "a", "right": "d", "cross": "p", "circle": "r", "square": "e", "triangle": ",", "l1": ".", "r1": "kp_divide", "l2": "kp_multiply",
               "r2": "kp_subtract", "start": "return", "select": "kp_decimal"}
