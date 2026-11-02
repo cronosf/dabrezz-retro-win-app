@@ -11,6 +11,7 @@ import client.covers as covers
 import client.romman as romman
 import client.theme as th
 from client.emotes import EMOTES, split_text
+from shared.capabilities import ZONES
 from shared.protocol import CHANNEL_LABELS, DEFAULT_CHANNELS, VERSION
 
 CARD_W = 196
@@ -215,6 +216,8 @@ class Views:
             self._fill_friends()
         elif view == "multi":
             self.rm_enter()
+        elif view == "ranked" and name == "ranked":
+            self.ranked_enter()
         elif view == "dance":
             self.dance_enter()
 
@@ -598,107 +601,13 @@ class Views:
             self.layout_games()
 
     def open_game(self, ch):
-        """Entrar al canal del juego y pasar a Multijugador."""
+        """Entrar al canal del juego (asi se puede invitar a un amigo) y pasar a Multijugador. Ranked y Zona Baile son zonas aparte (ver client/ranked_ui.py)."""
         self.sel_game = ch
         self.net.send(t="join", channel=ch)
-        self.lbl_chan.config(text=CHANNEL_LABELS.get(ch, ch))
-        self.show_view("ranked")
-
-    # ---------- ranked (chat y lista de jugadores del juego + BUSCAR PARTIDA) ----------
-    def _build_ranked(self):
-        v = self.views["ranked"]
-        self.lbl_chan = tk.Label(v, text="Elige un juego en la sección Juegos", font=(th.DISPLAY, 16), fg="#ffffff", bg=th.BG)
-        self.lbl_chan.pack(anchor="w")
-        bar = tk.Frame(v, bg=th.BG)
-        bar.pack(fill="x", pady=(10, 0))
-        for text, cmd in (("PROBAR JUEGO", self.test_game), ("DESCARGAR ROMS", self.download_roms), ("RANKING", lambda: self.net.send(t="top")),
-                          ("HISTORIAL", lambda: self.net.send(t="history")), ("EN VIVO", lambda: self.net.send(t="live"))):
-            ttk.Button(bar, text=text, command=cmd).pack(side="left", padx=(0, 8))
-
-        body = tk.Frame(v, bg=th.BG)
-        body.pack(fill="both", expand=True, pady=(14, 0))
-        body.columnconfigure(0, weight=1)
-        body.rowconfigure(0, weight=1)
-        mid = ttk.Frame(body, style="Panel.TFrame", padding=12)
-        mid.grid(row=0, column=0, sticky="nsew")
-        ttk.Label(mid, text="Chat", style="H.TLabel").pack(anchor="w", pady=(0, 6))
-        self.chat = th.textbox(mid, state="disabled", height=10)
-        self.chat.pack(fill="both", expand=True)
-        self.chat.tag_config("name", foreground=th.LINK)
-        for role, color in th.ROLE_COLOR.items():
-            self.chat.tag_config("name_" + role, foreground=color)
-        self.chat.tag_config("sys", foreground=th.YELLOW)
-        self.emo_tray = tk.Frame(mid, bg=th.FIELD, padx=6, pady=6)          # bandeja de emoticonos (se muestra con el boton)
-        for i, code in enumerate(EMOTES):
-            lbl = tk.Label(self.emo_tray, image=th.image(f"emo_{code}.png"), bg=th.FIELD, cursor="hand2", padx=3, pady=3)
-            lbl.grid(row=i // 10, column=i % 10)
-            lbl.bind("<Button-1>", lambda ev, c=code: self.insert_emote(c))
-            lbl.bind("<Enter>", lambda ev, w=lbl: w.config(bg=th.NAV_SEL))
-            lbl.bind("<Leave>", lambda ev, w=lbl: w.config(bg=th.FIELD))
-        self.chat_inp = inp = ttk.Frame(mid, style="Panel.TFrame")
-        inp.pack(fill="x", pady=(8, 0))
-        ttk.Button(inp, image=th.image("emo_smile.png"), command=self.toggle_emotes).pack(side="left", padx=(0, 8))
-        ttk.Button(inp, text="ENVIAR", style="Accent.TButton", command=self.send_chat).pack(side="right", padx=(8, 0))   # primero: no se aplasta
-        self.v_msg = tk.StringVar()
-        self.chat_entry = e = ttk.Entry(inp, textvariable=self.v_msg)
-        e.pack(side="left", fill="x", expand=True)
-        e.bind("<Return>", self.send_chat)
-        self.log("Elige un juego en la sección Juegos (abre su tarjeta) para entrar a su sala y chatear con los jugadores. "
-                 "Usa el botón 🙂 para los emoticonos.", "sys")
-
-        right = ttk.Frame(body, style="Panel.TFrame", padding=12)
-        right.grid(row=0, column=1, sticky="ns", padx=(14, 0))
-        ttk.Label(right, text="Jugadores en línea", style="H.TLabel").pack(anchor="w", pady=(0, 6))
-        # el rol va sin titulo; solo el nick cambia de color segun el rol
-        self.tv_users = colorlist.ColorList(right, (("nick", 150, "NOMBRE"), ("role", 74, ""), ("elo", 48, "ELO"), ("wl", 54, "W-L"), ("ping", 56, "PING")))
-        self.tv_users.on_context = self.roster_menu          # clic derecho: mensaje privado / invitacion de amistad (client/dm_ui.py)
-        # lo de abajo se empaqueta primero: en una ventana baja la lista se encoge y el boton sigue visible
-        self.lbl_rk_note = tk.Label(right, text="", fg=th.YELLOW, bg=th.PANEL, font=(th.BODY, 8), wraplength=330, justify="left", anchor="w")
-        self.lbl_rk_note.pack(side="bottom", fill="x", pady=(6, 0))
-        self.btn_queue = ttk.Button(right, text="BUSCAR PARTIDA", style="Cta.TButton", command=self.toggle_queue)
-        self.btn_queue.pack(side="bottom", fill="x", pady=(10, 0))
-        self.tv_users.pack(fill="both", expand=True)
-
-    def update_ranked_ui(self):
-        """BUSCAR PARTIDA solo se ofrece en los juegos donde el emulador detecta el resultado (ver DETECTOR_GAMES en el servidor)."""
-        if not hasattr(self, "btn_queue"):
-            return
-        ok = bool(self.channel) and self.channel in self.auto_channels
-        self.btn_queue.config(state="normal" if ok or self.queued else "disabled")
-        self.lbl_rk_note.config(text="" if ok or not self.channel else
-                                "Este juego aún no tiene ranked (no se detecta el resultado solo). Para jugar con otros usa Multijugador.")
+        self.show_view("multi")
 
     def refresh_me(self, **st):
         if self.me and hasattr(self, "lbl_me"):
             self.me.update(st)
-            r = f"\nELO {self.me['elo']} · {self.me['wins']}W {self.me['losses']}L" if self.channel else ""
+            r = f"\nELO {self.me['elo']} · {self.me['wins']}W {self.me['losses']}L" if self.channel and self.channel not in ZONES else ""
             self.lbl_me.config(text=f"{self.me['user_name']}{r}")
-
-    def log(self, text, tag=None, name=None, role=None, country=None):
-        if not hasattr(self, "chat"):
-            return
-        self.chat.config(state="normal")
-        if name:
-            flag = th.flag(country)
-            if flag:
-                self.chat.image_create("end", image=flag, padx=3)
-            self.chat.insert("end", name + ": ", "name_" + role if role in th.ROLE_COLOR else "name")
-        for chunk, code in split_text(text):                # :smile: -> imagen
-            if code:
-                self.chat.image_create("end", image=th.image(f"emo_{code}.png"), padx=1)
-            else:
-                self.chat.insert("end", chunk, tag)
-        self.chat.insert("end", "\n")
-        self.chat.config(state="disabled")
-        self.chat.see("end")
-
-    def toggle_emotes(self):
-        if self.emo_tray.winfo_ismapped():
-            self.emo_tray.pack_forget()
-        else:
-            self.emo_tray.pack(fill="x", pady=(6, 0), before=self.chat_inp)
-
-    def insert_emote(self, code):
-        self.chat_entry.insert("end", f":{code}: ")
-        self.chat_entry.focus_set()
-        self.chat_entry.icursor("end")

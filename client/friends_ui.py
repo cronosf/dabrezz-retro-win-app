@@ -66,7 +66,7 @@ class FriendsUI:
         self.v_friend.set("")
 
     def friend_invite(self, uid):
-        if not self.channel:
+        if not self.channel or self.channel in ("zone_ranked", "zone_dance"):
             return self.friends_msg("Entra primero a un juego (sección Juegos) para invitar a un amigo.", False)
         if self.match:
             return self.friends_msg("Ya estás en una partida.", False)

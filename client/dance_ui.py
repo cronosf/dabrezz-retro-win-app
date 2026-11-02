@@ -7,7 +7,7 @@ import client.colorlist as colorlist
 import client.theme as th
 import client.emote_ui as emote_ui
 from client.emotes import split_text
-from shared.capabilities import is_dance
+from shared.capabilities import ZONE_DANCE, is_dance
 from shared.protocol import CHANNEL_LABELS
 
 
@@ -64,8 +64,6 @@ class DanceUI:
         bar.pack(fill="x", pady=(10, 0))
         self.btn_dance_queue = ttk.Button(bar, text="BUSCAR PARTIDA", style="Cta.TButton", command=self.dance_toggle_queue)
         self.btn_dance_queue.pack(side="left")
-        for text, cmd in (("PROBAR JUEGO", self.test_game), ("DESCARGAR ROM", self.download_roms), ("CHAT DEL JUEGO", lambda: self.show_view("ranked"))):
-            ttk.Button(bar, text=text, command=cmd).pack(side="left", padx=(8, 0))
         body = tk.Frame(v, bg=th.BG)
         body.pack(fill="both", expand=True, pady=(12, 0))
         body.columnconfigure(0, weight=1)
@@ -108,7 +106,7 @@ class DanceUI:
         self.dance_chat.tag_config("sys", foreground=th.YELLOW)
         for role, color in th.ROLE_COLOR.items():
             self.dance_chat.tag_config("name_" + role, foreground=color)
-        self.dance_log("Chat compartido por todos los juegos de baile. Los mensajes no se guardan.", None)
+        self.dance_log("Chat libre de la Zona Baile: cualquiera que entre puede escribir, sin importar el juego que elija. Los mensajes no se guardan.", None)
         # derecha: jugadores del juego elegido
         right = ttk.Frame(body, style="Panel.TFrame", padding=12)
         right.grid(row=0, column=1, sticky="ns", padx=(14, 0))
@@ -142,9 +140,20 @@ class DanceUI:
             title.pack(anchor="w")
             meta = tk.Label(info, text="", font=(th.BODY, 9), fg=th.MUTED, bg=th.PANEL, anchor="w", cursor="hand2")
             meta.pack(anchor="w")
+            acts = tk.Frame(info, bg=th.PANEL)                     # acciones del juego: probarlo (control) y bajarlo si falta (flecha); debajo del titulo para no ensanchar la tarjeta
+            acts.pack(anchor="w", pady=(6, 0))
+            play = tk.Label(acts, image=th.image("ico_pad.png"), bg=th.PANEL_2, cursor="hand2", padx=7, pady=3)
+            play.pack(side="left", padx=(0, 6))
+            play.bind("<Button-1>", lambda e, c=ch: (self.dance_select(c), self.test_game(), "break")[2])
+            play.bind("<Enter>", lambda e, w=play: w.config(bg=th.NAV_SEL))
+            play.bind("<Leave>", lambda e, w=play: w.config(bg=th.PANEL_2))
+            dl = tk.Label(acts, text="⬇", fg="#ffffff", bg=th.ACCENT, cursor="hand2", font=("Segoe UI Symbol", 13, "bold"), padx=9, pady=3)
+            dl.bind("<Button-1>", lambda e, c=ch: (self.dance_select(c), self.download_roms(c), "break")[2])
+            dl.bind("<Enter>", lambda e, w=dl: w.config(bg=th.ACCENT_D))
+            dl.bind("<Leave>", lambda e, w=dl: w.config(bg=th.ACCENT))
             for w in (card, art, info, title, meta):
                 w.bind("<Button-1>", lambda e, c=ch: self.dance_select(c))
-            card.meta, card.art = meta, art
+            card.meta, card.art, card.dl = meta, art, dl
             self.dance_cards[ch] = card
         self.dance_refresh()
 
@@ -155,6 +164,9 @@ class DanceUI:
 
     # ---------- estado ----------
     def dance_enter(self):
+        """Pulsar Zona Baile: se entra a la zona (canal propio con su chat libre; se sale de Ranked o de cualquier juego)."""
+        if self.me and self.net.alive and self.channel != ZONE_DANCE:
+            self.net.send(t="join", channel=ZONE_DANCE)
         self.dance_cards_build()
         if not self.dance_sel and self.dance_cards:
             self.dance_select(next(iter(self.dance_cards)))
@@ -162,10 +174,7 @@ class DanceUI:
         self.dance_refresh()
 
     def dance_select(self, ch):
-        self.dance_sel = self.sel_game = ch
-        if self.channel != ch:
-            self.net.send(t="join", channel=ch)
-            self.lbl_chan.config(text=CHANNEL_LABELS.get(ch, ch))
+        self.dance_sel = self.sel_game = ch                  # elegir juego NO cambia de canal: el chat y la lista son de la zona
         self.dance_refresh()
 
     def dance_refresh(self):
@@ -174,8 +183,12 @@ class DanceUI:
             return
         for ch, card in self.dance_cards.items():
             has = self.rom_exists(ch)
-            card.meta.config(text=f"{'✔ ROM' if has else 'sin ROM'}  ·  {self.channels.get(ch, 0)} en línea")
+            card.meta.config(text=f"{'✔ ROM' if has else 'sin ROM'}  ·  {self.zone_counts.get(ZONE_DANCE, 0)} en la zona")
             card.config(highlightbackground=th.ACCENT if ch == self.dance_sel else th.BORDER)
+            if has:
+                card.dl.pack_forget()
+            elif not card.dl.winfo_ismapped():
+                card.dl.pack(side="left")
         self.btn_dance_queue.config(text="CANCELAR BÚSQUEDA" if self.queued else "BUSCAR PARTIDA",
                                     state="normal" if self.dance_sel or self.queued else "disabled")
         self.dance_users_refresh()
@@ -185,7 +198,7 @@ class DanceUI:
         if not hasattr(self, "dance_users"):
             return
         rows = []
-        for u in sorted(self.rosters.get(self.dance_sel, []), key=lambda u: (-th.ROLE_RANK.get(u.get("role"), 1), u["user_name"].lower())) if self.dance_sel else []:
+        for u in sorted(self.rosters.get(ZONE_DANCE, []), key=lambda u: (-th.ROLE_RANK.get(u.get("role"), 1), u["user_name"].lower())):
             role = u.get("role") if u.get("role") in th.ROLE_LABEL else "customer"
             rows.append({"iid": str(u["id"]), "flag": th.flag(u.get("country")), "color": th.ROLE_COLOR.get(role),
                          "text": ("⚔ " if u["busy"] else "") + u["user_name"], "cells": (th.ROLE_LABEL[role], f"{u['ping']}ms")})
@@ -216,11 +229,13 @@ class DanceUI:
         if self.match:
             return self.dance_say("Ya estás en una partida.", False)
         if not self.queued:
-            if not self.dance_sel or self.channel != self.dance_sel:
+            if not self.dance_sel:
                 return self.dance_say("Elige un juego de baile.", False)
             if not self.rm_need_game(self.dance_sel, "buscar partida"):
                 return
-        self.net.send(t="queue", on=not self.queued)
+            if self.channel != ZONE_DANCE:
+                self.net.send(t="join", channel=ZONE_DANCE)
+        self.net.send(t="queue", on=not self.queued, game=self.dance_sel)
 
     def dance_create(self):
         """Crear sala: lista con solo los juegos de baile (la misma ventana que en Multijugador)."""
@@ -248,8 +263,9 @@ class DanceUI:
         text = self.v_dance_msg.get().strip()
         if not text:
             return
-        if not is_dance(self.channel or ""):
-            return self.dance_say("Elige un juego de baile para chatear.", False)
+        if self.channel != ZONE_DANCE:
+            self.net.send(t="join", channel=ZONE_DANCE)             # el chat es de la zona (no de un juego): si no se estaba dentro, se entra y se envia de nuevo
+            return self.dance_say("Entrando a la Zona Baile… envía el mensaje otra vez.", False)
         self.net.send(t="chat", text=text)
         self.v_dance_msg.set("")
 

@@ -30,7 +30,8 @@ HELP = (
     ("b", "Controles: el botón CONFIGURAR (dentro de la sala, junto a INICIAR) reconoce la consola del juego y cómo se juega y te deja elegir tus teclas (y el mando donde se puede) "
           "para ese emulador: DuckStation en PS1 (Mednafen solo en la Zona Baile), Snes9x o RetroArch en SNES. En el Modo Anfitrión tiene dos pestañas: «Como anfitrión» y «Como invitado». Se guardan y se aplican solos al empezar cada partida; cada jugador usa los suyos. El que crea la sala es el jugador 1 y los demás ocupan "
           "los siguientes puertos al conectarse."),
-    ("b", "Zona Baile: los juegos de baile (Bust a Groove 1 y 2) se juegan aquí, con Mednafen. Elige el juego, pulsa BUSCAR PARTIDA (amistosa, 2 jugadores) "
+    ("b", "Zona Baile: los juegos de baile (Bust a Groove 1 y 2) se juegan aquí, con Mednafen. Es una zona aparte con su propio chat, libre para todos los que entren "
+          "(no depende del juego que elijas). En cada juego, el icono del control lo prueba y la flecha lo descarga si te falta. Pulsa BUSCAR PARTIDA (amistosa, 2 jugadores) "
           "o crea una sala con CREAR SALA; las salas abiertas aparecen en la lista con UNIRSE."),
     ("b", "Modo Anfitrión (Zona Baile): al crear la sala puedes elegirlo. Tú corres el juego en tu PC y el otro jugador lo ve en una ventana y juega por transmisión, "
           "sin tener el juego: no hay desincronización y el único retraso es el de su conexión contigo. La primera vez se descargan unas herramientas (unos 120 MB). "
@@ -38,8 +39,9 @@ HELP = (
           "(Xbox o genérico, como un control de PS1 con adaptador USB), con la ventana de la transmisión en primer plano. Puede cambiarlos en CONFIGURAR (en la sala) o en la Zona Baile, "
           "con una prueba en vivo de lo que reconoce la app. En AJUSTES (Zona Baile) o AJUSTES DE TRANSMISIÓN (en cualquier sala, junto a EXPULSAR) el anfitrión elige el tope de calidad del video en Mbps (la calidad baja y sube sola según la conexión de cada invitado, como en Parsec) y, en PS1 de 3 a 4 jugadores, el run-ahead de DuckStation (menos retraso, más gasto de procesador) (lo que sube su conexión; por defecto 4 Mbps de video, unos "
           "5,6 Mbps en total con la recuperación de pérdidas y el audio) y el invitado puede alinear la imagen con el sonido."),
-    ("b", "Ranked: elige un juego en Juegos y pulsa BUSCAR PARTIDA (debajo de la lista de jugadores). El ranked solo se juega buscando partida, "
-          "no con invitaciones ni salas, y solo en los juegos donde el emulador detecta el resultado."),
+    ("b", "Ranked: es una zona aparte (no depende de ningún juego): al entrar chateas con todos los que estén ahí y ves la lista de jugadores. Elige un juego con ranked y pulsa "
+          "BUSCAR PARTIDA, o crea una sala ranked con CREAR SALA (1 contra 1 con ELO). RANKING muestra el ranking de cada juego, global o por país; solo hay ranked en los juegos donde "
+          "el emulador detecta el resultado. Estás en una sola zona a la vez: al entrar a Ranked sales de la Zona Baile y al revés."),
     ("b", "Amigos: agrega a otros jugadores por su nombre de usuario (ellos aceptan la solicitud), mira quién está en línea, invítalos a una partida amistosa o escríbeles un mensaje privado. Haz clic derecho sobre un jugador de la lista para enviarle una invitación de amistad. Los mensajes privados solo se pueden enviar entre amigos y no se guardan: se borran al cerrar la app."),
     ("b", "La app se actualiza sola al abrirse cuando existe una versión nueva firmada."),
     ("h", "PlayStation 1 (beta)"),

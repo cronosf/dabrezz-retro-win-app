@@ -209,7 +209,7 @@ class RoomsUI:
         info = tk.Frame(row, bg=th.PANEL)
         info.pack(side="left", padx=14, fill="x", expand=True)
         tk.Label(info, text=CHANNEL_LABELS.get(ch, ch), font=(th.BODY, 12, "bold"), fg="#ffffff", bg=th.PANEL, anchor="w").pack(anchor="w")
-        sub = f"Sala de {r['owner_name']} · {platform_of(ch)}" + (" · Modo Anfitrión" if r.get("mode") == "host" else "") + (" · en partida" if r["playing"] else "")
+        sub = f"Sala de {r['owner_name']} · {platform_of(ch)}" + (" · Modo Anfitrión" if r.get("mode") == "host" else "") + (" · RANKED" if r.get("ranked") else "") + (" · en partida" if r["playing"] else "")
         tk.Label(info, text=sub, font=(th.BODY, 9), fg=th.MUTED, bg=th.PANEL, anchor="w").pack(anchor="w")
         cnt = tk.Frame(row, bg=th.PANEL)
         cnt.pack(side="left", padx=18)
@@ -246,7 +246,7 @@ class RoomsUI:
         if self.rm_need_game(ch, "unirte a esta sala"):
             self.net.send(t="room_join", id=rid)
 
-    def rm_create(self, games=None, title="Crear sala", modes=False):
+    def rm_create(self, games=None, title="Crear sala", modes=False, ranked=False):
         """Elegir el juego de la sala (lista con buscador) y crearla. Multijugador ofrece los juegos que no son de baile; la Zona Baile, solo los de baile."""
         if self.match:
             return self.rm_say("Ya estás en una partida.", False)
@@ -325,7 +325,7 @@ class RoomsUI:
             if mode == "host" and not self.stream_need_pack():
                 return
             if self.rm_need_game(sel[0], "crear la sala"):
-                self.net.send(t="room_create", channel=sel[0], mode=mode)
+                self.net.send(t="room_create", channel=sel[0], mode=mode, **({"ranked": True} if ranked else {}))
         ttk.Button(row, text="CREAR", style="Cta.TButton", command=go).pack(side="left", fill="x", expand=True)
         ttk.Button(row, text="CANCELAR", command=win.destroy).pack(side="left", padx=(8, 0))
         lst.canvas.bind("<Double-Button-1>", go)             # doble clic sobre un juego: crea la sala

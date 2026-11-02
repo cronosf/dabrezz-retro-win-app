@@ -47,7 +47,8 @@ from client.update_ui import UpdateUI  # noqa: E402
 from client.views import Views  # noqa: E402
 from client.net import Net  # noqa: E402
 from shared.protocol import APP_NAME, CHANNEL_LABELS, VERSION  # noqa: E402
-from shared.capabilities import is_dance  # noqa: E402
+from shared.capabilities import ZONE_DANCE, ZONE_RANKED, ZONES, is_dance  # noqa: E402
+from client.ranked_ui import RankedUI  # noqa: E402
 from shared.features import can_see  # noqa: E402
 
 # Valores internos: el usuario no los ve ni los cambia, siempre se aplican estos (aunque el config.json guardado diga otra cosa).
@@ -175,7 +176,7 @@ def detect_emulator(data):
     return p if os.path.exists(p) else ""
 
 
-class App(Views, LoginPages, LobbyPages, FriendsUI, DmUI, RoomsUI, DanceUI, HomeRooms, ControlsUI, ConfigUI, DanceControlsUI, DanceSettingsUI, AdminUI, HelpUI, UpdateUI, tk.Tk):
+class App(Views, LoginPages, LobbyPages, FriendsUI, DmUI, RoomsUI, DanceUI, RankedUI, HomeRooms, ControlsUI, ConfigUI, DanceControlsUI, DanceSettingsUI, AdminUI, HelpUI, UpdateUI, tk.Tk):
     auto_session = False
     kick_msg = ""           # motivo con el que el servidor expulso al jugador (se muestra al cerrarse la conexion)
     rom_busy = False
@@ -200,6 +201,7 @@ class App(Views, LoginPages, LobbyPages, FriendsUI, DmUI, RoomsUI, DanceUI, Home
         self.roster_names = {}
         self._dm_init()
         self.rosters = {}
+        self.zone_counts = {}
         self.channel = None
         self.match = None
         self.emu = None
@@ -401,21 +403,6 @@ class App(Views, LoginPages, LobbyPages, FriendsUI, DmUI, RoomsUI, DanceUI, Home
         if self.cfg["emulator"]:
             dirs.append(os.path.join(os.path.dirname(self.cfg["emulator"]), "..", "..", "ROMs"))
         return any(d and os.path.exists(os.path.join(d, channel + ".zip")) for d in dirs)
-
-    def send_chat(self, _=None):
-        text = self.v_msg.get().strip()
-        if text and not self.channel:
-            return self.log("Primero entra a un juego desde la sección Juegos: el chat es de la sala de cada juego.", "sys")
-        if text:
-            self.net.send(t="chat", text=text)
-        self.v_msg.set("")
-
-    def toggle_queue(self):
-        if not self.channel:
-            return messagebox.showinfo(APP_NAME, "Entra primero a un juego (doble clic).")
-        if not self.queued and self.channel not in self.auto_channels and not is_dance(self.channel):
-            return messagebox.showinfo(APP_NAME, "Este juego aún no tiene ranked: no se detecta el resultado solo.\nPara jugar con otros usa Multijugador (salas).")
-        self.net.send(t="queue", on=not self.queued)
 
     # ---------- RetroArch (partidas de 3 a 5 jugadores y N64) ----------
     def ensure_retro(self):
@@ -711,17 +698,11 @@ class App(Views, LoginPages, LobbyPages, FriendsUI, DmUI, RoomsUI, DanceUI, Home
 
     # ---------- eventos ----------
     def show_roster(self, users):
-        rows = []
-        # Developer primero, luego Admin y luego Player; dentro de cada grupo, por ELO
-        for u in sorted(users, key=lambda u: (-th.ROLE_RANK.get(u.get("role"), 1), -u["elo"], u["user_name"].lower())):
+        """Lista de un canal de JUEGO (se entra con una tarjeta de Juegos): de ahi salen el ELO propio y los nombres. Las zonas (Ranked, Zona Baile) tienen su propia lista."""
+        for u in users:
             if self.me and u["id"] == self.me["id"]:
                 self.refresh_me(elo=u["elo"], wins=u["wins"], losses=u["losses"])
-            role = u.get("role") if u.get("role") in th.ROLE_LABEL else "customer"
-            rows.append({"iid": str(u["id"]), "flag": th.flag(u.get("country")), "color": th.ROLE_COLOR.get(role),
-                         "text": ("⚔ " if u["busy"] else "") + u["user_name"],
-                         "cells": (th.ROLE_LABEL[role], u["elo"], f"{u['wins']}-{u['losses']}", f"{u['ping']}ms")})
         self.roster_names = {u["id"]: u["user_name"] for u in users}
-        self.tv_users.set_rows(rows)
 
     def ping_loop(self):
         if self.net.alive and self.me:
@@ -887,25 +868,27 @@ class App(Views, LoginPages, LobbyPages, FriendsUI, DmUI, RoomsUI, DanceUI, Home
         elif t == "channels":
             self.apply_labels(m.get("labels"))
             self.channels = m["channels"]
+            self.zone_counts = m.get("zones") or {}
             self.render_channels()
+            self.dance_refresh()
         elif t == "joined":
             before, self.channel = self.channel, m["channel"]
-            self.lbl_chan.config(text=CHANNEL_LABELS.get(self.channel, self.channel))
-            if before != self.channel and not is_dance(self.channel):      # el chat de Ranked solo avisa al cambiar de juego (y la Zona Baile no lo ensucia: tiene su propio chat)
+            if before != self.channel and self.channel not in ZONES:      # el chat de Ranked solo avisa al cambiar de juego (y la Zona Baile no lo ensucia: tiene su propio chat)
                 self.log(f"Entraste a {CHANNEL_LABELS.get(self.channel, self.channel)}", "sys")
             self.show_roster(self.rosters.get(self.channel, []))    # el servidor manda la lista ANTES de "joined"
             self.update_ranked_ui()
             self.dance_refresh()
         elif t == "roster":
             self.rosters[m["channel"]] = m["users"]
-            if m["channel"] == self.channel:
+            if m["channel"] == self.channel and m["channel"] not in ZONES:
                 self.show_roster(m["users"])
             self.rm_cand_refresh()
             self.dance_users_refresh()
+            self.ranked_users_refresh()
         elif t == "chat":
-            if is_dance(str(m.get("channel", ""))):                        # los chats son independientes: lo de la Zona Baile solo sale en su chat y lo de Ranked en el de Ranked
+            if m.get("channel") == ZONE_DANCE:                             # los chats son independientes: cada zona (Zona Baile, Ranked) tiene el suyo
                 self.dance_log(str(m["text"])[:300], str(m["user_name"])[:12], m.get("role"), m.get("country"))
-            else:
+            elif m.get("channel") == ZONE_RANKED:
                 self.log(m["text"], name=m["user_name"], role=m.get("role"), country=m.get("country"))
         elif t == "challenge":
             ok = messagebox.askyesno(APP_NAME, f"{m['from_user_name']} te reta ({'ranked a ' + str(m['first_to']) if m['ranked'] else 'amistoso'}) en {m['channel']}.\n¿Aceptas?")
@@ -920,15 +903,15 @@ class App(Views, LoginPages, LobbyPages, FriendsUI, DmUI, RoomsUI, DanceUI, Home
             self.log(f"{m['by_user_name']} rechazó el reto", "sys")
         elif t == "queued":
             self.queued = m["on"]
-            self.btn_queue.config(text="CANCELAR BÚSQUEDA" if self.queued else "BUSCAR PARTIDA")
-            self.update_ranked_ui()
+            self.ranked_on_queued()
             self.dance_on_queued()
         elif t == "match":
             if not ROM_RE.fullmatch(str(m.get("channel", ""))) or m["channel"] not in self.channels:
                 return self.log("Partida con un juego desconocido; se ignora.", "sys")
             self.match = m
             self.queued = False
-            self.btn_queue.config(text="BUSCAR PARTIDA")
+            self.ranked_refresh()
+            self.dance_refresh()
             if not self.net.udp:
                 self.net.udp_open(self.net.token)
             self.log(f"Partida {'ranked a ' + str(m['first_to']) + ' ' if m['ranked'] else ''}contra {m['rival_user_name']}", "sys")
@@ -961,9 +944,7 @@ class App(Views, LoginPages, LobbyPages, FriendsUI, DmUI, RoomsUI, DanceUI, Home
                 self.log("Sin cambio de ELO: ya jugaste muchas veces contra este rival hoy." if f == 0 else
                          f"ELO reducido al {round(f * 100)}% por jugar varias veces contra el mismo rival hoy.", "sys")
         elif t == "top":
-            self.table(f"Ranking · {m['channel']}", (("n", 190, "JUGADOR"), ("elo", 70, "ELO"), ("w", 60, "W"), ("l", 60, "L")),
-                       [(u["user_name"], u["elo"], u["wins"], u["losses"]) for u in m["users"]],
-                       flags=[u.get("country") for u in m["users"]], roles=[u.get("role") for u in m["users"]])
+            self.ranking_show(m)
         elif t == "history":
             self.table("Historial", (("g", 90, "JUEGO"), ("a", 130, "P1"), ("b", 130, "P2"), ("s", 80, "ESTADO"), ("d", 140, "FECHA")),
                        [(x["game"], x["p1_user_name"], x["p2_user_name"], x["status"], x["started_at"][:16]) for x in m["matches"]])

@@ -76,7 +76,7 @@ class LobbyPages:
                  font=(th.BODY, 9)).pack(anchor="w")
         rows = [("Correo", self.cfg.get("email") or "—"), ("Cuenta", "Dabrezz Play · " + th.ROLE_LABEL.get(me.get("role"), "Player")),
                 ("Acceso", f"Hasta el {me['expires']}" if me.get("expires") else "Sin límite")]
-        if self.channel:
+        if self.channel and not self.channel.startswith("zone_"):
             rows.append(("Ranking", f"ELO {me.get('elo', 1500)} · {me.get('wins', 0)}G {me.get('losses', 0)}P en {self.channel}"))
         grid = tk.Frame(card, bg=th.PANEL)
         grid.pack(fill="x", pady=(22, 0))

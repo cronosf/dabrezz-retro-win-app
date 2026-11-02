@@ -10,6 +10,10 @@ emulador solo sincroniza 2, no se puede jugar de 5 por internet.
   * Mednafen (psxm_*, Bust a Groove 1 y 2): su propio netplay con Mednafen-Server, 2 jugadores.
 """
 NETPLAY_MAX = {"fbneo": 2, "snes9x": 2, "duckstation": 2, "n64": 0, "mednafen": 2}
+# Zonas: "lugares" con su propio chat y su lista de jugadores, independientes de cualquier juego. Un jugador esta en UN solo canal a la vez (un juego o una zona): al entrar a
+# Ranked o a la Zona Baile sale del anterior, asi no aparece duplicado. La busqueda de partida lleva el juego elegido aparte (mensaje `queue` con `game`).
+ZONE_RANKED, ZONE_DANCE = "zone_ranked", "zone_dance"
+ZONES = frozenset({ZONE_RANKED, ZONE_DANCE})
 PARTY_MAX = 4                                # jugadores de una sala de PS1 en Modo Anfitrion (el anfitrion + 3 invitados, con el multitap)
 RETRO_MAX = {"snes": 5}          # jugadores que admite el netplay de RetroArch (Super Multitap)
 
