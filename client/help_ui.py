@@ -4,10 +4,8 @@ import webbrowser
 from tkinter import ttk
 
 import client.theme as th
+from client.legal import AUTHOR, CONTACT, PRIVACY, TERMS      # el mismo texto que ve quien crea una cuenta
 from shared.protocol import VERSION
-
-AUTHOR = "CRONOSF DEV"
-CONTACT = "cronosfvr@gmail.com"
 
 # (estilo, texto): "h" = titulo de seccion, "p" = parrafo, "b" = vineta
 HELP = (
@@ -50,26 +48,9 @@ HELP = (
     ("b", "Las partidas son de 2 jugadores (1 contra 1): el creador de la sala es el anfitrión. Solo amistoso (sin ELO)."),
     ("b", "Descarga el disco con DESCARGAR ROM y configura tus controles con PROBAR JUEGO (en DuckStation: Ajustes > Controladores)."),
     ("h", "Términos y condiciones"),
-    ("p", f"1. Gratuita. Dabrezz Play es gratuita y se puede distribuir libremente sin cobrar por ella. Está desarrollada por {AUTHOR}. "
-          "No se debe vender ni cobrar por su descarga, instalación o uso."),
-    ("p", "2. Sin garantía. La app se ofrece \"tal cual\", sin garantías de disponibilidad, continuidad ni ausencia de errores. El servicio "
-          "puede cambiar, interrumpirse o cerrarse en cualquier momento."),
-    ("p", "3. Emuladores y juegos. Los emuladores incluidos pertenecen a sus autores y se distribuyen bajo sus propias licencias "
-          "(consulta la carpeta de avisos de licencias de la instalación). Los juegos (ROMs) son propiedad de sus titulares: "
-          "usa únicamente copias que tengas derecho a usar. Dabrezz Play no es propietaria de ellos ni está afiliada a sus fabricantes."),
-    ("p", "4. Conducta. Está prohibido hacer trampas, usar clientes modificados o no oficiales, manipular resultados, acordar partidas "
-          "para inflar el ranking, suplantar a otros, usar nombres ofensivos o atacar el servicio. El incumplimiento puede causar "
-          "silenciamiento, restablecimiento del nombre, anulación de resultados o bloqueo de la cuenta."),
-    ("p", "5. Datos. El servidor guarda tu correo, tu nombre de usuario, tu ranking, el historial de "
-          "partidas y la dirección IP necesaria para conectar y detectar abusos. Tu nombre real y correo no se muestran a otros "
-          "jugadores. Tu contraseña se guarda cifrada de forma irreversible (scrypt) y viaja siempre por una conexión cifrada. Del país "
-          "que indica tu dirección IP al conectarte solo se guarda su código, para mostrar tu bandera junto a tu nombre; la IP en sí no se guarda."),
-    ("p", "6. Conexión entre jugadores. Para jugar en línea tu equipo se conecta con el del rival (o a través del servidor), por lo que "
-          "este puede conocer tu dirección IP durante la partida."),
-    ("p", f"7. Responsabilidad. {AUTHOR} no se hace responsable de daños, pérdida de datos o problemas derivados del uso de la app, "
-          "de los emuladores o de partidas con terceros."),
-    ("p", "8. Cambios. Estos términos pueden actualizarse con nuevas versiones de la app. Usarla implica aceptarlos."),
-    ("p", "9. Créditos. Banderas: flag-icons (licencia MIT). Países por IP: datos «IP to Country Lite» de DB-IP.com (licencia CC BY 4.0)."),
+    *TERMS,
+    ("h", "Política de privacidad"),
+    *PRIVACY,
     ("h", "Contacto y soporte"),
     ("p", f"Desarrollada por {AUTHOR}. Para dudas, errores, sugerencias o reportes de abuso escribe a:"),
 )

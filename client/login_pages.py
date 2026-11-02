@@ -5,6 +5,7 @@ import tkinter as tk
 from tkinter import ttk
 
 import shared.passrules as passwords
+import client.legal as legal
 import client.theme as th
 
 NICK_RE = re.compile(r"^[A-Za-z0-9_]{5,12}$")
@@ -75,6 +76,18 @@ class LoginPages:
         v["nick"].trace_add("write", lambda *a: self._reg_nick_hint(hint["nick"], v["nick"].get()))
         v["pw2"].trace_add("write", lambda *a: self._reg_pw_hint(hint["pw2"], v["pw"].get(), v["pw2"].get()))
         v["pw"].trace_add("write", lambda *a: self._reg_pw_hint(hint["pw2"], v["pw"].get(), v["pw2"].get()))
+        self.v_terms = tk.BooleanVar(value=False)                      # aceptacion de los terminos y la politica de privacidad (client/legal.py)
+        terms = tk.Frame(box, bg=th.BG)
+        terms.pack(fill="x", pady=(14, 0))
+        tk.Checkbutton(terms, text="Leí y acepto los Términos y Condiciones y la Política de Privacidad de Dabrezz Play.", variable=self.v_terms, onvalue=True, offvalue=False,
+                       fg=th.TEXT, bg=th.BG, selectcolor=th.FIELD, activebackground=th.BG, activeforeground=th.TEXT, bd=0, highlightthickness=0, font=(th.BODY, 9),
+                       justify="left", anchor="w", wraplength=340, cursor="hand2").pack(anchor="w")
+        links = tk.Frame(terms, bg=th.BG)
+        links.pack(anchor="w", padx=(22, 0), pady=(2, 0))
+        for text, which in (("Leer Términos y Condiciones", "terms"), ("Leer Política de Privacidad", "privacy")):
+            lk = tk.Label(links, text=text, fg=th.LINK, bg=th.BG, font=(th.BODY, 9, "underline"), cursor="hand2")
+            lk.pack(side="left", padx=(0, 16))
+            lk.bind("<Button-1>", lambda e, w=which: legal.show(self, w))
         self.lbl_reg = tk.Label(box, text="", fg=th.ERR, bg=th.BG, wraplength=360, justify="left", font=(th.BODY, 9))
         self.lbl_reg.pack(anchor="w", pady=(10, 4))
         self.btn_reg = ttk.Button(box, text="CREAR CUENTA", style="Cta.TButton", command=self.submit_register)
@@ -112,6 +125,8 @@ class LoginPages:
         nick, email = v["nick"].strip(), v["email"].strip()
         problem = (self.nick_problem(nick) or ("Escribe un correo válido" if not EMAIL_RE.match(email) or len(email) > 120 else None)
                    or passwords.problem(v["pw"]) or (None if v["pw"] == v["pw2"] else "Las contraseñas no coinciden"))
+        if not problem and not self.v_terms.get():
+            problem = "Para crear la cuenta debes aceptar los Términos y Condiciones y la Política de Privacidad."
         if problem:
             return self.lbl_reg.config(text=problem, fg=th.ERR)
         self.lbl_reg.config(text="Creando tu cuenta…", fg=th.MUTED)
