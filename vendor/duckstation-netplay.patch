@@ -1,0 +1,610 @@
+diff --git a/src/common/log.cpp b/src/common/log.cpp
+index 105e88a..e60f602 100644
+--- a/src/common/log.cpp
++++ b/src/common/log.cpp
+@@ -397,7 +397,10 @@ static void FileOutputLogCallback(void* pUserParam, const char* channelName, con
+ 
+   FormatLogMessageAndPrint(
+     channelName, functionName, level, message, true, false, true,
+-    [](const char* message, int message_len) { std::fwrite(message, 1, message_len, s_fileOutputHandle.get()); });
++    [](const char* message, int message_len) {
++      std::fwrite(message, 1, message_len, s_fileOutputHandle.get());
++      std::fflush(s_fileOutputHandle.get()); // Dabrezz Retro: el registro no se pierde si el proceso se cierra de golpe
++    });
+ }
+ 
+ void SetFileOutputParams(bool enabled, const char* filename, bool timestamps /* = true */,
+diff --git a/src/core/netplay.cpp b/src/core/netplay.cpp
+index fe52918..7b75bc6 100644
+--- a/src/core/netplay.cpp
++++ b/src/core/netplay.cpp
+@@ -1,5 +1,6 @@
+ #include "netplay.h"
+ #include "bios.h"
++#include "cheats.h"
+ #include "common/byte_stream.h"
+ #include "common/file_system.h"
+ #include "common/gpu_texture.h"
+@@ -60,13 +61,14 @@ static bool NpOnEventCb(void* ctx, GGPOEvent* ev);
+ static GGPOPlayerHandle PlayerIdToGGPOHandle(s32 player_id);
+ static Input ReadLocalInput();
+ static GGPOErrorCode AddLocalInput(Netplay::Input input);
+-static GGPOErrorCode SyncInput(Input inputs[2], int* disconnect_flags);
+-static void SetInputs(Input inputs[2]);
++static GGPOErrorCode SyncInput(Input inputs[MAX_PLAYERS], int* disconnect_flags);
++static void SetInputs(Input inputs[MAX_PLAYERS], s32 count);
+ 
+ static void SetSettings(const ConnectResponseMessage* msg);
+ static void FillSettings(ConnectResponseMessage* msg);
+ 
+ static bool CreateDummySystem();
++void EnsureSessionCheats();
+ static void CloseSessionWithError(const std::string_view& message);
+ static void RequestCloseSession(CloseSessionMessage::Reason reason);
+ 
+@@ -164,6 +166,16 @@ static std::string s_local_nickname;
+ static std::string s_local_session_password;
+ static GGPOPlayerHandle s_local_handle = GGPO_INVALID_HANDLE;
+ static s32 s_local_delay = 0;
++static s32 s_forced_local_port = 0;  // Dabrezz Retro: puerto local al unirse (0 = cualquiera)
++static s32 s_forced_input_delay = 1; // Dabrezz Retro: retraso de entrada local
++static s32 s_expected_players = 0;   // Dabrezz Retro: jugadores que el anfitrion espera antes de empezar la partida
++static s32 s_requested_player = -1;  // Dabrezz Retro: numero de jugador que pide este invitado (-1 = cualquiera libre)
++static ENetAddress s_peer_override[MAX_PLAYERS]; // Dabrezz Retro: direccion por la que ESTE jugador alcanza a cada otro (la que hallo la app: puerto vecino, o el relay del servidor)
++static bool s_peer_override_set[MAX_PLAYERS] = {};
++static Common::Timer s_keepalive_timer; // Dabrezz Retro: saludo periodico al relay del servidor
++static std::string s_cheat_file;     // Dabrezz Retro: trucos de la sesion ("ROM liberado")
++static Common::Timer s_wait_timer;   // Dabrezz Retro: desde que se unio el ultimo jugador (el anfitrion no espera para siempre a uno que no llega)
++static constexpr float WAIT_LAST_PLAYER_SECS = 25.0f;
+ static GGPONetworkStats s_last_net_stats{};
+ static GGPOSession* s_ggpo = nullptr;
+ 
+@@ -338,7 +350,8 @@ bool Netplay::Start(bool is_hosting, std::string nickname, const std::string& re
+   // Create our "host" (which is basically just our port).
+   ENetAddress server_address;
+   server_address.host = ENET_HOST_ANY;
+-  server_address.port = is_hosting ? static_cast<u16>(port) : ENET_PORT_ANY;
++  server_address.port = is_hosting ? static_cast<u16>(port) :
++                                     (s_forced_local_port > 0 ? static_cast<u16>(s_forced_local_port) : ENET_PORT_ANY);
+   s_enet_host = enet_host_create(&server_address, MAX_PLAYERS - 1, NUM_ENET_CHANNELS, 0, 0);
+   if (!s_enet_host)
+   {
+@@ -369,7 +382,7 @@ bool Netplay::Start(bool is_hosting, std::string nickname, const std::string& re
+   }
+ 
+   // for non-hosts, we don't know our player id yet until after we connect...
+-  s_player_id = -1;
++  s_player_id = (s_requested_player > 0 && s_requested_player < MAX_PLAYERS) ? s_requested_player : -1;   // Dabrezz Retro: el numero que pide (el de su sitio en la sala)
+ 
+   // Connect to host.
+   s_host_address.port = static_cast<u16>(port);
+@@ -639,6 +652,23 @@ void Netplay::HandleEnetEvent(const ENetEvent* event)
+ 
+ void Netplay::PollEnet(Common::Timer::Value until_time)
+ {
++  // Dabrezz Retro: con el relay del servidor, el router de cada jugador solo deja pasar lo que llega de un destino al que ya escribio; mientras se espera a los demas el emulador no envia nada y
++  // el router cierra ese paso (a los 30 s o menos en muchos operadores). Un saludo de 1 byte cada 2 s a cada direccion indicada por la app lo mantiene abierto (ENet lo descarta por pequeño).
++  if (s_enet_host && s_keepalive_timer.GetTimeSeconds() >= 2.0)
++  {
++    s_keepalive_timer.Reset();
++    static const u8 ping_byte = 0;
++    for (s32 i = 0; i < MAX_PLAYERS; i++)
++    {
++      if (!s_peer_override_set[i] || i == s_player_id)
++        continue;
++      ENetBuffer buf;
++      buf.data = const_cast<u8*>(&ping_byte);
++      buf.dataLength = 1;
++      enet_socket_send(s_enet_host->socket, &s_peer_override[i], &buf, 1);
++    }
++  }
++
+   ENetEvent event;
+ 
+   u64 current_time = Common::Timer::GetCurrentValue();
+@@ -1031,7 +1061,7 @@ void Netplay::HandleMessageFromNewPeer(ENetPeer* peer, const ENetPacket* pkt)
+   }
+ 
+   // Any free slots?
+-  const s32 new_player_id = (msg->requested_player_id >= 0) ? msg->requested_player_id : GetFreePlayerId();
++  const s32 new_player_id = (msg->requested_player_id >= 0 && msg->requested_player_id < MAX_PLAYERS) ? msg->requested_player_id : GetFreePlayerId();
+   if (new_player_id < 0)
+   {
+     Log_ErrorPrintf("Server full, rejecting connection.");
+@@ -1075,6 +1105,14 @@ void Netplay::HandlePeerConnectionAsNonHost(ENetPeer* peer, s32 claimed_player_i
+     return;
+   }
+ 
++  // Dabrezz Retro: una conexion SALIENTE nuestra (a otro invitado) que se completo: ya esta en la tabla de jugadores y el dato de ENet vale 0 de este lado, no es el id del otro
++  // (el codigo original lo tomaba por una conexion entrante con id 0 y fallaba la aserciones con 3 o mas jugadores).
++  if (GetPlayerIdForPeer(peer) >= 0)
++  {
++    Log_DevPrintf("Outgoing connection to player %d completed", GetPlayerIdForPeer(peer));
++    return;
++  }
++
+   Log_VerbosePrint(
+     fmt::format("New peer connection from {} claiming player ID {}", PeerAddressString(peer), claimed_player_id)
+       .c_str());
+@@ -1276,8 +1314,13 @@ void Netplay::HandleResetMessage(s32 player_id, const ENetPacket* pkt)
+     if (i == s_host_player_id)
+       continue;
+ 
++    // Dabrezz Retro: la direccion que dio el anfitrion es como LE ve a el; la que nos sirve es la que hallo la app (puerto vecino o relay del servidor).
++    ENetAddress target = {msg->players[i].host, msg->players[i].port};
++    if (s_peer_override_set[i])
++      target = s_peer_override[i];
++
+     // The host should fall into the category where we can reuse.
+-    if (p.peer && p.peer->address.host == msg->players[i].host && p.peer->address.port == msg->players[i].port)
++    if (p.peer && p.peer->address.host == target.host && p.peer->address.port == target.port)
+     {
+       Log_DevPrintf("Preserving connection to player %d", i);
+       continue;
+@@ -1299,7 +1342,7 @@ void Netplay::HandleResetMessage(s32 player_id, const ENetPacket* pkt)
+       continue;
+     }
+ 
+-    const ENetAddress address = {msg->players[i].host, msg->players[i].port};
++    const ENetAddress address = target;
+     p.peer = enet_host_connect(s_enet_host, &address, NUM_ENET_CHANNELS, static_cast<u32>(s_player_id));
+     if (!p.peer)
+       Panic("Failed to connect to peer on resynchronize");
+@@ -1368,6 +1411,7 @@ void Netplay::UpdateResetState()
+     if (static_cast<s32>(s_reset_players.count()) == s_num_players)
+     {
+       Log_VerbosePrintf("All players synchronized, resuming!");
++      s_wait_timer.Reset();
+       SendControlPacketToAll(NewControlPacket<ResumeSessionMessage>());
+       CreateGGPOSession();
+       s_state = SessionState::Running;
+@@ -1554,13 +1598,18 @@ void Netplay::SetSettings(const ConnectResponseMessage* msg)
+   MemorySettingsInterface& si = s_settings_overlay;
+ 
+   si.Clear();
+-  for (u32 i = 0; i < MAX_PLAYERS; i++)
++  // Dabrezz Retro: con 3 o 4 jugadores el anfitrion activa el multitap del puerto 1 (los invitados lo reciben en los ajustes del anfitrion); los 4 mandos son Pad1..Pad4
++  const MultitapMode multitap =
++    msg ? msg->settings.multitap_mode :
++          (s_expected_players > 2 ? MultitapMode::Port1Only : g_settings.multitap_mode);
++  const u32 num_pads = (multitap == MultitapMode::Port1Only || multitap == MultitapMode::BothPorts) ? static_cast<u32>(MAX_PLAYERS) : 2u;
++  for (u32 i = 0; i < num_pads; i++)
+   {
+     // Only digital pads supported for now.
+     si.SetStringValue(Controller::GetSettingsSection(i).c_str(), "Type",
+                       Settings::GetControllerTypeName(ControllerType::DigitalController));
+   }
+-  for (u32 i = MAX_PLAYERS; i < NUM_CONTROLLER_AND_CARD_PORTS; i++)
++  for (u32 i = num_pads; i < NUM_CONTROLLER_AND_CARD_PORTS; i++)
+   {
+     si.SetStringValue(Controller::GetSettingsSection(i).c_str(), "Type",
+                       Settings::GetControllerTypeName(ControllerType::None));
+@@ -1629,7 +1678,7 @@ void Netplay::SetSettings(const ConnectResponseMessage* msg)
+                                                  g_settings.display_aspect_ratio)));
+   si.SetIntValue("Display", "CustomAspectRatioNumerator", SELECT_SETTING(display_aspect_ratio_custom_numerator));
+   si.GetIntValue("Display", "CustomAspectRatioDenominator", SELECT_SETTING(display_aspect_ratio_custom_denominator));
+-  si.SetStringValue("ControllerPorts", "MultitapMode", Settings::GetMultitapModeName(SELECT_SETTING(multitap_mode)));
++  si.SetStringValue("ControllerPorts", "MultitapMode", Settings::GetMultitapModeName(multitap));
+   si.SetIntValue("Hacks", "DMAMaxSliceTicks", SELECT_SETTING(dma_max_slice_ticks));
+   si.SetIntValue("Hacks", "DMAHaltTicks", SELECT_SETTING(dma_halt_ticks));
+   si.SetIntValue("Hacks", "GPUFIFOSize", SELECT_SETTING(gpu_fifo_size));
+@@ -1779,7 +1828,7 @@ void Netplay::RunFrame()
+   // run game
+   auto result = GGPO_OK;
+   int disconnect_flags = 0;
+-  Netplay::Input inputs[2] = {};
++  Netplay::Input inputs[MAX_PLAYERS] = {};
+   // add local input
+   if (s_local_handle != GGPO_INVALID_HANDLE)
+   {
+@@ -1836,9 +1885,9 @@ void Netplay::SendChatMessage(const std::string_view& msg)
+   ShowChatMessage(s_player_id, msg);
+ }
+ 
+-GGPOErrorCode Netplay::SyncInput(Netplay::Input inputs[2], int* disconnect_flags)
++GGPOErrorCode Netplay::SyncInput(Netplay::Input inputs[MAX_PLAYERS], int* disconnect_flags)
+ {
+-  return ggpo_synchronize_input(s_ggpo, inputs, sizeof(Netplay::Input) * 2, disconnect_flags);
++  return ggpo_synchronize_input(s_ggpo, inputs, sizeof(Netplay::Input) * MAX_PLAYERS, disconnect_flags);
+ }
+ 
+ GGPOErrorCode Netplay::AddLocalInput(Netplay::Input input)
+@@ -1848,9 +1897,16 @@ GGPOErrorCode Netplay::AddLocalInput(Netplay::Input input)
+ 
+ s32 Netplay::GetPing()
+ {
+-  const int handle = s_local_handle == 1 ? 2 : 1;
+-  ggpo_get_network_stats(s_ggpo, handle, &s_last_net_stats);
+-  return s_last_net_stats.network.ping;
++  // Dabrezz Retro: con varios rivales se muestra el peor ping
++  s32 worst = 0;
++  for (s32 i = 0; i < MAX_PLAYERS; i++)
++  {
++    if (i == s_player_id || !s_peers[i].peer || s_peers[i].ggpo_handle == GGPO_INVALID_HANDLE)
++      continue;
++    if (ggpo_get_network_stats(s_ggpo, s_peers[i].ggpo_handle, &s_last_net_stats) == GGPO_OK)
++      worst = std::max<s32>(worst, s_last_net_stats.network.ping);
++  }
++  return worst;
+ }
+ 
+ u32 Netplay::GetMaxPrediction()
+@@ -1858,17 +1914,96 @@ u32 Netplay::GetMaxPrediction()
+   return MAX_ROLLBACK_FRAMES;
+ }
+ 
+-void Netplay::SetInputs(Netplay::Input inputs[2])
++void Netplay::SetInputs(Netplay::Input inputs[MAX_PLAYERS], s32 count)
+ {
+-  for (u32 i = 0; i < 2; i++)
++  // Dabrezz Retro: el jugador con id N (0 = anfitrion, 1..3 = invitados segun su sitio en la sala) maneja el mando N, este presente quien este presente; con multitap son los 4 mandos del puerto 1.
++  // Los mandos de quien no esta se sueltan. inputs[k] es el k-esimo jugador presente, por orden de id.
++  s32 ids[MAX_PLAYERS] = {};
++  s32 n = 0;
++  for (s32 id = 0; id < MAX_PLAYERS && n < count; id++)
++  {
++    if (id == s_player_id || s_peers[id].peer)
++      ids[n++] = id;
++  }
++  for (u32 i = 0; i < static_cast<u32>(MAX_PLAYERS); i++)
+   {
+     auto cont = Pad::GetController(i);
++    if (cont)
++    {
++      for (u32 j = 0; j < (u32)DigitalController::Button::Count; j++)
++        cont->SetBindState(j, 0.0f);
++    }
++  }
++  for (s32 k = 0; k < n; k++)
++  {
++    auto cont = Pad::GetController(static_cast<u32>(ids[k]));
++    if (!cont)
++      continue;
++    const s32 i = k;
+     std::bitset<sizeof(u32) * 8> button_bits(inputs[i].button_data);
+     for (u32 j = 0; j < (u32)DigitalController::Button::Count; j++)
+       cont->SetBindState(j, button_bits.test(j) ? 1.0f : 0.0f);
+   }
+ }
+ 
++void Netplay::SetLocalPort(s32 port)
++{
++  s_forced_local_port = port;
++}
++
++void Netplay::SetPeerAddress(s32 player_id, const std::string& host, s32 port)
++{
++  if (player_id < 0 || player_id >= MAX_PLAYERS)
++    return;
++  ENetAddress a = {};
++  if (enet_address_set_host(&a, host.c_str()) != 0)
++    return;
++  a.port = static_cast<u16>(port);
++  s_peer_override[player_id] = a;
++  s_peer_override_set[player_id] = true;
++}
++
++void Netplay::SetCheatFile(const std::string& path)
++{
++  s_cheat_file = path;
++}
++
++// Dabrezz Retro: carga los trucos de la sesion si no estan (cargar un estado de otro jugador, o un reinicio de la sesion, vacia la lista) y los activa TODOS. Se llama antes de cada fotograma
++// en todos los jugadores, asi la partida empieza con los mismos trucos en todos.
++void Netplay::EnsureSessionCheats()
++{
++  if (s_cheat_file.empty() || System::HasCheatList())
++    return;
++  if (!System::LoadCheatList(s_cheat_file.c_str()))
++  {
++    Log_ErrorPrintf("Netplay: no se pudieron cargar los trucos de '%s'", s_cheat_file.c_str());
++    s_cheat_file.clear(); // no se reintenta cada fotograma
++    return;
++  }
++  CheatList* cl = System::GetCheatList();
++  if (cl)
++  {
++    for (u32 i = 0; i < cl->GetCodeCount(); i++)
++      cl->SetCodeEnabled(i, true);
++    Log_InfoPrintf("Netplay: %u trucos de la sesion cargados y activos", cl->GetCodeCount());
++  }
++}
++
++void Netplay::SetRequestedPlayer(s32 player_id)
++{
++  s_requested_player = player_id;
++}
++
++void Netplay::SetExpectedPlayers(s32 players)
++{
++  s_expected_players = players < 0 ? 0 : (players > MAX_PLAYERS ? MAX_PLAYERS : players);
++}
++
++void Netplay::SetInputDelay(s32 frames)
++{
++  s_forced_input_delay = frames < 0 ? 0 : (frames > 10 ? 10 : frames);
++}
++
+ bool Netplay::CreateSession(std::string nickname, s32 port, s32 max_players, std::string password)
+ {
+   s_local_session_password = password;
+@@ -1878,7 +2013,7 @@ bool Netplay::CreateSession(std::string nickname, s32 port, s32 max_players, std
+   // the memory cards for this game (based on game/global settings), and copy that to the temp card.
+   
+   // TODO: input delay. GGPO Should support changing it on the fly.
+-  const s32 input_delay = 1;
++  const s32 input_delay = s_forced_input_delay;
+ 
+   if (!Netplay::Start(true, std::move(nickname), std::string(), port, input_delay))
+   {
+@@ -1898,7 +2033,7 @@ bool Netplay::JoinSession(std::string nickname, const std::string& hostname, s32
+ {
+   s_local_session_password = password;
+   // TODO: input delay. GGPO Should support changing it on the fly.
+-  const s32 input_delay = 1;
++  const s32 input_delay = s_forced_input_delay;
+ 
+   if (!Netplay::Start(false, std::move(nickname), hostname, port, input_delay))
+   {
+@@ -1911,7 +2046,8 @@ bool Netplay::JoinSession(std::string nickname, const std::string& hostname, s32
+ 
+ void Netplay::NetplayAdvanceFrame(Netplay::Input inputs[], int disconnect_flags)
+ {
+-  Netplay::SetInputs(inputs);
++  Netplay::SetInputs(inputs, s_num_players);
++  EnsureSessionCheats();
+   System::RunFrame();
+   Netplay::AdvanceFrame();
+ }
+@@ -1940,6 +2076,23 @@ void Netplay::ExecuteNetplay()
+ 
+       case SessionState::Running:
+       {
++        // Dabrezz Retro: el anfitrion no avanza el juego hasta que estan todos los jugadores esperados (cada uno que entra obliga a todos a resincronizar)
++        if (IsHost() && s_num_players < s_expected_players && s_num_players >= 2 && s_wait_timer.GetTimeSeconds() >= WAIT_LAST_PLAYER_SECS)
++        {
++          // alguien de la sala no llego (no tenia el juego, se desconecto...): se empieza con los que estan
++          Log_InfoPrintf("Not all expected players joined within %.0f s, starting with %d of %d", WAIT_LAST_PLAYER_SECS, s_num_players, s_expected_players);
++          s_expected_players = s_num_players;
++        }
++        if (IsHost() && s_num_players < s_expected_players)
++        {
++          PollEnet(Common::Timer::GetCurrentValue() + Common::Timer::ConvertMillisecondsToValue(16));
++          Host::DisplayLoadingScreen("Waiting for players", 0, s_expected_players, s_num_players);
++          Host::PumpMessagesOnCPUThread();
++          if (!System::IsValid())
++            break;
++          continue;
++        }
++
+         Netplay::RunFrame();
+ 
+         // this can shut us down
+@@ -1974,7 +2127,7 @@ void Netplay::ExecuteNetplay()
+ 
+ bool Netplay::NpAdvFrameCb(void* ctx, int flags)
+ {
+-  Netplay::Input inputs[2] = {};
++  Netplay::Input inputs[MAX_PLAYERS] = {};
+   int disconnect_flags;
+   Netplay::SyncInput(inputs, &disconnect_flags);
+   NetplayAdvanceFrame(inputs, disconnect_flags);
+@@ -2067,10 +2220,10 @@ bool Netplay::NpOnEventCb(void* ctx, GGPOEvent* ev)
+       HandleTimeSyncEvent(ev->u.timesync.frames_ahead, ev->u.timesync.timeSyncPeriodInFrames);
+       break;
+     case GGPOEventCode::GGPO_EVENTCODE_DESYNC:
+-      Host::OnNetplayMessage(fmt::format("Desync Detected: Current Frame: {}, Desync Frame: {}, Diff: {}, L:{}, R:{}",
+-                                         CurrentFrame(), ev->u.desync.nFrameOfDesync,
+-                                         CurrentFrame() - ev->u.desync.nFrameOfDesync, ev->u.desync.ourCheckSum,
+-                                         ev->u.desync.remoteChecksum));
++      // Dabrezz Retro: el aviso ya no se dibuja en pantalla (tapaba el juego); queda en el registro del emulador
++      Log_WarningPrintf("Desync Detected: Current Frame: %d, Desync Frame: %d, Diff: %d, L:%u, R:%u", CurrentFrame(),
++                        ev->u.desync.nFrameOfDesync, CurrentFrame() - ev->u.desync.nFrameOfDesync,
++                        ev->u.desync.ourCheckSum, ev->u.desync.remoteChecksum);
+       break;
+     default:
+       Log_ErrorPrintf("Netplay Event Code: %d", static_cast<int>(ev->code));
+diff --git a/src/core/netplay.h b/src/core/netplay.h
+index 082b3e6..a29600d 100644
+--- a/src/core/netplay.h
++++ b/src/core/netplay.h
+@@ -8,7 +8,7 @@ namespace Netplay {
+ enum : s32
+ {
+   // Maximum number of emulated controllers.
+-  MAX_PLAYERS = 2,
++  MAX_PLAYERS = 4, // Dabrezz Retro: hasta 4 jugadores (multitap en el puerto 1)
+ 
+   // Maximum netplay prediction frames
+   MAX_ROLLBACK_FRAMES = 8,
+@@ -28,6 +28,24 @@ enum : u8
+   NUM_ENET_CHANNELS,
+ };
+ 
++/// Dabrezz Retro: opciones fijadas desde la linea de comandos antes de crear o unirse a una sesion.
++/// Puerto UDP local al UNIRSE (0 = cualquiera): permite reutilizar el mapeo NAT abierto por el hole punching del lobby.
++void SetLocalPort(s32 port);
++/// Retraso de entrada local en frames (por defecto 1).
++void SetInputDelay(s32 frames);
++/// Jugadores que el anfitrion espera antes de empezar (0/1 = no espera: empieza en cuanto se une el primero). Con 3 o 4 el anfitrion arranca con el multitap activado.
++void SetExpectedPlayers(s32 players);
++/// Numero de jugador que pide este invitado al unirse (1 a MAX_PLAYERS - 1; el anfitrion es el 0). Asi el jugador 2, 3 y 4 son los de la sala y no los de quien conecte primero. -1 = el que haya libre.
++void SetRequestedPlayer(s32 player_id);
++/// Archivo de trucos (formato PCSXR, GameShark) que TODOS los jugadores de la sesion cargan (la app lo escribe temporal con lo que reparte el servidor: "ROM liberado"). Se aplica cada fotograma como
++/// cualquier truco; como todos tienen el mismo archivo, la partida sigue sincronizada. Vacio = sin trucos.
++void SetCheatFile(const std::string& path);
++/// Direccion por la que este jugador alcanza al jugador `player_id` (id del emulador: 0 = anfitrion): la que hallo la app al probar el camino (puerto vecino) o la del relay del servidor. Sustituye a la
++/// que reparte el anfitrion (que es como el anfitrion ve a ese jugador y no sirve al resto con NAT estricto).
++void SetPeerAddress(s32 player_id, const std::string& host, s32 port);
++/// Carga y activa el archivo de trucos si aun no hay lista (lo llama System::RunFrame: asi tambien funciona sin netplay, p. ej. PROBAR JUEGO de la sala con ROM liberado).
++void EnsureSessionCheats();
++
+ bool CreateSession(std::string nickname, s32 port, s32 max_players, std::string password);
+ bool JoinSession(std::string nickname, const std::string& hostname, s32 port, std::string password);
+ 
+diff --git a/src/core/system.cpp b/src/core/system.cpp
+index cac92ba..0b880a2 100644
+--- a/src/core/system.cpp
++++ b/src/core/system.cpp
+@@ -2221,6 +2221,7 @@ void System::SingleStepCPU()
+ 
+ void System::RunFrame()
+ {
++  Netplay::EnsureSessionCheats();
+   g_gpu->RestoreGraphicsAPIState();
+ 
+   if (CPU::g_state.use_debug_dispatcher)
+diff --git a/src/duckstation-qt/qthost.cpp b/src/duckstation-qt/qthost.cpp
+index 843b257..55a205b 100644
+--- a/src/duckstation-qt/qthost.cpp
++++ b/src/duckstation-qt/qthost.cpp
+@@ -101,6 +101,21 @@ static bool s_start_fullscreen_ui_fullscreen = false;
+ // TODO: REMOVE ME
+ static int s_netplay_test = -1;
+ 
++// Dabrezz Retro: sesion de netplay desde la linea de comandos (la app lanza el emulador ya emparejado con el rival)
++//   -dz-host <puerto>      anfitrion: arranca el juego dado y espera al invitado en ese puerto UDP
++//   -dz-join <ip:puerto>   invitado: se une al anfitrion (el juego y la BIOS se buscan por hash en la lista de juegos)
++//   -dz-nick <nombre> -dz-pass <clave> -dz-localport <puerto> -dz-delay <frames>
++static int s_dz_mode = 0; // 0 = nada, 1 = anfitrion, 2 = invitado
++static int s_dz_port = 31200;
++static int s_dz_local_port = 0;
++static int s_dz_delay = 1;
++static int s_dz_players = 2;
++static int s_dz_slot = -1;
++static std::string s_dz_remote;
++static QString s_dz_nick = QStringLiteral("Player");
++static QString s_dz_pass;
++static std::shared_ptr<SystemBootParameters> s_dz_boot;
++
+ EmuThread* g_emu_thread;
+ GDBServer* g_gdb_server;
+ 
+@@ -2089,6 +2104,71 @@ bool QtHost::ParseCommandLineParametersAndInitializeConfig(QApplication& app,
+         s_netplay_test = StringUtil::FromChars<int>(args[++i].toStdString()).value_or(0);
+         continue;
+       }
++      else if (CHECK_ARG_PARAM("-dz-host"))
++      {
++        s_dz_mode = 1;
++        s_dz_port = StringUtil::FromChars<int>(args[++i].toStdString()).value_or(31200);
++        continue;
++      }
++      else if (CHECK_ARG_PARAM("-dz-join"))
++      {
++        const std::string target = args[++i].toStdString();
++        const std::string::size_type colon = target.rfind(':');
++        if (colon == std::string::npos)
++        {
++          QMessageBox::critical(nullptr, QStringLiteral("Error"), QStringLiteral("-dz-join necesita ip:puerto"));
++          return false;
++        }
++        s_dz_mode = 2;
++        s_dz_remote = target.substr(0, colon);
++        s_dz_port = StringUtil::FromChars<int>(target.substr(colon + 1)).value_or(31200);
++        continue;
++      }
++      else if (CHECK_ARG_PARAM("-dz-nick"))
++      {
++        s_dz_nick = args[++i];
++        continue;
++      }
++      else if (CHECK_ARG_PARAM("-dz-pass"))
++      {
++        s_dz_pass = args[++i];
++        continue;
++      }
++      else if (CHECK_ARG_PARAM("-dz-localport"))
++      {
++        s_dz_local_port = StringUtil::FromChars<int>(args[++i].toStdString()).value_or(0);
++        continue;
++      }
++      else if (CHECK_ARG_PARAM("-dz-cheats"))
++      {
++        Netplay::SetCheatFile(args[++i].toStdString());
++        continue;
++      }
++      else if (CHECK_ARG_PARAM("-dz-peer"))
++      {
++        // -dz-peer <id>=<ip>:<puerto> (se puede repetir): como alcanzar a ese jugador (Dabrezz Retro)
++        const std::string spec = args[++i].toStdString();
++        const size_t eq = spec.find('='), colon = spec.rfind(':');
++        if (eq != std::string::npos && colon != std::string::npos && colon > eq)
++          Netplay::SetPeerAddress(StringUtil::FromChars<int>(spec.substr(0, eq)).value_or(-1), spec.substr(eq + 1, colon - eq - 1),
++                                  StringUtil::FromChars<int>(spec.substr(colon + 1)).value_or(0));
++        continue;
++      }
++      else if (CHECK_ARG_PARAM("-dz-slot"))
++      {
++        s_dz_slot = StringUtil::FromChars<int>(args[++i].toStdString()).value_or(-1);
++        continue;
++      }
++      else if (CHECK_ARG_PARAM("-dz-players"))
++      {
++        s_dz_players = StringUtil::FromChars<int>(args[++i].toStdString()).value_or(2);
++        continue;
++      }
++      else if (CHECK_ARG_PARAM("-dz-delay"))
++      {
++        s_dz_delay = StringUtil::FromChars<int>(args[++i].toStdString()).value_or(1);
++        continue;
++      }
+ #ifdef WITH_RAINTEGRATION
+       else if (CHECK_ARG("-raintegration"))
+       {
+@@ -2205,7 +2285,12 @@ int main(int argc, char* argv[])
+   main_window->initialize();
+ 
+   // When running in batch mode, ensure game list is loaded, but don't scan for any new files.
+-  if (!s_batch_mode)
++  // Dabrezz Retro: el invitado de una sesion hace su propio escaneo justo antes de conectar; el de la ventana (en paralelo)
++  // vaciaba la lista mientras se buscaba el juego del anfitrion.
++  if (s_dz_mode == 2)
++  {
++  }
++  else if (!s_batch_mode)
+     main_window->refreshGameList(false);
+   else
+     GameList::Refresh(false, true);
+@@ -2220,12 +2305,39 @@ int main(int argc, char* argv[])
+   else
+     s_start_fullscreen_ui_fullscreen = false;
+ 
++  // Dabrezz Retro: opciones de red de la sesion
++  if (s_dz_mode != 0)
++  {
++    Netplay::SetLocalPort(s_dz_local_port);
++    Netplay::SetInputDelay(s_dz_delay);
++    Netplay::SetExpectedPlayers(s_dz_mode == 1 ? s_dz_players : 0);
++    Netplay::SetRequestedPlayer(s_dz_mode == 2 ? s_dz_slot : -1);
++  }
++
+   // Skip the update check if we're booting a game directly.
+-  if (autoboot)
++  if (s_dz_mode == 1 && autoboot)
++    s_dz_boot = std::move(autoboot); // anfitrion: el juego se arranca justo antes de crear la sesion (mas abajo)
++  else if (autoboot)
+     g_emu_thread->bootSystem(std::move(autoboot));
+-  else if (!s_nogui_mode)
++  else if (!s_nogui_mode && s_dz_mode == 0)
+     main_window->startupUpdateCheck();
+ 
++  if (s_dz_mode == 1 && s_dz_boot)
++  {
++    Host::RunOnCPUThread([]() {
++      s_dz_boot->override_fast_boot = true;
++      g_emu_thread->bootSystem(std::move(s_dz_boot));
++      g_emu_thread->createNetplaySession(s_dz_nick, s_dz_port, s_dz_players, s_dz_pass);
++    });
++  }
++  else if (s_dz_mode == 2)
++  {
++    Host::RunOnCPUThread([]() {
++      GameList::Refresh(false, false, nullptr); // el invitado necesita conocer sus juegos antes de buscar el del anfitrion
++      g_emu_thread->joinNetplaySession(s_dz_nick, QString::fromStdString(s_dz_remote), s_dz_port, s_dz_pass);
++    });
++  }
++
+   if (s_netplay_test >= 0)
+   {
+     Host::RunOnCPUThread([]() {

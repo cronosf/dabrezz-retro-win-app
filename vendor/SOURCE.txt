@@ -1,0 +1,29 @@
+[Solo para desarrollo, no se instala en el equipo del usuario]
+Procedencia de los emuladores (para cumplir las licencias y poder regenerar vendor/emulator-*.zip):
+  Instalador oficial:  https://web.fightcade.com/download/Fightcade-win32-latest.exe
+  SHA-256 instalador:  81db623ee85d65cdaf0ad9e7c65e583ed3a29150c47d940e389ff634dde1af78
+  Carpetas usadas:     emulator\fbneo, snes9x, flycast, ggpofba (excluidos fcv39.exe y las carpetas ROMs\;
+                       no se incluyen fcade.exe ni frm.exe, que son herramientas del cliente original)
+  Codigo fuente FBNeo: https://github.com/fightcadeorg/fightcade-fbneo
+  Procesado con:       tools/make_emulator.py (cambia textos visibles, renombra la carpeta de resultados, quita la firma)
+Para actualizar: descargar el instalador nuevo, abrirlo con 7-Zip (sin ejecutarlo), extraer la carpeta emulator y
+ejecutar: python tools/make_emulator.py <carpeta emulator> [carpeta de salida]
+
+DuckStation (PS1): vendor/emulator-duckstation.zip se compila a partir de https://github.com/HeatXD/duckstation-netplay
+  (rama netplay_dev, commit 2cce4a404b7a80a9cba56388654ccb93a9ec70af, GPL v3) con el parche vendor/duckstation-netplay.patch
+  (agrega opciones de linea de comandos y el netplay de 3 a 4 jugadores con multitap: MAX_PLAYERS = 4, espera de jugadores, conexion entre invitados). Compilacion: Visual Studio 2022, "MSBuild duckstation.sln /t:duckstation-qt
+  /p:Configuration=Release /p:Platform=x64". El paquete se arma con: python tools/make_duckstation.py <carpeta bin\x64>.
+  Qt 6.1 (LGPL v3) viene del submodulo https://github.com/stenzek/duckstation-ext-qt-minimal.
+
+OpenBIOS (BIOS de PS1 libre, MIT): vendor/openbios.bin (512 KB, md5 c11db8c542b6ca411b6f5a7a474f0756) se instala en el paquete de
+  DuckStation (bios\openbios.bin). Origen: proyecto PCSX-Redux https://github.com/pcsx-redux/nugget (carpeta openbios); la copia
+  usada es identica (mismo hash) a la de https://github.com/ActionPL/duckstation_openbios_savestates y a la del cliente Arkadyzja.
+
+DirectX: vendor/directx-redist.zip es la carpeta Redist del "DirectX SDK (June 2010)" de Microsoft
+  (https://download.microsoft.com/download/A/E/7/AE743F1F-632B-4809-87A9-AA1BB3458E31/DXSDK_Jun10.exe,
+  SHA-256 705271DC83BFEE54D9B94E028426E288D5F070784B7446D164F48ECFBB2A02CB, firmado por Microsoft).
+  DIRECTX-LICENSE.txt autoriza redistribuir esa carpeta.
+
+RetroArch (3 a 5 jugadores y N64): vendor/emulator-retroarch.zip = RetroArch 1.22.2 estable (https://buildbot.libretro.com/stable/1.22.2/windows/x86_64/RetroArch.7z, GPL v3) recortado
+  con tools/make_retroarch.py (sin assets, shaders ni base de datos) + los nucleos snes9x, swanstation y mupen64plus_next de https://buildbot.libretro.com/nightly/windows/x86_64/latest/.
+  Codigo fuente: https://github.com/libretro/RetroArch (v1.22.2), https://github.com/libretro/snes9x, https://github.com/libretro/swanstation, https://github.com/libretro/mupen64plus-libretro-nx

@@ -1,0 +1,31 @@
+Emuladores incluidos en Dabrezz Retro
+=====================================
+Dabrezz Retro instala varios emuladores de codigo abierto con soporte de netplay (rollback). Todos son de sus
+autores originales; los unicos cambios son textos visibles (nombre de la aplicacion en ventanas, menus y ayuda)
+y el nombre de la carpeta de archivos de resultado (dabrezz\). No se modifico ninguna logica. El procedimiento
+exacto esta publicado en el proyecto (tools/make_emulator.py).
+
+  fbneo    FinalBurn Neo (arcade, Neo Geo, NES y mas)   Proyecto: https://neo-source.com
+           Licencia: FBNEO-LICENSE.txt (no se puede vender ni buscar lucro con el emulador)
+  snes9x   Snes9x (Super Nintendo)                       Licencia: SNES9X-LICENSE.txt (uso no comercial)
+  ggpofba  FB Alpha con GGPO (juegos arcade antiguos)    Licencia: la misma de FBNEO-LICENSE.txt
+  flycast  Flycast (Dreamcast, Naomi, Atomiswave)        Licencia GPL v2: FLYCAST-GPL2-LICENSE.txt
+           Codigo fuente: https://github.com/flyinghead/flycast  (y su variante con netplay "Dojo")
+
+  duckstation  DuckStation Netplay (PlayStation 1)        Licencia GPL v3: DUCKSTATION-GPL3-LICENSE.txt
+           Fork de DuckStation (Stenzek) con netplay por rollback (GGPO) de la comunidad (HeatXD), con un parche de
+           Dabrezz Retro que solo agrega opciones de linea de comandos para crear/unirse a una sesion (-dz-host,
+           -dz-join, -dz-nick, -dz-pass, -dz-localport, -dz-delay). Codigo fuente y parche (GPL v3):
+             https://github.com/HeatXD/duckstation-netplay  (rama netplay_dev, commit 2cce4a404b7a80a9cba56388654ccb93a9ec70af)
+             vendor/duckstation-netplay.patch en https://github.com/cronosf/dabrezz-retro-win-app
+           Usa las bibliotecas Qt 6 (LGPL v3, enlazadas dinamicamente: https://www.qt.io) y SDL2 (zlib).
+           BIOS: se instala OpenBIOS (MIT, proyecto PCSX-Redux, https://github.com/pcsx-redux/nugget/tree/main/openbios,
+           licencia en OPENBIOS-MIT-LICENSE.txt), una BIOS libre; asi nadie necesita la BIOS de Sony y todos los jugadores
+           tienen exactamente la misma. Pocos juegos no arrancan con ella (p. ej. Azure Dreams y Wipeout NTSC-U).
+
+Por las licencias anteriores Dabrezz Retro es GRATUITO y no distribuye ROMs ni BIOS comerciales (la unica BIOS incluida es la
+libre OpenBIOS): cada jugador debe aportar los juegos (o descargarlos desde un catalogo que el propio jugador o la comunidad
+mantenga y tenga derecho a distribuir).
+
+Tambien se instala el runtime redistribuible de Microsoft DirectX (junio 2010) que algunos emuladores necesitan;
+su licencia esta en DIRECTX-LICENSE.txt.
